@@ -1,0 +1,310 @@
+<%- include('includes/header') %>
+<div id="home">
+	<div class="col-md-12">
+		<div class="col-10">
+			<input class="form-control" type="text" placeholder="Search (currently disabled)" aria-label="Search" style="border-radius: 0" disabled>
+		</div>
+	</div>
+	<div class="form-group col-md-12" style="padding: 0px; margin: 0px">
+		<div class="form-group col-md-2">
+		<label for="page">Page:</label>
+		<input type="number" id="page" name="page" min="1" max="<%=pages%>" value="<%=Number(current)%>" style="width: 25%;">
+
+		<label for="perpage">PerPage:</label>
+		<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
+		</div>
+		<div class="col-6" style="float: right">
+			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="validationPage()">Training Mode</button>
+			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="createpage()">Create Project</button>
+			<button type="button" class="btn btn-primary" style="float:right" id="importbtn" data-toggle="modal" data-target="#import_modal" >Import Project</button>
+	   </div>
+	</div>
+    <div class="col-12">
+        <table class="table table-striped">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col">Project Name</th>
+					<th class="text-center" scope="col">Admin</th>
+					<th></th>
+					<th class="text-center" scope="col">Number of Labels</th>
+					<th class="text-center" scope="col">Number of Images</th>
+					<th class="text-center" scope="col">% Labeled</th>
+					<th></th>
+					<th></th>
+					<th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% for(var i=((page-1)*perPage); i<(Math.min(projects.length,(((page-1)*perPage)+Number(perPage)))); i++) {%>
+					<tr>
+						<td scope="row"><a href="/project?IDX=<%= projects[i][1] %>%>&page=1&perPage=<%= perPage %>"><%= projects[i][0].PName %></a></td>
+						<td class="text-center" scope="row"><%= projects[i][0].Admin %></td>
+						<% if (projects[i][2] != 0) {%>
+							<td class="text-center" style="color: red;">Needs Review</td>
+						<%} else {%>
+							<td></td>
+						<% } %>
+						<td class="text-center"><%= list_counter[i] %></td>
+						<td class="text-center"><%= projects[i][3] %></td>
+						<td class="text-center"><%= projects[i][4] %>%</td>
+						<td class="text-center">
+							<form class="download-project-form" action ="downloadProject" method="POST" enctype="multipart/form-data" id="downloadProjectForm<%=i%>">
+								<input id = "PName<%=i%>" type="hidden" name="PName" value="<%= projects[i][0].PName %>">
+								<input id = "Admin<%=i%>" type="hidden" name="Admin" value="<%= projects[i][0].Admin %>">
+								<input id = "PDescription<%=i%>" type="hidden" name="PDescription" value="<%= projects[i][0].PDescription %>">
+								<button id = "downloadbtn<%=i%>" name="form_action"  id="form-download" value="download" class="btn btn-primary">Download Project</button>
+							</form>
+						</td>
+						<td class="text-right"><button id="changeValidbtn<%=i%>" type="submit" class="btn btn-primary" onclick="changeValidation('<%= projects[i][0].PName %>', '<%= projects[i][0].Admin %>')">Enable Validation</button></td>
+						<td class="text-right"><a class="btn btn-primary" href="/project?IDX=<%= projects[i][1] %>&page=1&perPage=<%= perPage %>" role="button" style="border-radius: 0">Project Page</a></td>
+					</tr>
+				<% } %>
+				
+            </tbody>
+        </table>
+    </div>
+
+    <div class="col-md-12">
+        <% if (pages > 0) { %>
+        <nav aria-label="Page navigation example">
+            <ul class="pagination justify-content-center">
+                <% if (current == 1) { %>
+                <li class="page-item disabled">
+                  <a class="page-link" href="#" tabindex="-1">First</a>
+                </li>
+                <% } else { %>
+                <li class="page-item">
+                  <a class="page-link" href="/home?page=1&perPage=<%= perPage %>" tabindex="-1">First</a>
+                </li>
+                <% } %>
+                <% var i = (Number(current) > 6 ? Number(current) - 5 : 1) %>
+				<% var j = i+9 %>
+				<% if (i !== 1) { %>
+                    <li class="page-item disabled">
+                        <a class="page-link">...</a>
+                    </li>
+                <% } %>
+                <% for (; i <= j && i <= pages; i++) { %>
+                    <% if (i == current) { %>
+                        <li class="page-item active">
+                            <a class="page-link" href="#"><%= i %></a>
+                        </li>
+                    <% } else { %>
+                        <li class="page-item">
+                            <a class="page-link" href="/home?page=<%= i %>&perPage=<%= perPage %>"><%= i %></a>
+                        </li>
+                    <% } %>
+                    <% if (i == j && i < pages) { %>
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">...</a>
+                        </li>
+                    <% } %>
+                <% } %>
+                <% if (current == pages) { %>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#">Last</a>
+                    </li>
+                <% } else { %>
+                    <li class="page-item">
+                        <a class="page-link" href="/home?page=<%= pages %>&perPage=<%= perPage %>">Last</a>
+                    </li>
+                <% } %>
+            </ul>
+        </nav>
+        <% } %>
+    </div>
+</div>
+
+<div class="modal fade" id="import_modal" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Import Project</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+				<form class="import-project-form" action="/import" method="post" enctype="multipart/form-data" id="ImportForm">
+					<div class="form-row">
+						<div class="form-group col-md-6">
+							<label for="project-name">Project Name</label>
+							<input id = "project_name" name="project_name" type="text" class="form-control" placeholder="Project Name" required>
+						</div>
+						<div class="form-group col-md-6">
+							<label for="upload_project">Upload Project (.zip)</label>
+							<input id = "upload_project" name="upload_project" type="file" class="form-control-file" required>
+						</div>
+					</div>
+					<div class="col text-center">
+						<label for="progress" id="progress"></label>
+					</div>	
+					<div class="col text-center">
+						<hr class="my-4">
+						<input id="Importbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+					</div>
+				</form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+<script>
+	
+	document.forms['ImportForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleImport");
+
+		var PName = document.getElementById("project_name").value
+		var PNames = "<%= PNames%>".split()
+
+		if(PName.includes('/') || PName.includes('@') || PName.includes("\\") || PName.includes('.') || PName.includes("'") || PName.includes(" "))
+		{
+			alert("Invalid Project Name!\n Project Name Cannot Contain: /@.\\' or 'spaces'")
+		}
+		else if(PNames.includes(PName))
+		{
+			alert("That Project Name Already Exists!")
+		}
+		else
+		{
+			var formData = new FormData();
+
+			const upload_project = document.getElementById('upload_project');
+			console.log(formData);
+
+			const files = upload_project.files[0];
+			console.log("File: ", files)
+			formData.append('upload_file', new Blob([files]));
+			formData.append('project_name', document.getElementById("project_name").value);
+
+			//New Method
+			var request = new XMLHttpRequest();
+			request.upload.addEventListener('progress', function (e) {
+				var file1Size = $('#upload_project')[0].files[0].size;
+				if (e.loaded <= file1Size) {
+					var percent = Math.round(e.loaded / file1Size * 100);
+					$('#progress').text("Percent Uploaded: " + percent)
+
+				} 
+				if(e.loaded == e.total){
+					$('#progress').text("Uploaded Finished. Server processing upload. Please wait for the closing prompt.")
+					document.getElementById("Importbtn").style.display = "none";
+					alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
+					
+				}
+			}, true);   
+
+			request.open("post", event.target.action, true);
+			request.onreadystatechange = function receiveResponse() {
+				if(this.readyState == 4)
+				{
+					if(this.status == 200)
+					{
+						var mssg = this.response
+						console.log("mssg: ", mssg)
+						console.log('mssg["Success"]: ', mssg["Success"]);
+						alert(this.response);
+						window.location.reload();
+					}
+					else
+					{
+						if(isValid(this.response))
+						{
+							alert("Something went wrong! ", this.response);
+						}
+						else
+						{
+							alert("Something went wrong!")
+							console.log("response: ", this.response)
+						}
+					}
+				}
+			}
+			request.send(formData);
+			console.log(formData);
+		}
+	});
+
+</script>
+
+<script>
+	var pgnum = document.getElementById("page");
+	pgnum.oninput = function(){
+		console.log("pgnum oninput");
+		console.log("pgnum: ", pgnum.value)
+		if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
+		{
+			
+			window.location.href = `/home?page=${pgnum.value}&perPage=<%=perPage%>`;
+		}
+	}
+</script>
+<script>
+	var perpage = document.getElementById("perpage");
+	perpage.oninput = function(){
+		if(perpage.value > 0)
+		{
+			window.location.href = `/home?page=<%=page%>&perPage=${perpage.value}`;
+		}
+	}
+</script>
+<script>
+	function createpage(){
+		window.location.href = "/create"
+	}
+	function validationPage(){
+		window.location.href = "/homeV"
+	}
+</script>
+
+<script>
+	async function handleDownload(){
+		var formData = new FormData();
+		formData.append("PName", document.getElementById("PName").value);
+		let options = {
+			method: 'POST', 
+			body: formData
+		}
+		
+		let cred = await fetch('/downloadProject', options);
+		cred = await cred.json();
+		console.log("cred: ", cred);
+		if(cred.Success == "Yes"){
+			alert("Project download successful");
+			window.location.replace("/home");
+		}
+		else{
+			alert("An error occured. Please try again");
+			window.location.replace("/home");
+		}
+	}
+	async function changeValidation(Pname, Admin){
+
+		var formData = new FormData();
+		formData.append('PName', Pname);
+		formData.append('Admin', Admin);
+		formData.append('validMode', "0");
+
+		let options = {
+			method: 'POST', 
+			body: formData
+		}
+
+		let cred = await fetch('/changeValidation', options);
+		cred = await cred.json();
+		console.log("cred: ", cred);
+		if(cred.Success == "Yes"){
+			alert("Project has been moved to Validation.");
+			window.location.replace("/home");
+		}
+		else{
+			alert("An error occured. Please try again");
+			window.location.replace("/home");
+		}
+	}
+</script>
+<%- include('includes/footer') %>
+

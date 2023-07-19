@@ -1,0 +1,8 @@
+{
+	"port": 8081,
+	"hostname": "http://localhost",
+	"default_python_path": "/usr/bin/python",
+	"default_yolo_path": "",
+	"ssl_key_path": "",
+	"ssl_cert_path": ""
+}

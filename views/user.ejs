@@ -1,0 +1,512 @@
+<%- include('includes/header') %>
+
+<div id="config">
+	<div class="container">
+
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Update Account Information
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+						
+						<table class="table">
+							<tbody>
+								<tr>
+									<td>
+										<label for="FName">First Name:</label>
+										<%=Fname%>
+									</td>
+									<td class="text-right">
+										<button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Fchange" data-toggle="modal" data-target="#FName_modal" style="border-radius: 0">Change</button>
+									</td>
+								</tr>
+
+								<tr>
+									<td>
+										<label for="FName">Last Name:</label>
+										<%=Lname%>
+									</td>
+									<td class="text-right">
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Lchange" data-toggle="modal" data-target="#LName_modal" style="border-radius: 0">Change</button>
+									</td>
+								</tr>
+
+								<tr>
+									<td>
+										<label for="FName">Email:</label>
+										<%=email%>
+									</td>
+									<td class="text-right">
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Echange" data-toggle="modal" data-target="#Email_modal" style="border-radius: 0">Change</button>
+                                    </td>
+								</tr>
+
+								<tr>
+									<td>
+										<label for="FName">Username:</label>
+										<%=user%>
+									</td>
+									<td class="text-right">
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Uchange" data-toggle="modal" data-target="#Uname_modal" style="border-radius: 0">Change</button>
+                                    </td>
+								</tr>
+
+								<tr>
+									<td>
+										<label for="FName">Password:</label>
+										********
+									</td>
+									<td class="text-right">
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Pchange" data-toggle="modal" data-target="#Password_modal" style="border-radius: 0">Change</button>
+                                    </td>
+								</tr>
+								<tr>
+									<td >
+										<form class="deleteUserForm" action ="/deleteUser" method="POST" enctype="multipart/form-data" id="deleteUserForm">
+											<input type="submit" class="btn btn-danger" value="Delete User" style="border-radius: 0">
+										</form>
+									</td>
+								</tr>
+							</tbody>   
+						</table>
+					</p>
+				</div>
+			</div>
+		</div>
+
+	</div>
+</div>
+
+<!-- Modals -->
+<div class="modal fade" id="FName_modal" tabindex="-1" role="dialog" aria-labelledby="FNameModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Change First Name</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+                <div class="col-12">
+					<form action="/changeFname" id="FNameForm" name="FNameForm" method="POST">
+					<table cellpadding="1" cellspacing="1" align="center" class="signupTable unsegmented">
+						<tbody>
+							<tr>
+								<td class="label" colspan="2">
+									First Name
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="text" name="Fname" id="Fname" value="<%= Fname%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Fname" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="form">
+									<input type="submit" class="formbutton2" name="submit" value="submit" fvvalidateonsubmit="true">
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					</form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="modal fade" id="LName_modal" tabindex="-1" role="dialog" aria-labelledby="LNameModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Change Last Name</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+                <div class="col-12">
+					<form action="/changeLname" id="LNameForm" name="LNameForm" method="POST">
+					<table cellpadding="1" cellspacing="1" align="center" class="signupTable unsegmented">
+						<tbody>
+							<tr>
+								<td class="label" colspan="2">
+									Last Name
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="text" name="Lname" id="Lname" value="<%= Lname%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Lname" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="form">
+									<input type="submit" class="formbutton2" name="submit" value="submit" fvvalidateonsubmit="true">
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					</form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="Email_modal" tabindex="-1" role="dialog" aria-labelledby="LNameModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Change Email</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+                <div class="col-12">
+					<form action="/changeEmail" id="EmailForm" name="EmailForm" method="POST">
+					<table cellpadding="1" cellspacing="1" align="center" class="signupTable unsegmented">
+						<tbody>
+							<tr>
+								<td class="label" colspan="2">
+									Email
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="text" name="email" id="email" value="<%= email%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="email" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="form">
+									<input type="submit" class="formbutton2" name="submit" value="submit" fvvalidateonsubmit="true">
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					</form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="Uname_modal" tabindex="-1" role="dialog" aria-labelledby="UnameModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Change Username</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+                <div class="col-12">
+					<form action="/changeUname" id="UnameForm" name="UnameForm" method="POST">
+					<table cellpadding="1" cellspacing="1" align="center" class="signupTable unsegmented">
+						<tbody>
+							<tr>
+								<td class="label" colspan="2">
+									Username
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="text" name="Uname" id="Uname" value="<%= user%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Uname" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="form">
+									<input type="submit" class="formbutton2" name="submit" value="submit" fvvalidateonsubmit="true">
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					</form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="Password_modal" tabindex="-1" role="dialog" aria-labelledby="PasswordModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Change Password</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+                <div class="col-12">
+					<form action="/changePassword" id="PasswordForm" name="PasswordForm" method="POST">
+					<table cellpadding="1" cellspacing="1" align="center" class="signupTable unsegmented">
+						<tbody>
+							<tr>
+								<td class="label" colspan="2">
+									Old Password
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="password" name="oldPassword" id="oldPassword" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="oldPassword" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="label" colspan="2">
+									New Password
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="password" name="newPassword" id="newPassword" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="newPassword" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="label" colspan="2">
+									Re-Type Password
+								</td>
+							</tr>
+							<tr>
+								<td colspan="2">
+									<input type="password" name="rPassword" id="rPassword" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="rPassword" required>
+								</td>
+							</tr>
+							<tr>
+								<td class="form">
+									<input type="submit" class="formbutton2" name="submit" value="submit" fvvalidateonsubmit="true">
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					</form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+	document.forms['FNameForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("handle First Name change");
+		var FName = document.getElementById("Fname").value;
+		if(FName.includes('#') || FName.includes('<') || FName.includes('>') || FName.includes('$') || FName.includes('%') || FName.includes('!') || FName.includes('&') || FName.includes('*') || FName.includes("'") || FName.includes('{') || FName.includes('}') || FName.includes('?') || FName.includes('"') || FName.includes('/') || FName.includes(':') || FName.includes('\\') || FName.includes(' ') || FName.includes('@') || FName.includes('\t') || FName.includes('+') || FName.includes('`') || FName.includes('|') || FName.includes('=') || FName.includes('.'))
+		{
+			alert("Invalid First Name!\n First Name Cannot Contain: /@.\\' or 'spaces'")
+		}
+		else if(confirm('Are you sure you want to change your first name?'))
+		{
+			var formData = new FormData();
+			formData.append('FName', document.getElementById("Fname").value);
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				if(body.Success != "Yes")
+				{
+					alert(bod.Success);
+				}		
+				else
+				{
+					window.location.replace("/user");
+				}
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+
+	document.forms['LNameForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("handle Last Name change");
+		var LName = document.getElementById("Lname").value;
+		if(LName.includes('#') || LName.includes('<') || LName.includes('>') || LName.includes('$') || LName.includes('%') || LName.includes('!') || LName.includes('&') || LName.includes('*') || LName.includes("'") || LName.includes('{') || LName.includes('}') || LName.includes('?') || LName.includes('"') || LName.includes('/') || LName.includes(':') || LName.includes('\\') || LName.includes(' ') || LName.includes('@') || LName.includes('\t') || LName.includes('+') || LName.includes('`') || LName.includes('|') || LName.includes('=') || LName.includes('.'))
+		{
+			alert("Invalid Last Name!\n Last Name Cannot Contain: /@.\\' or 'spaces'")
+		}
+		else if(confirm('Are you sure you want to change your lastname?'))
+		{
+			var formData = new FormData();
+			formData.append('LName', document.getElementById("Lname").value);
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				if(body.Success != "Yes")
+				{
+					alert(bod.Success);
+				}		
+				else
+				{
+					window.location.replace("/user");
+				}
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+
+	document.forms['EmailForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("handle Email change");
+		var Email = document.getElementById("email").value;
+		if(Email.includes('/') || !Email.includes('@') || Email.includes("\\") || !Email.includes('.') || Email.includes("'") || Email.includes(" "))
+		{
+			alert("Invalid Email!")
+		}
+		else if(confirm('Are you sure you want to change your email?'))
+		{
+			var formData = new FormData();
+			formData.append('Email', document.getElementById("email").value);
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				if(body.Success != "Yes")
+				{
+					alert(bod.Success);
+				}		
+				else
+				{
+					window.location.replace("/user");
+				}
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+
+	document.forms['UnameForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("handle Username change");
+		var UName = document.getElementById("Uname").value;
+
+		var exists = 0;
+		var users = "<%= users%>".split(',');
+		console.log(users)
+		for(var i=0; i<users.length; i++)
+		{
+			console.log(users[i])
+			if(users[i] == UName)
+			{
+				console.log("Username already exists");
+				exists = 1;
+			}
+		}
+		if(UName.includes('#') || UName.includes('<') || UName.includes('>') || UName.includes('$') || UName.includes('%') || UName.includes('!') || UName.includes('&') || UName.includes('*') || UName.includes("'") || UName.includes('{') || UName.includes('}') || UName.includes('?') || UName.includes('"') || UName.includes('/') || UName.includes(':') || UName.includes('\\') || UName.includes(' ') || UName.includes('@') || UName.includes('\t') || UName.includes('+') || UName.includes('`') || UName.includes('|') || UName.includes('=') || UName.includes('.'))
+		{
+			alert("Invalid Username!\n Username Cannot Contain: /@.\\' or 'spaces'")
+		}
+		else if(users.includes(UName))
+		{
+			alert("That username already exists")
+		}
+		else if(confirm('Are you sure you want to change your username?'))
+		{
+			var formData = new FormData();
+			formData.append('UName', document.getElementById("Uname").value);
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				if(body.Success != "Yes")
+				{
+					alert(bod.Success);
+				}		
+				else
+				{
+					window.location.replace("/user");
+				}
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+
+	document.forms['PasswordForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("handle password");
+		var newP = document.getElementById("newPassword").value;
+		var rnewP = document.getElementById("rPassword").value;
+		if(newP != rnewP)
+		{
+			alert("New password and retyped password must be the same!")
+		}
+		else if(confirm('Are you sure you want to change your password?'))
+		{
+			var formData = new FormData();
+			formData.append('oldPassword', document.getElementById("oldPassword").value);
+			formData.append('newPassword', document.getElementById("newPassword").value);
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				if(body.Success != "Yes")
+				{
+					alert(bod.Success);
+				}		
+				else
+				{
+					window.location.replace("/user");
+				}
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+
+</script>
+
+<script>
+	document.forms['deleteUserForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("deleteUser Handler");
+
+		if(confirm('Are you sure you want to permanently delete this user?\nAll associated data and shared projects will be lost')){
+			var formData = new FormData();
+			
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				if(body.Success != "Yes")
+				{
+					alert(bod.Success);
+				}		
+				else
+				{
+					window.location.replace("/");
+				}
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+</script>
+<%- include('includes/footer') %>
+

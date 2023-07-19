@@ -1,0 +1,143 @@
+<%- include('includes/header') %>
+<script>
+	if("<%= access.includes(user)%>" == "false")
+	{
+		window.location.replace("/home");
+	}
+</script>
+<div id="project">
+	<div class="col-md-12">
+		<ul class="nav nav-tabs">
+			<li class="nav-item">
+				<a class="nav-link active" href="/project?IDX=<%= IDX %>" style="border-radius: 0;">Labels</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/config?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/download?IDX=<%= IDX %>" style="border-radius: 0">Download</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/stats?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/training?IDX=<%= IDX %>" style="border-radius: 0">Tensorflow</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/yolo?IDX=<%= IDX %>" style="border-radius: 0">Yolo</a>
+			</li>
+		</ul>
+	</div>
+	<div class="col-md-12">
+		<h1 style="text-align: center;"><%= PName %></h1>
+	</div>
+	<div class="form-group col-md-2">
+		<label for="page">Page:</label>
+		<input type="number" id="page" name="page" min="1" max="<%=pages%>" value="<%=Number(current)%>" style="width: 25%;">
+
+		<label for="perpage">PerPage:</label>
+		<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
+		
+	</div>
+	<div class="col-md-12">
+		<table class="table table-striped">
+			<thead class="thead-dark" style="width: 100%;">
+				<tr>
+					<th scope="col">Image Name</th>
+					<th></th>
+					<th class="text-center" scope="col">Number of Labels</th>
+					<th class="text-right" scope="col"></th>
+				</tr>
+			</thead>
+			<tbody>
+				<% for(var i=0; i<images.length; i++) {%>
+				<tr>
+					<td scope="row"><a href="/labeling?IDX=<%= IDX %>&IName=<%= images[i].IName %>"><%= images[i].IName %></a></td>
+					<!-- input checkbox for review here -->
+					<% if(images[i].reviewImage != 0) {%>
+						<td class="text-right"><h4 style="border-radius: 0; color: red;">Needs Review</h4></td>
+					<%} else {%>
+						<td></td>
+					<% } %>
+					<td class="text-center"><%= list_counter[i] %></td>
+					<td class="text-right"><a class="btn btn-primary" href="/labeling?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0">Label</a></td>
+				</tr>
+				<% } %>
+			</tbody>
+		</table>
+	</div>
+	<div class="col-md-12">
+		<% if (pages > 0) { %>
+		<nav aria-label="Page navigation example">
+			<ul class="pagination justify-content-center">
+				<% if (current == 1) { %>
+				<li class="page-item disabled">
+					<a class="page-link" href="#" tabindex="-1">First</a>
+				</li>
+				<% } else { %>
+				<li class="page-item">
+					<a class="page-link" href="/project?IDX=<%= IDX %>&page=1&perPage=<%= perPage %>" tabindex="-1">First</a>
+				</li>
+				<% } %>
+				<% var i = (Number(current) > 6 ? Number(current) - 5 : 1) %>
+				<% var j = i+9 %>
+				<% if (i !== 1) { %>
+					<li class="page-item disabled">
+						<a class="page-link">...</a>
+					</li>
+				<% } %>
+				<% for (; i <= j && i <= pages; i++) { %>
+					<% if (i == current) { %>
+						<li class="page-item active">
+							<a class="page-link" href"#"><%= i %></a>
+						</li>
+					<% } else { %>
+						<li class="page-item">
+							<a class="page-link" href="/project?IDX=<%= IDX %>&page=<%= i %>&perPage=<%= perPage %>"><%= i %></a>
+						</li>
+					<% } %>
+					<% if (i == j && i < pages) { %>
+						<li class="page-item disabled">
+							<a class="page-link" href="#">...</a>
+						</li>
+					<% } %>
+				<% } %>
+				<% if (current == pages) { %>
+					<li class="page-item disabled">
+						<a class="page-link" href"#">Last</a>
+					</li>
+				<% } else { %>
+					<li class="page-item">
+						<a class="page-link" href="/project?IDX=<%= IDX %>&page=<%= pages %>&perPage=<%= perPage %>">Last</a>
+					</li>
+				<% } %>
+			</ul>
+		</nav>
+		<% } %>
+	</div>
+</div>
+
+<script>
+	var pgnum = document.getElementById("page");
+	pgnum.oninput = function(){
+		console.log("pgnum oninput");
+		console.log("pgnum: ", pgnum.value)
+		if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
+		{
+			
+			window.location.href = `/project?IDX=<%= IDX %>&page=${pgnum.value}&perPage=<%=perPage%>`;
+		}
+	}
+</script>
+<script>
+	var perpage = document.getElementById("perpage");
+	perpage.oninput = function(){
+		if(perpage.value > 0)
+		{
+			window.location.href = `/project?IDX=<%= IDX %>&page=<%=pages%>&perPage=${perpage.value}`;
+		}
+	}
+</script>
+
+<%- include('includes/footer') %>
+

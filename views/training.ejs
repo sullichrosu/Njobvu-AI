@@ -1,0 +1,344 @@
+<%- include('includes/header') %>
+<script>
+	if("<%= access.includes(user)%>" == "false")
+	{
+		window.location.replace("/home");
+	}
+</script>
+<div id="training">
+	<div class="col-md-12">
+		<ul class="nav nav-tabs">
+			<li class="nav-item">
+				<a class="nav-link" href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Labels</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/config?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/download?IDX=<%= IDX %>" style="border-radius: 0">Download</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/stats?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link active" href="/training?IDX=<%= IDX %>" style="border-radius: 0">Tensorflow</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/yolo?IDX=<%= IDX %>" style="border-radius: 0">Yolo</a>
+			</li>
+		</ul>
+	</div>
+	<div class="col-md-12">
+		<h1 style="text-align: center;"><%= PName %></h1>
+	</div>
+	<div class="container">
+		<h3>Add a New Training</h3>
+		<form class="add-script" action="/script" enctype="multipart/form-data" id="add-script">
+			<div class="form-row">
+				<div class="form-group col-md-6">
+					<label for="upload-python">Upload python file (.py)</label>
+					<input id = "upload_python" name="upload_python" type="file" class="form-control-file" required>
+				</div>
+			</div>
+			<div class="col text-center">
+				<button id="Createbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">ADD FILE</button>
+				<hr class="my-4">
+			</div>
+		</form>
+		
+		<form class="add-weights" action="/upload_weights" enctype="multipart/form-data" id="add-weights">
+			<div class="form-row">
+				<div class="form-group col-md-6">
+					<label for="upload-weights">Upload weights file (.h5, .weights)</label>
+					<input id = "upload-weights" name="upload-weights" type="file" class="form-control-file" required>
+				</div>
+			</div>
+			<div class="col text-center">
+				<button id="Createbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">ADD FILE</button>
+				<hr class="my-4">
+			</div>
+		</form>
+		
+		<form class="add-python" action="/python" enctype="multipart/form-data" id="pythonForm">
+			<div class="form-row">
+				<div class="form-group col-md-6">
+					<label for="project-name">Python Path</label>
+					<input id = "python_path" name="python_path" type="text" class="form-control" id="python_path" placeholder="Python Path" required>
+				</div>
+			</div>
+			<div class="col text-center">
+				<button id="Createbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">ADD PATH</button>
+				<hr class="my-4">
+			</div>
+		</form>
+		
+		
+		<form class="start-run" action="/run" enctype="multipart/form-data" id="start-run">
+			<div class="slidecontainer">
+				<label for="TrainingRange">Training Data Percentage</label>
+				<input type="range" min="50" max="100" value="50" class="slider" id="TrainingRange">
+				<p>Value: <span id="demo"></span></p>
+			</div>
+			<div class="form-row">
+				<div class="form-group col-md-2">
+					<label for="Python">Select Python</label>
+					<select name="Python" id="Python" style="width:100%">
+					<% if(default_path != null){%><option><%= default_path %></option> <%}%>
+					<% for(var i=0; i<paths.length; i++) {%>
+						<option><%= paths[i] %></option>
+					<% } %>
+					</select>
+				</div>
+				<div class="form-group col-md-2">
+					<label for="Script">Select Script</label>
+					<select name="Script" id="Script" style="width:100%">
+					<% for(var i=0; i<scripts.length; i++) {%>
+						<option><%= scripts[i] %></option>
+					<% } %>
+					</select>
+				</div>
+				<div class="form-group col-md-3">
+					<label for="upload-command">Weights File</label>
+					<select name="Weights" id="Weights" style="width:100%">
+					<% for(var i=0; i<global_weights.length; i++) {%>
+						<option><%= global_weights[i]%></option>
+					<% } %> 
+					</select>
+				</div>
+				<div class="form-group col-md-6">
+					<label for="upload-command">Script Options: Please add "&lt;data_dir&gt;" "&lt;training_csv&gt;" "&lt;validation_csv&gt;" "&lt;output_dir&gt;" "&lt;weights&gt;"</label>
+					<input id ="options" name="options" type="text" class="form-control-file">
+				</div>
+			</div>
+			<div class="col text-center">
+				<button id="Trainbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">TRAIN</button>
+				<hr class="my-4">
+			</div>
+		</form>
+		
+		<div class="col-12">
+			<table class="table table-striped">
+				<thead class="thead-dark">
+					<tr>
+						<th scope="col">Run Name</th>
+						<th class="text-center">Status</th>
+						<th class="text-center" scope="col">Weights</th>
+						<th></th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<% for(var i=0; i<logs.length; i++) {%>
+					<tr>
+						<td scope="row"><button type="button" class="btn btn-primary" data-toggle="modal" data-target="#log_modal<%= i%>"><%= logs[i] %></button></td>
+						<% if(run_status[i] == "FAILED"){ %>
+							<td class="text-center"><button type="button" class="btn " style="background-color: black; color: white;" data-toggle="modal" data-target="#error_modal<%= i%>"><%= run_status[i] %></button></td>
+						<% }else{ %>
+							<td class="text-center"><button type="button" class="btn" style="background-color: green; color: white;" data-toggle="modal" data-target="#log_modal<%= i%>"><%= run_status[i] %></button></td>
+						<% } %>
+						<form action="downloadRun" method="POST" enctype="multipart/form-data" >
+							<td>
+							<ul>
+							<%for(var j=0; j<weights[i].length; j++) {%>
+								<li><%=weight_names[i][j]%></li>
+							<% } %>
+							</ul>
+							</td>	
+							<td class="text-center">
+							<input type="hidden" name="PName" value="<%= PName %>">
+							<input type="hidden" name="Admin" value="<%= Admin %>">
+							<input type="hidden" name="IDX" value="<%= IDX %>">
+							<input type="hidden" name="log_file" value="<%= logs[i] %>">
+							<input type="hidden" name="run_path" value="<%= run_paths[i] %>">
+							<button type="submit" name="form_action" value="download" class="btn btn-primary">Download</button>
+							</td>
+						</form>
+						<td class="text-right">
+						<% if(run_status[i] != "RUNNING"){ %>
+							<form action="deleteRun" method="POST" enctype="multipart/form-data" >
+								<input type="hidden" name="PName" value="<%= PName %>">
+								<input type="hidden" name="Admin" value="<%= Admin %>">
+								<input type="hidden" name="IDX" value="<%= IDX %>">
+								<input type="hidden" name="weights" value="<%= weights[i] %>">
+								<input type="hidden" name="log_file" value="<%= logs[i] %>">
+								<input type="hidden" name="run_path" value="<%= run_paths[i] %>">
+								<button type="submit" name="form_action" value="download" class="btn btn-danger">Delete</button>
+							</form>
+						<% } %>
+						</td>
+					</tr>
+					<% } %>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+<% for(var i=0; i<logs.length; i++) {%>
+<div class="modal fade" id="log_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h4 class="modal-title" id="myModalLabel"><%= logs[i]%></h4>
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+			</div>
+			<pre><%=log_contents[i]%></pre>
+		</div>
+	</div>
+</div>
+<div class="modal fade" id="error_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+	<div class="modal-dialog modal-lg" role="document">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h4 class="modal-title" id="myModalLabel"><%= logs[i]%></h4>
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+			</div>
+			<pre><%=err_contents[i]%></pre>
+		</div>
+	</div>
+</div>
+<% } %>
+<script>
+	var slider = document.getElementById("TrainingRange");
+	var sliderval = document.getElementById("demo");
+	sliderval.innerHTML = slider.value;
+	slider.oninput = function(){
+		sliderval.innerHTML = this.value;
+	}
+
+	document.forms['add-script'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleImport");
+		var formData = new FormData();
+		const upload_project = document.getElementById('upload_python');
+		const files = upload_project.files[0];
+		formData.append('upload_python', files);
+
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+
+		console.log(files)
+
+		fetch(event.target.action, {
+			method: 'POST',
+			body: formData 
+		}).then((resp) => {
+			return resp.json();
+		}).then((body) => {
+			console.log(body);
+			alert(body.Success);
+			window.location.replace("/training?IDX=<%= IDX %>");
+  
+		}).catch((error) => {
+			console.log(error);
+		});
+	});
+
+	document.forms['add-weights'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleImport");
+		var formData = new FormData();
+		const upload_project = document.getElementById('upload-weights');
+		const files = upload_project.files[0];
+		console.log(files.size)
+		if( !files.size > 0 )
+		{
+			alert("File must have a size > 0")
+		}
+		else
+		{
+			formData.append('upload_weights', files);
+			
+			formData.append("PName", "<%= PName %>");
+			formData.append("Admin", "<%= Admin %>");
+
+
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then((resp) => {
+				return resp.json();
+			}).then((body) => {
+				console.log(body);
+				alert(body.Success);
+				window.location.replace("/training?IDX=<%= IDX %>");
+  	
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+	});
+
+	document.forms['pythonForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleImport");
+		var formData = new FormData();
+
+		formData.append("python_path", document.getElementById("python_path").value);
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+
+
+		fetch(event.target.action, {
+			method: 'POST',
+			body: formData 
+		}).then((resp) => {
+			return resp.json();
+		}).then((body) => {
+			console.log(body);
+
+			alert(body.Success);
+			window.location.replace("/training?IDX=<%= IDX %>");
+  
+		}).catch((error) => {
+			console.log(error);
+		});
+	});
+
+
+	document.forms['start-run'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("start-run");
+		var formData = new FormData();
+
+		var Python_path = document.getElementById("Python").value;
+		var python_script = document.getElementById("Script").value;
+		var script_options = document.getElementById("options").value;
+		var weights_file = document.getElementById("Weights").value;
+
+		console.log("weights_file: ", weights_file)
+		if(weights_file == "")
+		{
+			alert("Must select a weights file")
+			return;
+		}
+		formData.append("python_path", document.getElementById("Python").value);
+		formData.append("script", document.getElementById("Script").value);
+		formData.append("options", document.getElementById("options").value);
+		formData.append("weights", document.getElementById("Weights").value);
+		formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+	
+
+		fetch(event.target.action, {
+			method: 'POST',
+			body: formData 
+		}).then((resp) => {
+			return resp.json();
+		}).then((body) => {
+			console.log(body);
+
+			alert(body.Success);
+			window.location.replace("/training?IDX=<%= IDX %>");
+  
+		}).catch((error) => {
+			console.log(error);
+		});
+	});
+	
+</script>
+<%- include('includes/footer') %>

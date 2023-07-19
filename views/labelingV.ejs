@@ -1,0 +1,378 @@
+<%- include('includes/header') %>
+<script>
+  // console.log("<%= access.Username%>");
+  if("<%= access.includes(user)%>" == "false")
+  {
+      window.location.replace("/home");
+  }
+</script>
+<body style="background-color: #4C4C4C;">
+<div id="labeling" class="row" style="margin-left: 0; margin-right: 0;">
+    <form action ="updateLabels" method="post" id="submit-project">
+        <!--Classes bar -->
+        <div class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
+              <% for(var i=0; i<classes.length; i++) {%>
+                  <% if(classes[i] == curr_class) {%>
+                      <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection selected-class" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
+                  <% } else { %>
+                      <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
+                  <% } %>
+              <% } %>
+        </div>
+        <!-- prev/next image arrows bar -->
+        <div class="mb-0 col-md-12 row text-center mx-auto nopadding" style="background-color: #262C2F; color: white">
+          <% if(prev_IName != -1) { %>
+                  <% if (AutoSave == 1) { %>
+                      <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-prevV" value="auto-prevV" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></button>
+                  <% } else { %>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=null&class=null" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
+                  <% } %>
+          <% } else { %>
+              <a href="#" role="button" class="mr-0 ml-0 btn btn-dark col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
+          <% } %>
+          <span class="mr-0 ml-0 btn col text-center" style="cursor: default"><%= image_name %> (<b><%= curr_index %></b>/<%= images_length %>)</span>
+          <% if(next_IName != -1) { %>
+                  <% if (AutoSave == 1) { %>
+                      <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-nextV" value="auto-nextV" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></button>
+                  <% } else { %>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=null" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
+                  <% } %>
+          <% } else { %>
+              <a href="#" role="button" class="mr-0 ml-0 btn btn-primary col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
+          <% } %>
+        </div>
+        <div>
+          <button type="button" id ="openOptions" class="semi-transparent-button" onclick="toggleOptions()">Options</button>
+          <div class="modalV" id = "optionModal">
+            <div class="modal-headerV">
+              <div>
+                <button type="button" class="semi-transparent-button" onclick="toggleOptions()">Close</button>
+              </div>
+            </div>
+            <div class="modal-contentV">
+              <div class="modal-textV">
+                <a >Image Stats:</a>
+                <% for(var i=0; i < stats.length; i++) {%>
+                  <a class ="mr-0 ml-0 btn col text-center"><%= stats[i][0]%>: <%= stats[i][1] %></a>
+                  <% } %>
+              </div>
+              <div class="modal-textV">
+                <a >Image Labels:</a>
+                <% for(var i=0; i < labelConf.length; i++) {%>
+                  <div class="imageLabels">
+                    <div>
+                      <a class ="mr-0 ml-0 btn col text-center">
+                        ID: <%= labelConf[i].LID %>, Conf: <%= labelConf[i].Confidence %>%
+                      </a>
+                    </div>
+                    <div>
+                        <select name="classChange" id="classChange" data-lid="<%= labelConf[i].LID %>">
+                          <option><%= labelConf[i].CName %></option>
+                          <% for(var f=0; f<classes.length; f++) {%>
+                            <% if(classes[f] != labelConf[i].CName) { %>
+                                <option><%=classes[f]%></option>
+                            <% } %>
+                          <% } %>
+                        </select>
+                        <input type="hidden" name="LID" value="<%= labelConf[i].LID %>">
+                    </div>
+                  </div>
+                  <% } %>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+
+          <div id="editor-area" class="col-md-12 pt-2 pb-2 mx-auto" style="background: #4C4C4C">
+            <canvas id="canvas"
+                    width="<%= image_width %>"
+                    height="<%= image_height %>"
+                    style=" cursor: crosshair;
+                            margin: auto">
+            </canvas>
+        </div>
+
+        <div id="dynamic_form">
+			<% for(var i=0; i< classes.length; i++) {%>
+				<input class="classes class-<%= classes[i] %>" type="hidden" name="classes" value="<%= classes[i] %>"> 
+			<% } %>
+			<input type="hidden" name="PName" value="<%= PName %>">
+			<input type="hidden" name="Admin" value="<%= Admin %>">
+			<input type="hidden" name="user" value="<%= user %>">
+			<input type="hidden" name="IDX" value="<%= IDX %>">
+            <input type="hidden" name="IName" value="<%= IName %>">
+            <input id="rev_image" type="hidden" name="rev_image" value="<%= rev_image %>">
+            <input type="hidden" name="prev_IName" value="<%= prev_IName %>">
+            <input type="hidden" name="next_IName" value="<%= next_IName %>">
+            <input type="hidden" name="sortFilter" value="<%= sortFilter %>">
+            <input type="hidden" name="imageClass" value="<%= imageClass %>">
+            <input id="curr_class" type="hidden" name="curr_class" value="<%= curr_class %>">
+            <input id="image_path" type="hidden" name="image_path" value="<%= image_path %>">
+            <input id="origin_image_width" type="hidden" name="origin_image_width" value="<%= image_width %>">
+            <input id="origin_image_height" type="hidden" name="origin_image_height" value="<%= image_height %>">
+            <input id="image_width" type="hidden" name="image_width" value="<%= image_width %>">
+            <input id="image_height" type="hidden" name="image_height" value="<%= image_height %>">
+            <input type="hidden" id="image_ratio" name="image_ratio" value="<%= image_ratio %>">
+            <input type="hidden" name="labels_counter" value="<%= labels.length %>" id="labels-counter">
+            <% for(var i=0; i< labels.length; i++) {%>
+                <input class="labels label-<%= labels[i].LID %> label-id" type="hidden" name="LabelingID" value="<%= labels[i].LID %>">
+        				<input class="labels label-<%= labels[i].LID %> label-c" type="hidden" name="CName" value="<%= labels[i].CName %>">
+                <input class="labels label-<%= labels[i].LID %> label-x" type="hidden" name="X" value="<%= labels[i].X %>">
+                <input class="labels label-<%= labels[i].LID %> label-y" type="hidden" name="Y" value="<%= labels[i].Y %>">
+                <input class="labels label-<%= labels[i].LID %> label-w" type="hidden" name="W" value="<%= labels[i].W %>">
+                <input class="labels label-<%= labels[i].LID %> label-h" type="hidden" name="H" value="<%= labels[i].H %>">
+            <% } %>
+        </div>
+
+        <div class="col-md-12 enoughPadding row mx-auto text-center">
+            <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="menu" data-toggle="modal" data-target="#menu_modal" style="border-radius: 0"><i class="fas fa-bars"></i> <u>M</u>enu</button>
+            <button type="button" class="mr-0 ml-0 btn btn-dark col text-center" id="info" data-toggle="modal" data-target="#info_modal" style="border-radius: 0"><i class="fas fa-info"></i> <u>I</u>nfo</button>
+            <button type="button" class="mr-0 ml-0 btn btn-danger col text-center" id="reset-labeling" style="border-radius: 0"><i class="fas fa-recycle"></i> <u>R</u>eset</button>
+            <button type="button" class="mr-0 ml-0 btn btn-warning col text-center" id="undo-labeling" style="border-radius: 0"><i class="fas fa-undo"></i> <u>U</u>ndo</button>
+            <button type="button" class="mr-0 ml-0 btn btn-dark col text-center" id="reset-zoom" style="border-radius: 0"><i class="fas fa-search"></i> Reset <u>Z</u>oom</button>
+            <% if(rev_image != 0){ %>
+              <button type="button" class="mr-0 ml-0 col text-center rev-button" id="Review" style="border-radius: 0; background-color: red;">Needs Review</button>
+            <%} else {%>
+              <button type="button" class="mr-0 ml-0 col text-center rev-button" id="Review" style="border-radius: 0;">Needs Review</button>
+            <% } %>
+            <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-success col text-center" id="form-save" value="save" style="border-radius: 0"><i class="fas fa-save"></i> <u>S</u>ave </button>
+        </div>
+    </form>
+    <ul id="output"></ul>
+</div>
+
+<!-- Modals -->
+<div class="modal fade" id="menu_modal" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">List of Images</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body row">
+                <div class="col-12">
+	          		<a href="/projectV?IDX=<%= IDX %>" class="mr-1 ml-1 btn btn-secondary col text-center"><i class="fas fa-long-arrow-left"></i> Back to Project Page</a>
+                </div>
+                <div class="col-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">Project Name</th>
+                                <th></th>
+                                <th class="text-right" scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% for(var i=0; i<images.length; i++) {%>
+                            <tr>
+                                <td scope="row"><%= images[i].IName %></td>
+                                <!-- input checkbox for review here -->
+                                <% if(images[i].reviewImage != 0) {%>
+                                <td class="text-right"><h4 style="border-radius: 0; color: red;">Needs Review</h4></td>
+                                <%} else {%>
+                                <td></td>
+                                <%}%>
+                                <td class="text-right"><a class="btn btn-primary pass-class" href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&curr_class=<%= curr_class %>&sort=null&class=null" role="button">Label</a></td>
+                            </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="info_modal" tabindex="-1" role="dialog" aria-labelledby="infoModal">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">Hotkeys Infomation</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <table class="modal-body table">
+              <thead>
+                <tr>
+                  <th scope="col">Buttons</th>
+                  <th scope="col">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">1</div>
+                        </div>
+                        <div class="keyboard__row">
+                            <div class="key--letter">2</div>
+                        </div>
+                        ...
+                        <div class="keyboard__row">
+                            <div class="key--letter">9</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Select class number (1-9)</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                      <div class="keyboard__row">
+                        <div class="key--letter">W</div>
+                      </div>
+                    </div>
+                  </th>
+                  <td>Set current class to next class</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                      <div class="keyboard__row">
+                        <div class="key--letter">A</div>
+                        <div class="key--letter">&#x2190</div>
+                      </div>
+                    </div>
+                  </th>
+                  <td>Go Previous Page</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                      <div class="keyboard__row">
+                        <div class="key--letter">D</div>
+                        <div class="key--letter">&#x2192;</div>
+                      </div>
+                    </div>
+                  </th>
+                  <td>Go Next Page</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">S</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Save</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">E</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Erase a rectangle (<u>after clicking on the rectangle</u>)</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">Q</div>
+                            <div class="key--letter">U</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Undo the latest label</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">R</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Reset all the labels</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">Z</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Reset zoom (<u>display full width and height</u>)</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">C</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Toggle Needs Review Status</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
+                            <div class="key--letter">I</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Toggle Hotkeys Information Popup</td>
+                </tr>
+              </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+<%- include('includes/footer') %>
+
+<script>
+  var modal = document.getElementById("optionModal")
+
+  function openOptions() {
+    modal.style.display = 'block';
+  }
+
+  // Close the modal
+  function toggleOptions() {
+    if(modal.style.display == 'block'){
+      modal.style.display = 'none';
+    }
+    else{
+      modal.style.display = 'block';
+    }
+    
+  }
+</script>
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+  var selectElements = document.querySelectorAll('select[name="classChange"]');
+  Array.prototype.forEach.call(selectElements, function(select) {
+    select.addEventListener('change', function() {
+
+      var formData = new FormData();
+      formData.append("LID", this.getAttribute('data-lid'));
+      formData.append("selectedClass", this.value);
+      formData.append("PName", "<%= PName %>");
+      formData.append("Admin", "<%= Admin %>");
+
+      fetch('/solo-change-class', {
+			method: 'POST',
+			body: formData 
+      }).then((resp) => {
+        return resp.json();
+      }).then((body) => {
+        console.log(body);
+
+        window.location.reload();
+    
+      }).catch((error) => {
+        console.log(error);
+      });
+
+    });
+  });
+});
+</script>

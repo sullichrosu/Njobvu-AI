@@ -1,0 +1,136 @@
+<%- include('includes/Signin') %>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<div id="login">
+	<input type="hidden" name="action" value="logon">
+	<table cellpadding="1" cellspacing="1" align="center" class="loginTable unsegmented">
+		<tbody>
+			<tr>
+				<td class="label" colspan="2" id="usernameLabel">
+					Username
+				</td>
+			</tr>
+			<tr>
+				<td colspan="2">
+					<input type="text" name="username" id="username" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Username" required>
+				</td>
+			</tr>
+			<tr>
+				<td class="label" colspan="2" id="passwordLabel">
+					Password
+				</td>
+			</tr>
+			<tr>
+				<td colspan="2">
+					<input type="password" name="password" id="password" value size="20" maxlength="40" class="textInput" fvtype="Text" fvrequired="true" fvname="Password" required>
+				</td>
+			</tr>
+			<tr>
+				<td class="form" id="form">
+					<input onclick="handleForm()" id="Login" type="submit" class="mr-1 ml-1 btn btn-secondary col text-center formbutton2" name="submit" value="Log In" fvvalidateonsubmit="true">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<a href="/signup" class="mr-1 ml-1 btn text-center" id="signup"><i class="fas"></i>Signup</a>
+				</td>
+			</tr>
+			<tr>
+				<td id="newCaptcha" class="New Captcha" colspan="2">
+					<a href="#" onclick="generateCaptcha()">New Captcha</a>
+				</td>
+			</tr>
+			<tr>
+				<td class="label" colspan="2" id="captchaLabel">
+					Captcha
+				</td>
+			</tr>
+			<tr>
+				<td class="input">
+					<input type="text" name="inputCaptcha" id="inputCaptcha" placeholder="Type The Captcha"/>
+					</td>
+			</tr>
+			<tr>
+				<td><input type="button" id="submitCaptcha" value="Submit" onclick="checkCaptcha()"/></td>
+			</tr>
+		</tbody>
+	</table>
+</div>
+<script>
+	document.cookie = "Username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+	var form = document.getElementById("Login");
+	
+
+	document.getElementById("newCaptcha").style.display = "none";
+	document.getElementById("captchaLabel").style.display = "none";
+	document.getElementById("inputCaptcha").style.display = "none";
+	document.getElementById("submitCaptcha").style.display = "none";
+
+	var captcha = 0;
+	var captchaArray = ["9^2 = ?", "4 * 5 = ?", "12 - 2 = ?", "23 * 2 = ?",
+	 "24 / 8 = ?", "6^2 = ?", "64 / 2 = ?"];
+	var captchaAnswers = ['81', '20', '10', '46', '3', '36', '32'];
+
+	async function generateCaptcha(){
+		captcha = Math.floor(Math.random() * 7);
+		document.getElementById("captchaLabel").innerHTML = captchaArray[captcha];
+	}
+
+	async function checkCaptcha(){
+		const inputCaptcha = document.getElementById("inputCaptcha").value;
+		var correctCaptcha = true;
+
+		if(inputCaptcha != captchaAnswers[captcha]){
+			correctCaptcha = false;
+		}
+
+		if(correctCaptcha != true){
+			alert("Incorrect Answer");
+		}
+		else{
+			window.location.replace("/home");
+		}
+	}
+
+	async function handleForm(){
+		var user = {
+			"username": document.getElementById("username").value,
+			"password": document.getElementById("password").value,
+		};
+		let options = {
+			method: 'POST',
+			headers: { 
+                'Content-Type':  
+                    'application/json;charset=utf-8' 
+            }, 
+			body: JSON.stringify(user)
+		}
+		
+		let cred = await fetch('/login', options);
+		cred = await cred.json();
+		console.log(cred);
+
+		if(cred.Success == "Yes"){
+			document.getElementById("usernameLabel").style.display = "none";
+			document.getElementById("username").style.display = "none";
+			document.getElementById("passwordLabel").style.display = "none";
+			document.getElementById("password").style.display = "none";
+			document.getElementById("Login").style.display = "none";
+			document.getElementById("signup").style.display = "none";
+
+			document.getElementById("newCaptcha").style.display = "block";
+			document.getElementById("captchaLabel").style.display = "block";
+			document.getElementById("inputCaptcha").style.display = "block";
+			document.getElementById("submitCaptcha").style.display = "block";
+			generateCaptcha();
+		}
+		else{
+			alert("Wrong Username or Password");
+			window.location.replace("/");
+		}
+		
+	}
+	form.addEventListener("submit", handleForm);
+	
+	console.log(sessionStorage.getItem("test"));
+</script>
+<%- include('includes/footer') %>

@@ -1,0 +1,153 @@
+<%- include('includes/header') %>
+<div id="create">
+    <div class="container">
+        <div class="contact">
+			<form class="add-project-form" action="/createP" method='POST' enctype="multipart/form-data" id="projectForm">
+                <h3>Add a New Project</h3>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="project-name">Project Name</label>
+                        <input id = "project_name" name="project_name" type="text" class="form-control" id="project-name" placeholder="Project Name" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="upload-images">Upload Images (.zip)</label>
+						<input id = "upload_images" name="upload_images" type="file" class="form-control-file" id="upload-images" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="input-classes">Input classes (separated with commas)</label>
+                        <input id="input_classes" name="input_classes" type="text" class="form-control" id="input-classes" placeholder="cat,dog,large mouse" required>
+						<p>Do not add leading or trailing spaces between classes</p>
+                    </div>
+                </div>
+				<div class="form-row">
+					<div class="form-group col-md-6"> 
+						<p>
+						<input type="checkbox" id="bootstrap_check" name="bootstrap_check">
+						Check to Enable Image Classification </p>
+					</div>
+					<div class="form-group col-md-6">
+                        <label for="upload-bootstrap">Upload (.data + .cfg + .weights).zip</label>
+						<input id = "upload_bootstrap" name="upload_bootstrap" type="file" class="form-control-file" id="upload-bootstrap">
+                    </div>
+				</div>
+                <div class="col text-center">
+                    <hr class="my-4">
+						<input id="Createbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                </div>
+            </form>
+			<div class="col text-center">
+				<label for="progress" id="progress"></label>
+			</div>
+        </div>
+    </div>
+</div>
+<script>
+
+
+	document.forms['projectForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		var PName = document.getElementById("project_name").value
+		var PNames = "<%= PNames %>".split()
+
+		if(PName.includes('/') || PName.includes('@') || PName.includes("\\") || PName.includes('.') || PName.includes("'") || PName.includes(" "))
+		{
+			alert("Invalid Project Name!\n Project Name Cannot Contain: /@.\\' or 'spaces'")
+		}
+		else if(PNames.includes(PName))
+		{
+			alert("That Project Name Already Exists!")
+		}
+		else
+		{
+			var formData = new FormData();
+			const upload_images = document.getElementById('upload_images');
+			const files = upload_images.files[0];
+			const upload_bootstrap = document.getElementById('upload_bootstrap');
+			formData.append('upload_images', new Blob([files]));
+			if(document.getElementById('bootstrap_check').checked){
+				const filesB = upload_bootstrap.files[0];
+				formData.append('upload_bootstrap', new Blob([filesB]));
+			}
+			formData.append('project_name', document.getElementById("project_name").value);
+			formData.append('input_classes', document.getElementById("input_classes").value);
+
+			//New method
+			var request = new XMLHttpRequest();
+			request.upload.addEventListener('progress', function (e) {
+				var file1Size = $('#upload_images')[0].files[0].size;
+
+				if(document.getElementById('bootstrap_check').checked){
+					console.log('Checked!!!!!');
+					var file2Size = $('#upload_bootstrap')[0].files[0].size;
+					if (e.loaded <= (file1Size + file2Size)) {
+						var percent = Math.round(e.loaded / (file1Size + file2Size) * 100);
+						console.log(percent);
+						$('#progress').text("Percent Uploaded: " + percent)
+
+					} 
+					if(e.loaded == e.total){
+						// console.log('100%');
+						$('#progress').text("Upload Finished. Server processing upload. Please wait for the closing prompt.")
+						document.getElementById("Importbtn").style.display = "none";
+						alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
+						// window.location.reload();
+						
+					}	
+				}
+
+				else{
+					if (e.loaded <= file1Size) {
+						var percent = Math.round(e.loaded / file1Size * 100);
+						console.log(percent);
+						$('#progress').text("Percent Uploaded: " + percent)
+
+					} 
+					if(e.loaded == e.total){
+						// console.log('100%');
+						$('#progress').text("Upload Finished. Server processing upload. Please wait for the closing prompt.")
+						document.getElementById("Importbtn").style.display = "none";
+						alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
+						// window.location.reload();
+						
+					}	
+				}
+
+			}, true);   
+
+			request.open("post", event.target.action, true);
+			request.onreadystatechange = function receiveResponse() {
+				if(this.readyState == 4)
+				{
+					if(this.status == 200)
+					{
+						var mssg = this.response
+						console.log("mssg: ", mssg)
+						console.log('mssg["Success"]: ', mssg["Success"]);
+						alert(this.response);
+						window.location.replace("/home");
+					}
+					else
+					{
+						if(isValid(this.response))
+						{
+							alert("Something went wrong! ", this.response);
+						}
+						else
+						{
+							alert("Something went wrong!")
+							console.log("response: ", this.response)
+						}
+					}
+				}
+			}
+			request.send(formData);
+			console.log(formData);
+		}
+	});
+	
+
+</script>
+<%- include('includes/footer') %>

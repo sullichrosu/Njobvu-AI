@@ -1,0 +1,106 @@
+<%- include('includes/Signin') %>
+<div id="signup">
+	<form action="/signup" id="signupForm" name="signupForm" method="POST">
+		<table cellpadding="1" cellspacing="1" align="center" class="signupTable unsegmented">
+			<tbody>
+				<tr>
+					<td class="label" colspan="2">
+						First Name
+					</td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<input type="text" name="Fname" id="Fname" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Fname" required>
+					</td>
+				</tr>
+				<tr>
+					<td class="label" colspan="2">
+						Last Name
+					</td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<input type="text" name="Lname" id="Lname" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Lname" required>
+					</td>
+				</tr>
+				<tr>
+					<td class="label" colspan="2">
+						email
+					</td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<input type="text" name="email" id="email" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="email" required>
+					</td>
+				</tr>
+				<tr>
+					<td class="label" colspan="2">
+						Username
+					</td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<input type="text" name="username" id="username" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Username" required>
+					</td>
+				</tr>
+				<tr>
+					<td class="label" colspan="2">
+						Password
+					</td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<input type="password" name="password" id="password" value size="20" maxlength="40" class="textInput" fvtype="Text" fvrequired="true" fvname="Password" required>
+					</td>
+				</tr>
+				<tr>
+					<td class="form">
+						<input type="submit" class="formbutton2" name="submit" value="submit" fvvalidateonsubmit="true">
+					</td>
+				</tr>
+			</tbody>
+		</table>
+	</form>
+</div>
+<script>
+	document.forms['signupForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("handle signup");
+		var users = "<%= users%>".split(',');
+		//Check for bad characters
+		var username = document.getElementById("username").value
+		var Email = document.getElementById("email").value
+		console.log(username)
+		if(username.includes('#') || username.includes('<') || username.includes('>') || username.includes('$') || username.includes('%') || username.includes('!') || username.includes('&') || username.includes('*') || username.includes("'") || username.includes('{') || username.includes('}') || username.includes('?') || username.includes('"') || username.includes('/') || username.includes(':') || username.includes('\\') || username.includes(' ') || username.includes('@') || username.includes('\t') || username.includes('+') || username.includes('`') || username.includes('|') || username.includes('=') || username.includes('.'))
+		{
+			alert("Invalid username!\n Username must be alphanumeric without white space")
+		}
+		else if(users.includes(username))
+		{
+			alert("Username already exists")
+		}
+		else if(Email.includes('/') || !Email.includes('@') || Email.includes("\\") || !Email.includes('.') || Email.includes("'") || Email.includes(" "))
+		{
+			alert("Invalid Email!")
+		}
+		else
+		{
+			var formData = new FormData();
+			formData.append("Fname", document.getElementById("Fname").value);
+			formData.append("Lname", document.getElementById("Lname").value);
+			formData.append("email", document.getElementById("email").value);
+			formData.append("username", document.getElementById("username").value);
+			formData.append("password", document.getElementById("password").value);
+			fetch(event.target.action, {
+				method: 'POST',
+				body: formData 
+			}).then(() => {
+				window.location.replace("/");
+			}).catch((error) => {
+				console.log(error);
+			});
+		}
+		
+	});
+</script>
+<%- include('includes/footer') %>

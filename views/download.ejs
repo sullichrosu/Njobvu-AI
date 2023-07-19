@@ -1,0 +1,162 @@
+<%- include('includes/header') %>
+<script>
+	console.log("<%= acc.includes(user)%>");
+	if("<%= acc.includes(user)%>" == "false")
+	{
+		window.location.replace("/home");
+	}
+</script>
+<div id="config">
+	<div class="col-md-12">
+		<ul class="nav nav-tabs">
+			<li class="nav-item">
+				<a class="nav-link" href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Labels</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/config?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link active" href="/download?IDX=<%= IDX %>" style="border-radius: 0">Download</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/stats?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/training?IDX=<%= IDX %>" style="border-radius: 0">Tensorflow</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/yolo?IDX=<%= IDX %>" style="border-radius: 0">Yolo</a>
+			</li>
+		</ul>
+	</div>
+	<div class="col-md-12">
+		<h1 style="text-align: center;"><%= PName %></h1>
+	</div>
+	<div class="container">
+		
+		
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Download Project
+				</div>
+				<div class="card-body">
+					<form class="download-project-form" action ="downloadProject" method="POST" enctype="multipart/form-data" id="downloadProjectForm" style="text-align: center;">
+						<input id = "PName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "Admin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "IDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<input id = "PDescription" type="hidden" name="PDescription" value="<%= PDescription %>">
+						<button id = "downloadbtn" name="form_action"  id="form-download" value="download" class="btn btn-primary" style="text-align: center;">Download Project</button>
+					</form>
+				</div>
+			</div>
+		</div> 
+		
+		
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Download Dataset
+				</div>
+				<div class="card-body">
+					<form class="download-dataset-form" action ="/downloadDataset" method="POST" enctype="multipart/form-data" id="downloadDatasetForm">
+						<input id = "PName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "Admin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "IDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<div class="form-group row">
+							<label class="col-md-4 col-form-label" for="list_of_available_formats">List of Available Formats</label>
+							<div class="col-md">
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="0" required> YOLOv3 Format</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="1"> TensorFlow Format (CSV)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="2"> COCO Format (JSON + images)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="3"> Pascal VOC Format (xml + images)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="4"> Summary File</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="5"> Initial Classification (auto-labled projects only)</label>
+								</div>  
+								<div class="col-md-2 text-right">
+									<input type="submit" class="btn btn-primary" value="Download" style="border-radius: 0">
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+
+		
+		<%if(has_scripts == 1) {%>
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Download Script
+				</div>
+				<div class="card-body">
+					<form class="download-dataset-form" action ="/downloadScript" method="POST" enctype="multipart/form-data" id="downloadDatasetForm">
+						<input id = "PName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "Admin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "IDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<div class="form-group row">
+							<label class="col-md-4 col-form-label" for="list_of_available_formats">Project Scripts</label>
+							<div class="col-md">
+								
+							<% for(var i=0; i<scripts.length; i++) {%>
+								<input type="checkbox" id="<%=scripts[i]%>" name="scripts[]" value="<%=scripts[i]%>">
+								<label for="<%=scripts[i]%>"><%=scripts[i]%></label><br>
+							<% } %>
+							<div class="col-md-2 text-right">
+								<input type="submit" class="btn btn-primary" value="Download" style="border-radius: 0">
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<%}%>
+
+
+		<%if(weights.length > 0) {%>
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Download Weights
+				</div>
+				<div class="card-body">
+					<form class="download-dataset-form" action ="/downloadWeights" method="POST" enctype="multipart/form-data" id="downloadDatasetForm">
+						<input id = "PName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "Admin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "IDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<div class="form-group row">
+							<label class="col-md-4 col-form-label" for="list_of_available_formats">Project Weights</label>
+							<div class="col-md">
+								
+							<% for(var i=0; i<weights.length; i++) {%>
+								<input type="checkbox" id="<%=weights[i]%>" name="weights[]" value="<%=weights[i]%>">
+								<label for="<%=weights[i]%>"><%=weights[i]%></label><br>
+							<% } %>
+							<div class="col-md-2 text-right">
+								<input type="submit" class="btn btn-primary" value="Download" style="border-radius: 0">
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<%}%>
+
+
+	</div>
+</div>
+
+<%- include('includes/footer') %>
+
