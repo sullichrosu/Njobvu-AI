@@ -1,0 +1,50 @@
+{
+  "name": "labeling-tool",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/madebymaze/express-server.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/madebymaze/express-server/issues"
+  },
+  "homepage": "https://github.com/madebymaze/express-server#readme",
+  "dependencies": {
+    "@mapbox/node-pre-gyp": "^1.0.5",
+    "archiver": "^3.1.1",
+    "bcryptjs": "^2.4.3",
+    "bluebird": "^3.5.3",
+    "body-parser": "^1.18.3",
+    "child_process": "^1.0.2",
+    "cookie-parser": "^1.4.4",
+    "csvtojson": "^2.0.10",
+    "decompress-zip": "^0.3.3",
+    "ejs": "^2.6.1",
+    "express": "^4.16.4",
+    "express-fileupload": "^1.1.6-alpha.6",
+    "express-session": "^1.16.1",
+    "glob": "^7.1.5",
+    "http": "0.0.0",
+    "moment": "^2.24.0",
+    "nedb": "^1.8.0",
+    "node-stream-zip": "^1.13.6",
+    "nodemon": "^2.0.2",
+    "popper.js": "^1.14.7",
+    "probe-image-size": "^5.0.0",
+    "req-flash": "0.0.3",
+    "socket.io": "^2.3.0",
+    "socket.io-client": "^2.3.0",
+    "sqlite3": "^5.0.2",
+    "tiff-to-png": "^2.0.1",
+    "unzip": "^0.1.11",
+    "unzip-stream": "^0.3.0",
+    "unzipper": "^0.10.5"
+  }
+}
