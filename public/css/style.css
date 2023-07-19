@@ -1,0 +1,286 @@
+/*
+ Import
+*/
+
+/* libraries */
+@import url(../libraries/fontawesome-free-5.7.0-web/css/fontawesome.min.css);
+@import url(../libraries/bootstrap-4.0.0-dist/css/bootstrap.min.css);
+
+/* fonts */
+/* vietnamese */
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Saira SemiCondensed Regular'), local('SairaSemiCondensed-Regular'), url(https://fonts.gstatic.com/s/sairasemicondensed/v5/U9MD6c-2-nnJkHxyCjRcnMHcWVWV1cWRRX8DaOYuqA.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Saira SemiCondensed Regular'), local('SairaSemiCondensed-Regular'), url(https://fonts.gstatic.com/s/sairasemicondensed/v5/U9MD6c-2-nnJkHxyCjRcnMHcWVWV1cWRRX8CaOYuqA.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Saira Semi Condensed';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Saira SemiCondensed Regular'), local('SairaSemiCondensed-Regular'), url(https://fonts.gstatic.com/s/sairasemicondensed/v5/U9MD6c-2-nnJkHxyCjRcnMHcWVWV1cWRRX8MaOY.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+global:
+    dark blue: 5580E9
+*/
+
+/*
+    Gloabl
+*/
+html {
+    height: 100%;
+}
+body {
+    background: #F1F4F9; /*#4C4C4C;*/
+}
+p {
+  font-family: 'Saira Semi Condensed', sans-serif;
+}
+h1, h2, h3, h4, h5, nav a, footer p, footer a, th{
+  font-family: 'Saira Semi Condensed', sans-serif !important;
+}
+.navbar-dark{
+  background-color: #171717 !important;
+}
+h3 {
+  color: #5085A5;
+}
+.btn-primary {
+  background-color: #1569AE !important;
+  border-color: #1569AE !important;
+}
+.btn-primary:hover {
+  background-color: #0d406a !important;
+  border-color: #0d406a !important;
+}
+a {
+  color: #1569AE;
+}
+a:hover {
+  color: #0d406a;
+}
+.row::after {
+    content: "";
+    clear: both;
+    display: table;
+}
+
+[class*="col-"] {
+	float: left;
+	padding: 15px;
+}
+.col-10 {
+	float: left;
+	padding: 15px;
+	width: 50%;
+}
+.col-buttons {
+	float: right;
+	padding: 15px;
+}
+#footer{
+    background: white;
+}
+    #footer .row {
+        margin-top: 5px;
+        margin-bottom: 5px;
+    }
+    #footer .footer-copyright{
+        background: #252525;
+        color: white;
+    }
+        #footer .footer-copyright a{
+            color: white;
+        }
+#header {
+    z-index: 2;
+}
+.modal-content {
+    width: 100%;
+}
+    .modal-content .modal-header {
+        background: #F1F4F9;
+    }
+    .modal-content .modal-header .modal-title {
+        text-align: center;
+    }
+    .modal-content .modal-body img {
+        width: 100%;
+        background: black;
+    }
+#header .navbar-nav > li > a {padding-top:1px !important; padding-bottom:1px !important;}
+/* #header .navbar {max-height:32px !important} */
+/*
+    Home
+*/
+#home .col-sm-6 {
+    height: auto;
+}
+
+/*
+    Labeling
+*/
+#canvas {
+    position: relative;
+    left: 0;
+    right: 0;
+    margin: auto;
+}
+#editor-area {
+    cursor: not-allowed;
+    width: 100vw;
+}
+.upper-canvas {
+    cursor: crosshair !important;
+    margin: auto;
+}
+.canvas-container {
+    margin: auto !important; 
+    width: 100vw;
+}
+.nopadding {
+   padding: 0 !important;
+}
+
+.enoughPadding {
+    /* bottom: 0;
+    position: fixed; */
+    padding: 0 !important;
+    
+ }
+
+.keyboard {
+    font-size: 14px;
+    font-family: sans-serif;
+}
+
+.keyboard__row {
+    display: inline-block;
+    height: 3em;
+    margin: 0.2em;
+}
+
+.keyboard__row > * {
+    position: relative;
+    background: #333;
+    text-align: center;
+    color: #eee;
+    float: left;
+    border-radius: 0.3em;
+    margin: 0.2em;
+    padding: 0.2em;
+    width: 3.3em;
+    height: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    border: 1px solid #444;
+    box-shadow: 0 0.2em 0 0.05em #222;
+    border-bottom-color: #555;
+}
+
+.keyboard__row > div[data-pressed],
+.keyboard__row > div:active {
+    background: #2a2a2a;
+    color: #aaa;
+    position: relative;
+    top: 0.2em;
+    box-shadow: 0 0 0 0.05em black;
+}
+
+.keyboard > .keyboard__row {
+    text-align: center;
+}
+.selected-class {
+    border: 5px solid #009EFD !important;
+}
+.modal {
+    display: none; /* Hide the modal by default */
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 300px; /* Adjust the width as needed */
+    background-color: #fff;
+    z-index: 9999;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  .semi-transparent-button {
+     display: block; 
+     box-sizing: 
+     border-box; 
+     margin: 0 auto;
+     margin-left: auto;
+     margin-right: 0; 
+     /* padding: 8px;  */
+     opacity: 70%;
+     width: 80%; 
+     max-width: 100px; 
+     background: rgb(180, 108, 108); 
+     border-radius: 8px; 
+     color: #000000; 
+     text-align: center; 
+     text-decoration: none; 
+     letter-spacing: 1px; 
+     transition: all 0.3s ease-out; 
+    }
+
+.modalV {
+    width: 300px; /* Adjust the width as needed */
+    overflow-y: auto;
+
+    position: fixed;
+    margin-left: auto;
+    margin-right: 0; 
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    z-index: 9999; /* Higher z-index value to ensure the modal is on top */
+    display: block;
+    }
+
+.modalV .modal-contentV {
+    /* position: absolute; */
+    /* top: 50%; */
+    margin-left: auto;
+    /* transform: translate(-50%, -50%); */
+    padding: 20px;
+    }
+
+.modal-contentV .modal-headerV {
+    margin-top: auto;
+    margin-bottom: 0;
+    margin-left: auto;
+    margin-right: 0;
+    }
+
+.modal-contentV .modal-textV {
+    color:rgb(255, 255, 255);
+    font-weight: bold;
+}
+
+.imageLabels {
+    display: flex;
+    align-items: center;
+}
+
