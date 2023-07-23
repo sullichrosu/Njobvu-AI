@@ -1,4 +1,4 @@
-**CCV-Tool TOOL**
+**Njovu-AI TOOL**
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -33,11 +33,11 @@ Node.js
 **Windows:**
 Use the created shortcut on your desktop
 *or*
-Run CCV-Tool.exe in the root directory of the CCV-Tool
+Run Njovu-AI.exe in the root directory of the Njovu-AI
 
 
 **All Platforms:**
-1) Using the terminal, navigate to the root directory of the CCV-Tool.
+1) Using the terminal, navigate to the root directory of the Njovu-AI.
 2) Run "node server.js".
 3) Go to "http://localhost:8080".
 
