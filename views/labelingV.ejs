@@ -9,8 +9,9 @@
 <body style="background-color: #4C4C4C;">
 <div id="labeling" class="row" style="margin-left: 0; margin-right: 0;">
     <form action ="updateLabels" method="post" id="submit-project">
+      <% if(classFilter != 'false') { %>
         <!--Classes bar -->
-        <div class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
+        <div id="class-list" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
               <% for(var i=0; i<classes.length; i++) {%>
                   <% if(classes[i] == curr_class) {%>
                       <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection selected-class" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
@@ -18,14 +19,24 @@
                       <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
                   <% } %>
               <% } %>
+              <a href="/labelingV?IDX=<%= IDX %>&IName=<%= IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=false">
+              <button type="button" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn" style="background-color: lightblue; border-radius: 0; border: 5px solid black">Hide Class List</button>
+              </a>
         </div>
+        <% } else { %>
+        <div id="showClassesButton" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
+          <a href="/labelingV?IDX=<%= IDX %>&IName=<%= IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=true">
+            <button type="button" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn" style="background-color: lightblue; border-radius: 0; border: 5px solid black">Show Class List</button>
+          </a>
+        </div>
+        <% } %>
         <!-- prev/next image arrows bar -->
         <div class="mb-0 col-md-12 row text-center mx-auto nopadding" style="background-color: #262C2F; color: white">
           <% if(prev_IName != -1) { %>
                   <% if (AutoSave == 1) { %>
                       <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-prevV" value="auto-prevV" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></button>
                   <% } else { %>
-					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=null&class=null" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-dark col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
@@ -35,7 +46,7 @@
                   <% if (AutoSave == 1) { %>
                       <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-nextV" value="auto-nextV" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></button>
                   <% } else { %>
-					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=null" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-primary col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
@@ -62,7 +73,7 @@
                   <div class="imageLabels">
                     <div>
                       <a class ="mr-0 ml-0 btn col text-center">
-                        ID: <%= labelConf[i].LID %>, Conf: <%= labelConf[i].Confidence %>%
+                        ID: <%= labelConf[i].LID %>, Conf: <%= Math.round(Number(labelConf[i].Confidence)) %>%
                       </a>
                     </div>
                     <div>
@@ -106,6 +117,7 @@
             <input type="hidden" name="prev_IName" value="<%= prev_IName %>">
             <input type="hidden" name="next_IName" value="<%= next_IName %>">
             <input type="hidden" name="sortFilter" value="<%= sortFilter %>">
+            <input id="classFilter" type="hidden" name="classFilter" value="<%= classFilter %>">
             <input type="hidden" name="imageClass" value="<%= imageClass %>">
             <input id="curr_class" type="hidden" name="curr_class" value="<%= curr_class %>">
             <input id="image_path" type="hidden" name="image_path" value="<%= image_path %>">
@@ -136,7 +148,7 @@
             <%} else {%>
               <button type="button" class="mr-0 ml-0 col text-center rev-button" id="Review" style="border-radius: 0;">Needs Review</button>
             <% } %>
-            <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-success col text-center" id="form-save" value="save" style="border-radius: 0"><i class="fas fa-save"></i> <u>S</u>ave </button>
+            <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-success col text-center" id="form-save" value="saveV" style="border-radius: 0"><i class="fas fa-save"></i> <u>S</u>ave </button>
         </div>
     </form>
     <ul id="output"></ul>
@@ -173,7 +185,7 @@
                                 <%} else {%>
                                 <td></td>
                                 <%}%>
-                                <td class="text-right"><a class="btn btn-primary pass-class" href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&curr_class=<%= curr_class %>&sort=null&class=null" role="button">Label</a></td>
+                                <td class="text-right"><a class="btn btn-primary pass-class" href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button">Label</a></td>
                             </tr>
                             <% } %>
                         </tbody>
@@ -335,6 +347,7 @@
 
   // Close the modal
   function toggleOptions() {
+
     if(modal.style.display == 'block'){
       modal.style.display = 'none';
     }
@@ -343,6 +356,21 @@
     }
     
   }
+
+  // function toggleClassList() {
+  //   var url = window.location.href;
+  //   var display = url.split('&');
+  //   console.log(display);
+  //   var displayChoice = display[display.length - 1].split('=');
+
+  //   console.log(displayChoice);
+  //   displayChoice[1] = 'true';
+
+
+  //   display[display.length - 1] = displayChoice.join('=');
+
+
+  // }
 </script>
 
 

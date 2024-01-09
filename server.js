@@ -169,7 +169,9 @@ const {
   get404Page,
   getValidationHomePage,
   getValidationProjectPage,
-  getValidationLabelingPage
+  getValidationLabelingPage,
+  getValidationConfigPage,
+  getValidationStatsPage
 } = require('./routes/pages');
 // configure middlewares
 // set
@@ -209,6 +211,8 @@ app.get('/user', getUserPage);
 app.get('/homeV', getValidationHomePage);
 app.get('/projectV', getValidationProjectPage);
 app.get('/labelingV', getValidationLabelingPage);
+app.get('/configV', getValidationConfigPage);
+app.get('/statsV', getValidationStatsPage);
 // everything else -> 404
 app.get('*', get404Page);
 

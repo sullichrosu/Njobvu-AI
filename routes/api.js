@@ -8,6 +8,7 @@ const StreamZip = require('node-stream-zip');
 const { protocol } = require('socket.io-client');
 const { OPEN_CREATE } = require('sqlite3');
 const rimraf = require('../public/libraries/rimraf');
+const ffmpeg = require('ffmpeg');
 
 const api = express.Router();
 
@@ -129,7 +130,9 @@ api.post('/createP', async (req, res) => {
 	// get form inputs
 	var project_name = req.body.project_name,
 		upload_images = req.files["upload_images"],
+		upload_video = req.files["upload_video"],
 		upload_bootstrap = req.files["upload_bootstrap"],
+		frame_rate = req.body.frame_rate,
 		input_classes = req.body.input_classes,
 		auto_save = 1,
 		username = req.cookies.Username,
@@ -293,54 +296,151 @@ api.post('/createP', async (req, res) => {
 		}
 	}
 
-	//Images Table
-	// console.log(project_path, project_name, images_path);
-	var zip_path = images_path + '/' +upload_images.name; // $LABELING_TOOL_PATH/public/projects/{project_name}/{zip_file_name}
+	//If images instead of video is being uploaded
+	if(upload_images){
 
-	await upload_images.mv(zip_path);
-	console.log("File Uploaded", upload_images.name);
-	
-	//extract images zip file
-	console.log(`zip_path: ${zip_path}`);
-	var zip = new StreamZip({file: zip_path})
+		var zip_path = images_path + '/' +upload_images.name; // $LABELING_TOOL_PATH/public/projects/{project_name}/{zip_file_name}
 
-	zip.on('error', err => {
-		console.log(err);	
-		cdb.close(function(err){
-			if(err)
-			{
-				console.error(err);
-			}
-			else{
-				console.log("cdb closed successfully");
-			}
-		});
+		await upload_images.mv(zip_path);
+		console.log("File Uploaded", upload_images.name);
+		
+		//extract images zip file
+		console.log(`zip_path: ${zip_path}`);
+		var zip = new StreamZip({file: zip_path})
 
-		return res.send("ERROR! ", err)
-	});
-
-	zip.on('ready', async () =>{
-		console.log(zip_path)
-		zip.extract(null, images_path, async (err, count) =>{
-			console.log(err ? `Extract error: ${err}` : `Extracted ${count} entries`);
-			zip.close();
-			rimraf(zip_path, (err) => {
+		zip.on('error', err => {
+			console.log(err);	
+			cdb.close(function(err){
 				if(err)
 				{
-					console.log(err);
-					// res.send({"Success": "could not remove zip file"});
-					cdb.close(function(err){
-						if(err)
-						{
-							console.error(err);
-						}
-						else{
-							console.log("cdb closed successfully");
-						}
-					});
-					res.send(err)
+					console.error(err);
 				}
-			})
+				else{
+					console.log("cdb closed successfully");
+				}
+			});
+
+			return res.send("ERROR! ", err)
+		});
+
+		zip.on('ready', async () =>{
+			console.log(zip_path)
+			zip.extract(null, images_path, async (err, count) =>{
+				console.log(err ? `Extract error: ${err}` : `Extracted ${count} entries`);
+				zip.close();
+				rimraf(zip_path, (err) => {
+					if(err)
+					{
+						console.log(err);
+						// res.send({"Success": "could not remove zip file"});
+						cdb.close(function(err){
+							if(err)
+							{
+								console.error(err);
+							}
+							else{
+								console.log("cdb closed successfully");
+							}
+						});
+						res.send(err)
+					}
+				})
+				
+				files = await readdirAsync(images_path);
+				console.log("file path: ", images_path);
+				console.log("files: ", files);
+				// console.log("addProject (INSERT INTO Images)");
+				for (var i = 0; i < files.length; i++) {
+					if(files[i] == "__MACOSX")
+					{
+						// check if __MACOSX is the last file, if so close cdb
+						if(i+1 == files.length)
+						{
+							console.log("cbd should be closing here");
+							cdb.close(function(err){ 
+								if(err)
+								{
+									console.error(err);
+								}
+								else{
+									console.log("cdb closed successfully");
+								}
+							});
+							// res.send({"Success": "Yes"});
+							res.send("Project creation successful")
+						}
+						continue;
+					}
+					//Cleans filenames, Removes trailing and leading spaces and swaps 0s and +s with _.
+					if(!files[i].endsWith('.zip') && files[i] != 'blob')
+					{
+						var temp = images_path + '/' + files[i];
+						// console.log("files[i]: ", files[i]);
+						files[i] = files[i].trim();
+						files[i] = files[i].split(' ').join('_');
+						files[i] = files[i].split('+').join('_');
+						fs.rename(temp, images_path + '/' + files[i], () => {});
+
+						// console.log("addProject (INSERT INTO Images -> image = "+files[i] + ")");
+						await cdb.runAsync("INSERT INTO Images (IName, reviewImage, validateImage) VALUES ('" +  files[i] +
+							"', '" + 0 + "', '" + 0 + "')");
+					}
+					if(files[i].endsWith('.zip'))
+					{
+						fs.unlink(images_path + '/' + files[i], () => {});
+					}
+					// check if last file, if so close cdb
+					if(i+1 == files.length)
+					{
+						console.log("cbd should be closing here"); 
+						cdb.close(function(err){
+							if(err)
+							{
+								console.error(err);
+							}
+							else{
+								console.log("cdb closed successfully");
+							}
+						});
+						// res.send({"Success": "Yes"});
+						if(upload_bootstrap == undefined){
+							res.send("Project creation successful");
+						}
+					}
+				}
+			});
+		});
+	}
+	else if(upload_video){
+		var video_path = images_path + '/' +upload_video.name; // $LABELING_TOOL_PATH/public/projects/{project_name}/{zip_file_name}
+
+		await upload_video.mv(video_path);
+		console.log("File Uploaded", upload_video.name);
+		
+		//extract photos from video
+		console.log(`video_path: ${video_path}`);
+		try {
+			var process = new ffmpeg(video_path);
+			process.then(function (video) {
+				video.fnExtractFrameToJPG(images_path, {
+					every_n_frames : frame_rate
+				}, function (err, files){
+					if(!err){
+						console.log("Photos generated:");
+						console.log(files);
+						cleanFiles();
+					}
+					else{
+						console.log('Error: ' + err);
+					}
+				});
+			}, function (err) {
+				console.log('Error: ' + err);
+			});	
+		} catch (e) {
+			console.log("ERROR " + e);
+		}
+		async function cleanFiles() {
 			files = await readdirAsync(images_path);
 			console.log("file path: ", images_path);
 			console.log("files: ", files);
@@ -367,7 +467,7 @@ api.post('/createP', async (req, res) => {
 					continue;
 				}
 				//Cleans filenames, Removes trailing and leading spaces and swaps 0s and +s with _.
-				if(!files[i].endsWith('.zip') && files[i] != 'blob')
+				if(!files[i].endsWith('.mp4') && !files[i].endsWith('.avi') && !files[i].endsWith('.mov') && !files[i] != 'blob')
 				{
 					var temp = images_path + '/' + files[i];
 					// console.log("files[i]: ", files[i]);
@@ -380,7 +480,7 @@ api.post('/createP', async (req, res) => {
 					await cdb.runAsync("INSERT INTO Images (IName, reviewImage, validateImage) VALUES ('" +  files[i] +
 						"', '" + 0 + "', '" + 0 + "')");
 				}
-				if(files[i].endsWith('.zip'))
+				if(files[i].endsWith('.mp4') || files[i].endsWith('.avi') || files[i].endsWith('.mov'))
 				{
 					fs.unlink(images_path + '/' + files[i], () => {});
 				}
@@ -401,12 +501,13 @@ api.post('/createP', async (req, res) => {
 					if(upload_bootstrap == undefined){
 						res.send("Project creation successful");
 					}
-					
 				}
 			}
-		});
-	});
-
+		}
+	}
+	else{
+		return res.send("ERROR! NO PHOTO ZIP OR VIDEO FILE PROVIDED");
+	}
 	//Run models on existing data
 	if(upload_bootstrap !== undefined){
 		var bzip_path = bootstrap_path + '/' + upload_bootstrap.name;
@@ -482,7 +583,7 @@ api.post('/createP', async (req, res) => {
 						// Pass in python path, script, and options
 						var darknet_path = '/export/darknet'; //TEMP SWITCH TO USER INPUT ASAP
 						var cmd = `python3 ${yolo_script} -d ${data_bootstrap_path} -c ${cfg_bootstrap_path} -t ${run_txt_path} -y ${darknet_path} -w ${weight_bootstrap_path} -o ${out_bootstrap_json}`;
-						// console.log(cmd)
+						console.log(cmd)
 						process.chdir(darknet_path);
 
 						var child = exec(cmd, (err, stdout, stderr) => {
@@ -496,6 +597,14 @@ api.post('/createP', async (req, res) => {
 							console.log("stderr: ", stderr)
 							console.log("err: ", err)
 							console.log("The script has finished running");
+						});
+
+						child.on('error', (err) => {
+							console.error(`Error occurred: ${err.message}`);
+						});
+
+						child.on('exit', (code) => {
+							console.log(`Child process exited with code ${code}`);
 							apply_bootstrap_labels();
 						});
 					}
@@ -503,6 +612,7 @@ api.post('/createP', async (req, res) => {
 			});
 			async function apply_bootstrap_labels() {
 				console.log("Applying bootstrap labels.");
+
 				var raw_label_bootstrap_data = fs.readFileSync(out_bootstrap_json);
 				var label_bootstrap_data = JSON.parse(raw_label_bootstrap_data);
 
@@ -653,6 +763,7 @@ api.post('/updateLabels', async (req, res) => {
 		labels_counter = parseInt(req.body.labels_counter),
 		curr_class = req.body.curr_class,
 		sortFilter = req.body.sortFilter,
+		classFilter = req.body.classFilter,
 		imageClass = req.body.imageClass,
 		form_action = req.body.form_action;
 	
@@ -758,7 +869,7 @@ api.post('/updateLabels', async (req, res) => {
 			cur_conf.push([]);
 		}
 
-	}//tp3
+	}
 	var labelsExists = await uldb.getAsync("SELECT COUNT(*) AS count FROM Labels");
 
 	if(labelsExists.count == 0)
@@ -795,8 +906,7 @@ api.post('/updateLabels', async (req, res) => {
 				"', '" + Number(req.body.H[i]) + 
 				"', '" + CName[i] + "')");
 
-				if(cur_conf.length > 0){
-
+				if(cur_conf[i][0] && cur_conf.length > 0){
 					await uldb.runAsync("INSERT INTO Validation (Confidence, LID, CName, IName) VALUES ('" + Number(cur_conf[i][0].Confidence) + 
 					"', '" + Number(newmax) +
 					"', '" + cur_conf[i][0].CName + 
@@ -822,7 +932,7 @@ api.post('/updateLabels', async (req, res) => {
 			"', '" + Number(req.body.H) +
 			"', '" + CName + "')");
 
-			if(cur_conf.length > 0){
+			if(cur_conf[0][0] && cur_conf.length > 0){
 				console.log('inserting', cur_conf[0][0]);
 				var cc = cur_conf[0][0];
 
@@ -846,8 +956,9 @@ api.post('/updateLabels', async (req, res) => {
 	if(form_action == "save"){ return res.redirect('/labeling?IDX='+IDX+'&IName='+IName+'&curr_class='+curr_class); }
 	else if(form_action == "auto-prev"){ return res.redirect('/labeling?IDX='+IDX+'&IName='+prev_IName+'&curr_class='+curr_class); }
 	else if(form_action == "auto-next"){ return res.redirect('/labeling?IDX='+IDX+'&IName='+next_IName+'&curr_class='+curr_class); }
-	else if(form_action == "auto-prevV"){ return res.redirect('/labelingV?IDX='+IDX+'&IName='+prev_IName+'&curr_class='+curr_class+'&sort='+sortFilter+'&class='+imageClass); }
-	else if(form_action == "auto-nextV"){ return res.redirect('/labelingV?IDX='+IDX+'&IName='+next_IName+'&curr_class='+curr_class+'&sort='+sortFilter+'&class='+imageClass); }
+	else if(form_action == "saveV"){ return res.redirect('/labelingV?IDX='+IDX+'&IName='+IName+'&curr_class='+curr_class+'&sort='+sortFilter+'&class='+imageClass+'&classFilter='+classFilter); }
+	else if(form_action == "auto-prevV"){ return res.redirect('/labelingV?IDX='+IDX+'&IName='+prev_IName+'&curr_class='+curr_class+'&sort='+sortFilter+'&class='+imageClass+'&classFilter='+classFilter); }
+	else if(form_action == "auto-nextV"){ return res.redirect('/labelingV?IDX='+IDX+'&IName='+next_IName+'&curr_class='+curr_class+'&sort='+sortFilter+'&class='+imageClass+'&classFilter='+classFilter); }
 });
 
 
@@ -960,7 +1071,8 @@ api.post('/addClasses', async (req, res) => {
 		admin = req.body.Admin,
 		IDX = parseInt(req.body.IDX),
 		// mult = parseInt(req.body.mult),
-		user = req.cookies.Username;
+		user = req.cookies.Username,
+		validation = req.body.validation;
 	
 
 	// Set paths
@@ -1080,6 +1192,7 @@ api.post('/addClasses', async (req, res) => {
 		}
 	});
 
+	if (validation) return res.redirect('/configV?IDX='+IDX);
 	return res.redirect('/config?IDX='+IDX);
 });
 
@@ -2292,7 +2405,6 @@ api.post('/import', async(req,res) => {
 								res.send({"Success": "No"})
 							});
 						};
-
 						//Clean image and class names
 						var images = await readdirAsync(images_path);
 						var imcount = await imdb.allAsync("SELECT * FROM Images")
@@ -2310,7 +2422,7 @@ api.post('/import', async(req,res) => {
 							image = image.trim();
 							image = image.split(' ').join('_');
 							image = image.split('+').join('_');
-							var ext = image.split('.').pop()
+							var ext = image.split('.').pop();
 							if(image != oldimg)
 							{
 								fs.rename(images_path + '/' + images[j], images_path + '/' + image, () => {});
@@ -2337,15 +2449,15 @@ api.post('/import', async(req,res) => {
 							await imdb.runAsync("UPDATE Labels SET CName = '" + CName + "' WHERE CName = '" + classes[j].CName + "'");
 							await imdb.runAsync("UPDATE Validation SET CName = '" + CName + "' WHERE CName = '" + classes[j].CName + "'");
 						}
-
 						var labels = await imdb.allAsync("SELECT * FROM Labels");
 						var confidence = await imdb.allAsync("SELECT * FROM Validation");
 						var conf = {};
-						for(var x; x < confidence.length; x++){
-							console.log(confidence[x])
-							conf[confidence[x].LID] = confidence[x]
+						for(var x = 0; x < confidence.length; x++){
+							console.log(confidence[x]);
+							conf[confidence[x].LID] = confidence[x];
 						}
 						// console.log(confidence);
+						// console.log(conf);
 						var cur_labels = [];
 						var cur_conf = [];
 						for(var j = 0; j < labels.length; j++)
@@ -2363,7 +2475,7 @@ api.post('/import', async(req,res) => {
 							}
 						}
 						// console.log("CIR CONGAfADF");
-						// console.log(cur_conf);
+						// console.log(labels);
 						await imdb.runAsync("DELETE FROM Labels");
 						await imdb.runAsync("DELETE FROM Validation");
 						for(var j = 0; j < cur_labels.length; j++)
@@ -2376,7 +2488,7 @@ api.post('/import', async(req,res) => {
 							"', '" + cur_labels[j][5] + "')");
 
 							if(cur_conf[j].length != 0){
-								await imdb.runAsync("INSERT INTO Validation (Confidence, LID, CName, IName) VALUES ('" + Number(cur_conf[i][0].Confidence) + 
+								await imdb.runAsync("INSERT INTO Validation (Confidence, LID, CName, IName) VALUES ('" + Number(cur_conf[j][0].Confidence) + 
 							"', '" + Number(j+1) +
 							"', '" + cur_conf[j][0].CName + 
 							"', '" + cur_conf[j][0].IName + "')"); //tp4
@@ -3030,6 +3142,15 @@ api.post('/mergeTest', async(req,res) => {
 
 				// get incoming labels
 				var results6 = await nmdb.allAsync("SELECT * FROM Labels");
+
+				var results7 = await mergeDB.allAsync("SELECT * FROM Validation");
+				var new_valids = [];
+				for(var i = 0; i < results7.length; i++)
+				{
+					new_valids.push([results7[i].Confidence, results7[i].LID, results7[i].CName, results7[i].IName]);
+					
+				}
+
 				var new_labels = [];
 				var newl = 0;
 				for(var i = 0; i < results6.length; i++)
@@ -3049,6 +3170,13 @@ api.post('/mergeTest', async(req,res) => {
 					{
 						cur_labels.push([results6[i].CName, results6[i].X, results6[i].Y, results6[i].W, results6[i].H, results6[i].IName]);
 						await mdb.runAsync("INSERT INTO Labels (LID, IName, X, Y, W, H, CName) VALUES ('"+Number(newmax)+"', '" + results6[i].IName + "', '" + Number(results6[i].X) + "', '" + Number(results6[i].Y) + "', '" + Number(results6[i].W) + "', '" + Number(results6[i].H) + "', '" + results6[i].CName + "')");
+						for(var v = 0; v < new_valids.length; v++){
+							if(results6[i].LID == new_valids[v][1]){
+								await mdb.runAsync("INSERT INTO Validation (Confidence, LID, CName, IName) VALUES ('"+new_valids[v][0]+"', '" + Number(newmax) + "', '" + new_valids[v][2] + "', '" + new_valids[v][3] + "')")
+								break;
+							}
+							
+						}
 						newmax = newmax + 1;
 					}
 					newl = 0;
@@ -3110,14 +3238,14 @@ api.post('/mergeTest', async(req,res) => {
 	})
 });
 
-//TODO add correct res.send to finish the function
+
 api.post('/mergeLocal', async(req, res) => {
     console.log("mergeLocal");
 
     var PName = req.body.PName,
 		Admin = req.body.Admin,
-        mergeName = req.body.mergeName,
-        mergeAdmin = req.body.mergeAdmin,
+        mergeName = String(req.body.mergeName).trim(),
+        mergeAdmin = String(req.body.mergeAdmin).trim(),
 		username = req.cookies.Username;
 
     console.log("PName: ", PName);
@@ -3134,18 +3262,21 @@ api.post('/mergeLocal', async(req, res) => {
 		training_path = project_path + '/training',
 		log_path = training_path + '/logs/',
 		scripts_path = training_path + '/python/',
+		weights_path = training_path + '/weights',
 		python_path_file = training_path + '/Paths.txt',
 		darknet_path_file = training_path + '/darknetPaths.txt';
 
-	var	merge_path = main_path + '/' + mergeAdmin + '-' + mergeName,
+	var	merge_path = main_path + '/' + mergeAdmin + '-' + mergeName, 
         mergeDB_path = merge_path + '/' + mergeName + '.db',
         merge_images = merge_path + '/images/',
 		merge_training = merge_path + '/training',
         merge_log = merge_training + '/logs/',
         merge_scripts_path = merge_training + '/python',
+		merge_weights_path = merge_training + '/weights',
         merge_python_file = merge_training + '/Paths.txt',
         merge_darknet_file = merge_training + '/darknetPaths.txt';
-        
+    
+
     var mdb = new sqlite3.Database(mdb_path, function(err){
         if (err) {
             return console.error(err.message);
@@ -3200,7 +3331,6 @@ api.post('/mergeLocal', async(req, res) => {
             console.error(err)
         });
     };
-
 
     var mergeDB = new sqlite3.Database(mergeDB_path, function(err){
         if (err) {
@@ -3257,8 +3387,6 @@ api.post('/mergeLocal', async(req, res) => {
         });
     };
     
-
-
     // Transfer incoming runs to current runs
     // var merge_runs_path = `${merge_path}/training/logs/`
     if(fs.existsSync(merge_log))
@@ -3297,7 +3425,6 @@ api.post('/mergeLocal', async(req, res) => {
             }
         }
     }
-
 
     // Transfer incomimg python scrips to current scripts
     // var merge_scripts_path = `${merge_path}/training/python/`;
@@ -3398,6 +3525,36 @@ api.post('/mergeLocal', async(req, res) => {
         }
     }
 
+	//add incoming weights here
+    if(fs.existsSync(merge_weights_path))
+    {
+        var merge_weights = await readdirAsync(merge_weights_path);		
+        for(var i = 0; i < merge_weights.length; i++)
+        {
+			var extension = merge_weights[i].split('.').pop();
+            if(extension == "weights" || Number.isInteger(extension))
+            {
+                var merge_weights_path = path.join(merge_weights_path, merge_weights[i]);
+                var cur_weights = await readdirAsync(weights_path);
+                var merge_weight_name = merge_weights[i];
+                var j = 1;
+                var t = `${merge_weights[i].split('.')[0]}${j}.${extension}`
+
+                while(cur_weights.includes(merge_weight_name))
+                {
+                    merge_weight_name = `${merge_weights[i].split('.')[0]}${j}.py`
+                    
+                }
+                var new_weight_path = path.join(weights_path, merge_weight_name);
+                fs.copyFile(merge_weight_path, new_weight_path, (error) => {
+                    if(error){
+                        console.log(error)
+                    }
+                });
+                
+            }
+        }
+    }
 
     // merge classes //////////////////////////////////////////////////////
     var results1 = await mdb.allAsync("SELECT * FROM Classes");
@@ -3407,7 +3564,7 @@ api.post('/mergeLocal', async(req, res) => {
         cur_classes.push(results1[i].CName);
     }
     
-    var results2 = await mergedb.allAsync("SELECT * FROM Classes");
+    var results2 = await mergeDB.allAsync("SELECT * FROM Classes");
     for(var i = 0; i < results2.length; i++)
     {
         var temp = results2[i].CName;
@@ -3415,7 +3572,7 @@ api.post('/mergeLocal', async(req, res) => {
         results2[i].CName = results2[i].CName.split(' ').join('_');
         if(!cur_classes.includes(results2[i].CName))
         {
-            await mergedb.runAsync("UPDATE Labels SET CName = '" + results2[i].CName + "' WHERE CName = '" + temp + "'");
+            await mergeDB.runAsync("UPDATE Labels SET CName = '" + results2[i].CName + "' WHERE CName = '" + temp + "'");
             cur_classes.push(results2[i].CName);
             await mdb.runAsync("INSERT INTO Classes (CName) VALUES ('"+results2[i].CName+"')");
         }
@@ -3423,7 +3580,7 @@ api.post('/mergeLocal', async(req, res) => {
 
     // merge images /////////////////////////////////////////////////////////
     var curr_DB_Images = await readdirAsync(image_path);
-    var results4 = await mergedb.allAsync("SELECT * FROM Images");
+    var results4 = await mergeDB.allAsync("SELECT * FROM Images");
     console.log("moving new images");
     for(var i = 0; i < results4.length; i++)
     {
@@ -3442,7 +3599,7 @@ api.post('/mergeLocal', async(req, res) => {
     console.log("Done moving new images");
 
 
-    // merge labels ///////////////////////////////////////////////////////////////
+    // merge labels + validation ///////////////////////////////////////////////////////////////
     // count current labels
     var labelsExists = await mdb.getAsync("SELECT COUNT(*) AS count FROM Labels");
     console.log("LabelsExists: ", labelsExists.count);
@@ -3464,8 +3621,24 @@ api.post('/mergeLocal', async(req, res) => {
         cur_labels.push([results5[i].CName, results5[i].X, results5[i].Y, results5[i].W, results5[i].H, results5[i].IName]);
     }
 
+	// var results8 = await mdb.allAsync("SELECT * FROM Validation");
+	// var cur_valids = [];
+	// for(var i = 0; i < results8.length; i++)
+    // {
+    //     cur_valids.push([results8[i].Confidence, results8[i].LID, results8[i].CName, results8[i].IName]);
+    // }
+
     // get incoming labels
-    var results6 = await mergedb.allAsync("SELECT * FROM Labels");
+    var results6 = await mergeDB.allAsync("SELECT * FROM Labels");
+
+	var results7 = await mergeDB.allAsync("SELECT * FROM Validation");
+	var new_valids = [];
+	for(var i = 0; i < results7.length; i++)
+    {
+        new_valids.push([results7[i].Confidence, results7[i].LID, results7[i].CName, results7[i].IName]);
+        
+    }
+
     var new_labels = [];
     var newl = 0;
     for(var i = 0; i < results6.length; i++)
@@ -3485,6 +3658,13 @@ api.post('/mergeLocal', async(req, res) => {
         {
             cur_labels.push([results6[i].CName, results6[i].X, results6[i].Y, results6[i].W, results6[i].H, results6[i].IName]);
             await mdb.runAsync("INSERT INTO Labels (LID, IName, X, Y, W, H, CName) VALUES ('"+Number(newmax)+"', '" + results6[i].IName + "', '" + Number(results6[i].X) + "', '" + Number(results6[i].Y) + "', '" + Number(results6[i].W) + "', '" + Number(results6[i].H) + "', '" + results6[i].CName + "')");
+			for(var v = 0; v < new_valids.length; v++){
+				if(results6[i].LID == new_valids[v][1]){
+					await mdb.runAsync("INSERT INTO Validation (Confidence, LID, CName, IName) VALUES ('"+new_valids[v][0]+"', '" + Number(newmax) + "', '" + new_valids[v][2] + "', '" + new_valids[v][3] + "')")
+					break;
+				}
+				
+			}
             newmax = newmax + 1;
         }
         newl = 0;
@@ -3502,16 +3682,17 @@ api.post('/mergeLocal', async(req, res) => {
         }
     });
 
-    mergedb.close((err) => {
+    mergeDB.close((err) => {
         if(err)
         {
             console.log(err);
         }
         else
         {
-            console.log("mergedb closed successfully");
+            console.log("mergeDB closed successfully");
         }
     });
+	res.send("Merge successful")
 });
 
 
@@ -3521,22 +3702,24 @@ api.post('/addUser', async(req,res) => {
 	var PName = req.body.PName,
 		Admin = req.body.Admin,
 		IDX = parseInt(req.body.IDX),
-		user = req.cookies.Username;
+		user = req.cookies.Username,
+		validation = req.body.validation;
 
 	var NewUser = req.body.newUser;
 	console.log("NewUser: ", NewUser);
 
 	var results1 = await db.getAsync("SELECT COUNT(*) AS THING FROM Users WHERE Username = '" + NewUser + "'");
-	console.log("results1.User: ", results1.THING);
+	// console.log("results1.User: ", results1.THING);
 	if(results1.THING == 1)
 	{
 		var results2 = await db.getAsync("SELECT COUNT(*) AS SOMETHING FROM Access WHERE Username = '" + NewUser + "' AND PName = '" + PName + "' AND Admin = '" + Admin + "'");
-		console.log("results2.SOMETHING: ", results2.SOMETHING);
+		// console.log("results2.SOMETHING: ", results2.SOMETHING);
 		if(results2.SOMETHING == 0)
 		{
 			await db.runAsync("INSERT INTO Access (Username, PName, Admin) VALUES('"+NewUser+"', '"+PName+"', '"+Admin+"')");
 		}
 	}
+	if(validation) return res.redirect('/configV?IDX='+IDX);
 	return res.redirect('/config?IDX='+IDX);
 });
 
@@ -3547,13 +3730,15 @@ api.post('/removeAccess', async(req,res) => {
 	var PName = req.body.PName,
 		Admin = req.body.Admin,
 		IDX = parseInt(req.body.IDX),
-		user = req.cookies.Username;
+		user = req.cookies.Username,
+		validation = req.body.validation;
 
 	var OldUser = req.body.OldUser
 	console.log("OldUser: ", OldUser);
 
 	await db.runAsync("DELETE FROM Access WHERE PName = '" + PName + "' AND Username = '" + OldUser + "' AND Admin = '" + Admin + "'");
 
+	if(validation) return res.redirect('/configV?IDX='+IDX);
 	return res.redirect('/config?IDX='+IDX);
 });
 
@@ -3565,7 +3750,8 @@ api.post('/transferAdmin', async(req,res) => {
 	var PName = req.body.PName,
 		Admin = req.body.Admin,
 		IDX = parseInt(req.body.IDX),
-		user = req.cookies.Username;
+		user = req.cookies.Username,
+		validation = req.body.validation;
 
 	var NewAdmin = req.body.NewAdmin;
 	console.log("NewAdmin: ", NewAdmin);
@@ -3591,6 +3777,7 @@ api.post('/transferAdmin', async(req,res) => {
 		}
 	})
 
+	if(validation) return res.redirect('/configV?IDX='+IDX);
 	return res.redirect('/config?IDX='+IDX)
 })
 
@@ -4985,7 +5172,7 @@ api.post('/changePassword', async (req, res) => {
 	}
 });
 
-//TODO return to whatever page calls it
+
 api.post('/deleteImage', async (req, res) => {
     console.log("deleteImage");
 
@@ -4993,7 +5180,7 @@ api.post('/deleteImage', async (req, res) => {
 		PName = req.body.PName,
 		admin = req.body.Admin,
 		user = req.cookies.Username,
-		images = req.body.ImageArray;;
+		images = req.body.ImageArray;
 
 		console.log("IDX: ", IDX)
 	// set paths
@@ -5057,31 +5244,30 @@ api.post('/deleteImage', async (req, res) => {
             console.error(err)
         });
     };
-    
+    console.log(images);
     if(images.includes(",")){
 		images = images.split(",");
 	}
 
     var deleteLabels = "";
 	var deleteImages = "";
+	var deleteVal = "";
 	if(typeof(images) == "string"){
 		deleteImages = `DELETE FROM Images WHERE IName = '${images}'`;
-		deleteLabels = `DELETE FROM Labels WHERE IName = '${images}`;
-		deleteLabels = `DELETE FROM Validation WHERE IName = '${images}`;
+		deleteLabels = `DELETE FROM Labels WHERE IName = '${images}'`;
+		deleteVal = `DELETE FROM Validation WHERE IName = '${images}'`;
 	}
 	else
 	{
 		deleteLabels = `DELETE FROM Labels WHERE IName = '${images[0]}'`;
-		deleteImage = `DELETE FROM Images WHERE IName = '${images[0]}'`;
-		deleteImage = `DELETE FROM Validation WHERE IName = '${images[0]}'`;
+		deleteImages = `DELETE FROM Images WHERE IName = '${images[0]}'`;
+		deleteVal = `DELETE FROM Validation WHERE IName = '${images[0]}'`;
 		for(var i = 1; i < images.length; i++){
 			var string = ` OR IName = '${images[i]}'`;
 			deleteLabels += string;
 			deleteClasses += string;
 		}
 	}
-    // deleteImage = `DELETE FROM Images WHERE IName = '${IName}'`;
-    // deleteLabels = `DELETE FROM Labels WHERE IName = '${IName}`;
 
     console.log(deleteLabels);
 	await didb.runAsync(deleteLabels);
@@ -5089,18 +5275,31 @@ api.post('/deleteImage', async (req, res) => {
     console.log(deleteImages);
 	await didb.runAsync(deleteImages);
 
-    image_path = `${images_path}${IName}`
-    console.log("Delete image: ", image_path)
-    fs.unlink(image_path, function (err) { 
-		if(err)
-		{
-			console.error(err);
-		}
-		else
-		{
-			console.log("done"); 
-		}
-	});
+	console.log(deleteVal);
+	await didb.runAsync(deleteVal);
+
+	//reIndex Images to reset rowId
+	var reIndexImages = await didb.allAsync("SELECT * FROM Images"); //tp1
+	await didb.runAsync("DELETE FROM Images");
+	for(var t = 0; t < reIndexImages.length; t++){
+		await didb.runAsync("INSERT INTO Images (IName, reviewImage, validateImage) VALUES ('"+reIndexImages[t]['IName']+"', '"
+			+reIndexImages[t]['reviewImage']+"', '"+reIndexImages[t]['validateImage']+"')");
+	}
+
+	// for(var i = 1; i < images.length; i++){ 
+		image_path = `${images_path}` + images; //change if multi image deletion is requested
+		console.log("Delete image: ", image_path)
+		fs.unlink(image_path, function (err) { 
+			if(err)
+			{
+				console.error(err);
+			}
+			else
+			{
+				console.log("done"); 
+			}
+		});
+	// }
 
     didb.close(function(err){
 		if(err)
@@ -5109,6 +5308,7 @@ api.post('/deleteImage', async (req, res) => {
 		}
 		else{
 			console.log("didb closed successfully");
+			res.send({"Success": "Yes"});
 		}
 	});
 
@@ -5436,17 +5636,82 @@ api.post('/changeValidation', async(req, res) => {
 	var admin = req.body.Admin;
 	var status = req.body.validMode;
 
+	var public_path = __dirname.replace('routes',''),
+		main_path = public_path + 'public/projects/',
+		project_path = main_path + admin + '-' + PName,
+        images_path = project_path + '/images/';
+
+
+    var rmdb = new sqlite3.Database(project_path+'/'+PName+'.db', (err) => {
+        if (err) {
+            return console.error(err.message);
+        }
+        console.log('Connected to rmdb.');
+    });    
+
+    rmdb.runAsync = function (sql) {
+        var that = this;
+        return new Promise(function (resolve, reject) {
+            that.run(sql, function (err, row) {
+                if (err)
+                {
+                    console.log("runAsync ERROR! ", err);
+                    reject(err);
+                }
+                else
+                    resolve(row);
+            });
+        }).catch(err => {
+            console.error(err)
+        });
+    };
+
 	if(status == 0){
 		await db.runAsync("UPDATE Projects SET Validate = '"+Number(1)+"' WHERE PName = '" + PName + "' AND Admin ='" + admin + "'");
+		await rmdb.runAsync("UPDATE Images SET reviewImage = 1");
 		console.log("Enabled Validation mode for: " + admin + "-" + PName);
+
+		rmdb.close(function(err){
+			if(err)
+			{
+				console.error(err);
+			}
+			else{
+				console.log("rmdb closed successfully");
+			}
+		});
+
 		res.send({"Success": "Yes"});
 	}
 	else if(status == 1) {
 		await db.runAsync("UPDATE Projects SET Validate = '"+Number(0)+"' WHERE PName = '" + PName + "' AND Admin ='" + admin + "'");
+		await rmdb.runAsync("UPDATE Images SET reviewImage = 0");
 		console.log("Disabled Validation mode for: " + admin + "-" + PName);
+
+		rmdb.close(function(err){
+			if(err)
+			{
+				console.error(err);
+			}
+			else{
+				console.log("rmdb closed successfully");
+			}
+		});
+
 		res.send({"Success": "Yes"});
 	}
 	else{
+
+		rmdb.close(function(err){
+			if(err)
+			{
+				console.error(err);
+			}
+			else{
+				console.log("rmdb closed successfully");
+			}
+		});
+
 		res.send({"Success": "No"});
 	}
 });

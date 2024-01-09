@@ -1,0 +1,458 @@
+<%- include('includes/header') %>
+<script>
+	console.log("<%= acc.includes(user)%>");
+	if("<%= acc.includes(user)%>" == "false")
+	{
+		window.location.replace("/home");
+	}
+	console.log("DAdmin: <%= DAdmin.includes('benny')%>")
+</script>
+<div id="config">
+	<div class="col-md-12">
+		<ul class="nav nav-tabs">
+			<li class="nav-item">
+				<a class="nav-link" href="/projectV?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Labels</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link active" href="/configV?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
+			</li>
+			<li class="nav-item">
+				<a class="nav-link" href="/statsV?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
+			</li>
+		</ul>
+	</div>
+	<div class="col-md-12">
+		<h1 style="text-align: center;"><%= PName %></h1>
+	</div>
+	
+	<div class="container">
+		
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Download Project
+				</div>
+				<div class="card-body">
+					<form class="download-project-form" action ="/downloadProject" method="POST" enctype="multipart/form-data" id="downloadProjectForm" style="text-align: center;">
+						<input id = "PName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "Admin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "IDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<input id = "PDescription" type="hidden" name="PDescription" value="<%= PDescription %>">
+						<button id = "downloadbtn" name="form_action"  id="form-download" value="download" class="btn btn-primary" style="text-align: center;">Download Project</button>
+					</form>
+				</div>
+			</div>
+		</div> 
+		
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Download Dataset
+				</div>
+				<div class="card-body">
+					<form class="download-dataset-form" action ="/downloadDataset" method="POST" enctype="multipart/form-data" id="downloadDatasetForm">
+						<input id = "PName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "Admin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "IDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<div class="form-group row">
+							<label class="col-md-4 col-form-label" for="list_of_available_formats">List of Available Formats</label>
+							<div class="col-md">
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="0" required> YOLOv3 Format</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="1"> TensorFlow Format (CSV)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="2"> COCO Format (JSON + images)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="3"> Pascal VOC Format (xml + images)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="4"> Summary File</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="5"> Initial Classification (auto-labled projects only)</label>
+								</div>  
+								<div class="col-md-2 text-right">
+									<input type="submit" class="btn btn-primary" value="Download" style="border-radius: 0">
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Update Classes
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+			
+						<form class="delete-class-form" action ="/deleteClass" method="POST" enctype="multipart/form-data" id="deleteClassForm">
+							<div class="form-group row">
+								<div class="col-md-10 mr-0 ml-0 row justify-content-md-center padding" >
+									<% for(var i=0; i<classes.length; i++) {%>										
+										<button type="button" value="<%=classes[i].CName%>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i].CName %></button>
+									<% } %>
+								</div>		
+								<div class="col-md-2 text-right">
+									<% if(user == Admin) {%>
+										<input type="submit" class="btn btn-danger" value="Delete" style="border-radius: 0">
+									<%}else {%>
+										<a href="#" role="button" class="btn btn-danger disabled" value="Delete" style="border-radius: 0">Delete</a>
+									<%}%>
+								</div>	
+							</div>
+						</form>
+
+						<form class="add-classes-form" action ="/addClasses" method="POST" enctype="multipart/form-data" id="addClassesForm">
+							<input type="hidden" name="PName" value="<%= PName %>">
+							<input type="hidden" name="Admin" value="<%= Admin %>">
+							<input type="hidden" name="IDX" value="<%= IDX %>">
+							<input type="hidden" name="validation" value="1">
+							<!--  -->
+							<div class="form-group row">
+								<div class="col-md">
+									<input name="input_classes" type="text" class="form-control" id="input_classes" placeholder="cat,dog,large mouse" required>
+								</div>
+								<div class="col-md-2 text-right">
+									<% if(user == Admin) {%>
+										<input type="submit" class="btn btn-primary" value="Add" style="border-radius: 0">
+									<%}else {%>
+										<a href="#" role="button" class="btn btn-primary disabled" value="Add" style="border-radius: 0">Add</a>
+									<%}%>
+
+								</div>
+							</div>
+						</form>
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Give Access
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+						<form class="add-User-form" action ="/addUser" method="POST" enctype="multipart/form-data" id="addUserForm">
+							<input type="hidden" name="PName" value="<%= PName %>">
+							<input type="hidden" name="Admin" value="<%= Admin %>">
+							<input type="hidden" name="IDX" value="<%= IDX %>">
+							<input type="hidden" name="validation" value="1">
+							<!--  -->
+							<div class="form-group row">
+								<label class="col-md-4 col-form-label" for="newUser">Enter Username to Authorize Access</label>
+								<div class="col-md">
+									<input name="newUser" type="text" class="form-control" id="newUser" placeholder="Nobody" required>
+								</div>
+								<div class="col-md-2 text-right">
+									<% if(user == Admin) {%>
+										<input type="submit" class="btn btn-primary" value="Add" style="border-radius: 0">
+									<%}else {%>
+										<a href="#" role="button" class="btn btn-primary disabled" value="Add" style="border-radius: 0">Add</a>
+									<%}%>
+								</div>
+							</div>
+						</form>
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Change Access
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+						
+						<table class="table table-striped">
+							<tbody>
+								<tr>
+									<%for(var i = 0; i < access.length; i++){%>
+										<td scope="row"><%= access[i] %></td>
+										<% if(user == Admin) {%>
+											<td class="text-right">
+												<form class="add-User-form" action ="/removeAccess" method="POST" enctype="multipart/form-data" id="removeUserForm">
+													<input type="hidden" name="PName" value="<%= PName %>">
+													<input type="hidden" name="Admin" value="<%= Admin %>">
+													<input type="hidden" name="IDX" value="<%= IDX %>">
+													<input type="hidden" name="validation" value="1">
+													<!--  -->
+													<button type="submit" name="OldUser" class="btn btn-danger" value="<%= access[i] %>" style="border-radius: 0">Remove</button>
+												</form>
+											</td>
+										<%}else {%>
+											<td class="text-right"><a href="#" role="button" class="btn btn-danger disabled" value="REMOVE" style="border-radius: 0">REMOVE</a></td>   
+										<%}%>
+										<% if(user == Admin) {%>
+											<td class="text-right">
+												<% if(DAdmin.includes(access[i])) {%>
+													<td class="text-right"><a href="#" role="button" class="btn btn-primary disabled" value="Make ADMIN" style="border-radius: 0">ADMIN OF SAME PROJECT NAME</a></td>
+												<%}else{%>
+												<form class="add-User-form" action ="/transferAdmin?IDX=<%= IDX %>" method="POST" enctype="multipart/form-data" id="transferAdminForm">
+													<input type="hidden" name="PName" value="<%= PName %>">
+													<input type="hidden" name="Admin" value="<%= Admin %>">
+													<input type="hidden" name="IDX" value="<%= IDX %>">
+													<input type="hidden" name="validation" value="1">
+					
+													<!--  -->
+													<button type="submit" name= "NewAdmin" class="btn btn-danger" id="<%= access[i] %>" value="<%= access[i] %>" style="border-radius: 0">Make Admin</button>
+												</form>
+												<%}%>
+											</td>
+										<%}else if(access[i] == Admin) {%>
+											<td class="text-right"><a href="#" role="button" class="btn btn-primary disabled" value="MAKE ADMIN" style="border-radius: 0">IS ADMIN</a></td>   
+										<%}else{%>
+											<td class="text-right"><a href="#" role="button" class="btn btn-primary disabled" value="MAKE ADMIN" style="border-radius: 0">MAKE ADMIN</a></td>	
+										<%}%>
+									<%}%>
+								</tr>
+							</tbody>   
+						</table>
+					</p>
+				</div>
+			</div>
+		</div>
+		
+		
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Merge Projects
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+						<form class="add-User-form" action="/mergeTest" method="POST" enctype="multipart/form-data" id="mergeForm">
+							<div class="form-group row">
+								<label class="col-md-4 col-form-label" for="upload_project">Upload Project (.zip)</label>
+								<div class="col-md">
+									<input id = "upload_project" name="upload_project" type="file" class="form-control-file" required>
+								</div>
+								<div class="col-md-2 text-right">
+									<% if(user == Admin) {%>
+										<input type="submit" class="btn btn-primary" value="submit" style="border-radius: 0">
+									<%}else {%>
+										<a href="#" role="button" class="btn btn-primary disabled" value="MergeProject" style="border-radius: 0">submit</a>
+									<%}%>
+								</div>
+							</div>
+						</form>
+						<div class="col text-center">
+							<label for="progress" id="progress"></label>
+						</div>
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Merge Projects Locally
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+						<form class="add-User-form" action="/mergeLocal" method="POST" enctype="multipart/form-data" id="mergeLocalForm">
+							<div class="form-group row">
+								<label class="col-md-4 col-form-label" for="merge_project">Select Project Name, Admin</label>
+
+								<div class="col-md">
+										<!-- <label for="Darknet">Select Darknet</label> -->
+										<select name="mergeLocal" id="mergeLocalOption" style="text-align-last: center;">
+											<% for(var i=0; i<mergeProjects.length; i++) {%>
+												<option><%= mergeProjects[i]['PName'] %>, <%= mergeProjects[i]['Admin'] %></option>
+											<% } %>
+										</select>
+								</div>
+								<div class="col-md-2 text-right">
+									<% if(user == Admin) {%>
+										<input type="submit" class="btn btn-primary" value="submit" style="border-radius: 0">
+									<%}else {%>
+										<a href="#" role="button" class="btn btn-primary disabled" value="MergeLocal" style="border-radius: 0">submit</a>
+									<%}%>
+								</div>
+							</div>
+						</form>
+						<div class="col text-center">
+							<label for="progress" id="progress"></label>
+						</div>
+					</p>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	$(".class-selection").click(function () {
+		if($(this).hasClass("selected-class")){
+			console.log("Remove Selection");
+			$(this).removeClass("selected-class");
+		}
+		else{
+			$(this).addClass("selected-class");
+		}
+
+	});
+</script>
+
+<script>
+
+	document.forms['mergeForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleMerge");
+		var formData = new FormData();
+		const upload_project = document.getElementById('upload_project');
+		const files = upload_project.files[0];
+		formData.append('upload_project', files)
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+		formData.append("IDX", "<%= IDX %>");
+		// 
+
+		var request = new XMLHttpRequest();
+		request.upload.addEventListener('progress', function (e) {
+			var file1Size = $('#upload_project')[0].files[0].size;
+			if (e.loaded <= file1Size) {
+				var percent = Math.round(e.loaded / file1Size * 100);
+				console.log(percent);
+				$('#progress').text("Percent Uploaded: " + percent)
+
+			} 
+			if(e.loaded == e.total){
+				$('#progress').text("Uploaded Finished. Server processing upload. Please wait for the closing prompt.")
+				document.getElementById("Importbtn").style.display = "none";
+				alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
+				
+			}
+		}, true);   
+
+		request.open("post", event.target.action, true);
+		request.onreadystatechange = function receiveResponse() {
+			if(this.readyState == 4)
+			{
+				if(this.status == 200)
+				{
+					var mssg = this.response
+					console.log("mssg: ", mssg)
+					console.log('mssg["Success"]: ', mssg["Success"]);
+					alert(this.response);
+					window.location.reload();
+				}
+				else
+				{
+					if(isValid(this.response))
+					{
+						alert("Something went wrong! ", this.response);
+					}
+					else
+					{
+						alert("Something went wrong!")
+						console.log("response: ", this.response)
+					}
+				}
+			}
+		}
+		request.send(formData);
+		console.log(formData);
+	});
+
+</script>
+
+<script>
+
+	document.forms['mergeLocalForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleLocalMerge");
+		var formData = new FormData();
+		var [mergeName, mergeAdmin] = document.getElementById('mergeLocalOption').value.split(',');
+
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+		formData.append("IDX", "<%= IDX %>");
+		formData.append("mergeName", mergeName);
+		formData.append("mergeAdmin", mergeAdmin);
+
+		var request = new XMLHttpRequest();
+		request.open("post", event.target.action, true);
+		request.onreadystatechange = function receiveResponse() {
+			if(this.readyState == 4)
+			{
+				if(this.status == 200)
+				{
+					var mssg = this.response
+					console.log("mssg: ", mssg)
+					console.log('mssg["Success"]: ', mssg["Success"]);
+					alert(this.response);
+					window.location.reload();
+				}
+				else
+				{
+					if(isValid(this.response))
+					{
+						alert("Something went wrong! ", this.response);
+					}
+					else
+					{
+						alert("Something went wrong!")
+						console.log("response: ", this.response)
+					}
+				}
+			}
+		}
+		request.send(formData);
+	});
+
+</script>
+
+<script>
+	document.forms['deleteClassForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+		console.log("deleteClass Handler");
+		var CNames = document.getElementsByClassName("selected-class");
+		var classArray = []
+		if(! (CNames.length > 0))
+		{
+			alert("No classes selected")
+		}
+		else if(confirm('Are you sure you want to permanetly delete these classes?\nAll associated labels will be lost'))
+		{
+			for(var i = 0; i < CNames.length; i++){
+				classArray.push(CNames[i].value);
+			}
+			var formData = new FormData();
+			formData.append("PName", "<%= PName %>");
+			formData.append("Admin", "<%= Admin %>");
+			formData.append("IDX", "<%= IDX %>");
+			// 
+			formData.append("classArray", classArray);
+			
+			console.log("IDX: ", "<%= IDX %>");
+			// 
+			
+			fetch(event.target.action, {
+					method: 'POST',
+					body: formData 
+				}).then(() => {
+					window.location.replace("/configV?IDX=<%= IDX %>");
+				}).catch((error) => {
+					console.log(error);
+				});
+		}
+	});
+</script>
+
+<%- include('includes/footer') %>
+

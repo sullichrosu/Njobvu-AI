@@ -452,6 +452,7 @@ module.exports = {
             title: 'project',
 			user: user,
 			PName: PName,
+			Admin: admin,
 			IDX: IDX,
             access: access,
             images: results1,
@@ -566,21 +567,64 @@ module.exports = {
 		else if(sortFilter == "needs_review" && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
 			results1 = await pdb.allAsync("SELECT * FROM `Images` WHERE reviewImage=1 LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
 		}
-		else if(sortFilter == 'Confidence' && imageClass != null && Classes.includes(imageClass)){
+		else if(sortFilter == 'confidence' && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
+			var images = await pdb.allAsync("SELECT * FROM `Labels`");
+			var confidenceImages = await pdb.allAsync("SELECT Confidence, IName FROM `Validation`");
+			const highestConf = {};
+			confidenceImages.forEach(item => {
+				const { Confidence, IName } = item;
+				if (!(IName in highestConf) || Confidence > highestConf[IName]) {
+					highestConf[IName] = Confidence;
+				}
+			});
+
+			images.sort((a, b) => {
+				const confidenceA = highestConf[a.IName] || 0;
+				const confidenceB = highestConf[b.IName] || 0;
+				return confidenceB - confidenceA;
+			  });
+
+			for(var d = 0; d < images.length; d++){
+				var imageData = await (pdb.allAsync("SELECT * FROM `Images` WHERE IName = '" + images[d].IName + "'"));
+				results1.push(imageData[0]);
+			}
+		}
+		else if(sortFilter == 'confidence' && imageClass != null && Classes.includes(imageClass)){
 			var imagesWithClass = await pdb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
 			var confidenceImages = await pdb.allAsync("SELECT Confidence, IName FROM `Validation` WHERE CName = '" + imageClass + "'");
+			const highestConf = {};
+			confidenceImages.forEach(item => {
+				const { Confidence, IName } = item;
+				if (!(IName in highestConf) || Confidence > highestConf[IName]) {
+					highestConf[IName] = Confidence;
+				}
+			});
 			imagesWithClass.sort((a, b) => {
-				const indexA = confidenceImages.findIndex(item => item.IName === a);
-				const indexB = confidenceImages.findIndex(item => item.IName === b);
-			  
-				if (indexA === -1 && indexB === -1) {
-				  return 0; // no weight for items with missing filenames
-				} else if (indexA === -1) {
-				  return 1; // itemB comes before itemA
-				} else if (indexB === -1) {
-				  return -1; // itemA comes before itemB
+				const confidenceA = highestConf[a.IName] || 0;
+				const confidenceB = highestConf[b.IName] || 0;
+				return confidenceB - confidenceA;
+			  });
+
+			for(var d = 0; d < imagesWithClass.length; d++){
+				var imageData = await (pdb.allAsync("SELECT * FROM `Images` WHERE IName = '" + imagesWithClass[d].IName + "'"));
+				results1.push(imageData[0]);
+			}
+		}
+		else if(sortFilter == 'has_class'){
+			if(imageClass != 'null'){
+				var imagesWithClass;
+				imagesWithClass = await pdb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
+			}
+			else{
+				imagesWithClass = await pdb.allAsync("SELECT DISTINCT IName FROM `Labels`");
+			}
+			imagesWithClass.sort((a, b) => {
+				if (a.IName < b.IName) {
+				  return -1;
+				} else if (a.IName > b.IName) {
+				  return 1;
 				} else {
-				  return firstArray[indexA].Confidence - firstArray[indexB].Confidence;
+				  return 0;
 				}
 			  });
 
@@ -590,7 +634,6 @@ module.exports = {
 			}
 		}
         else{
-			 
 			var imagesWithClass = await pdb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
 			imagesWithClass.sort((a, b) => {
 				if (a.IName < b.IName) {
@@ -610,9 +653,10 @@ module.exports = {
 
         var results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
 		
-		
 		var imageLabels = [];
-        var list_counter = []
+        var list_counter = [];
+		var imageConf = [];
+		// console.log(results1);
         for(var i=0; i<results1.length; i++) {
 
 			labelList = await pdb.allAsync("SELECT CName FROM `Labels` WHERE IName = '" + results1[i].IName + "'");
@@ -625,6 +669,29 @@ module.exports = {
             list_counter.push(results3['COUNT(*)']);
 			
 			imageLabels.push(Array.from(usedLabels));
+
+			var imageList = await pdb.allAsync("SELECT Confidence FROM `Validation` WHERE IName = '"+results1[i].IName+"'");
+			if(imageList.length == 0){
+				imageConf.push(0);
+			}
+			else{
+				var high = 0;
+				var idx = 0;
+				for(var x = 0; x < imageList.length; x++){
+					if(imageList[x].Confidence > high){
+						high = imageList[x].Confidence;
+						idx = x;
+					}
+				}
+				if(typeof(imageList[idx].Confidence) != 'number'){	
+					imageConf.push(0);
+				}
+				else{
+					imageConf.push(imageList[idx].Confidence);
+				}
+			}
+
+			// console.log(imageConf + ' ' + results1[i].IName);
         }
 
 		// var acc = await db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "'");
@@ -643,6 +710,7 @@ module.exports = {
 				console.log("pdb closed successfully");
 			}
 		});
+
         res.render('projectV', {
             title: 'projectV',
 			user: user,
@@ -659,7 +727,8 @@ module.exports = {
             logged: req.query.logged,
 			sortFilter: sortFilter,
 			imageClass: imageClass,
-			projectClasses: Classes
+			projectClasses: Classes,
+			imageConf: imageConf
         });
     },
 
@@ -695,6 +764,8 @@ module.exports = {
 
 		var PName = projects[num].PName;
 		var admin = projects[num].Admin;	
+		
+		var mergeProjects = await db.allAsync("SELECT * FROM Access WHERE Username = '"+user+"' AND NOT PName = '"+PName+"'");
 
 		var public_path = __dirname.replace('routes',''),
 			main_path = public_path + 'public/projects/',
@@ -862,9 +933,214 @@ module.exports = {
 			darknet_paths: darknet_paths,
 			classes: results2,
 			colors: colors,
-            logged: req.query.logged
+            logged: req.query.logged,
+			mergeProjects: mergeProjects
         });
     },
+
+// config page
+getValidationConfigPage: async (req, res) => {
+	console.log("getValidationConfigPage");
+	   
+	// get URL variables
+	var IDX = parseInt(req.query.IDX),
+		user = req.cookies.Username;
+	
+	if(IDX == undefined)
+	{
+		IDX = 0;
+		valid = 1;
+		return res.redirect('/home');
+	}
+
+	if(user == undefined)
+	{
+		return res.redirect('/');
+	}
+	var projects = await db.allAsync("SELECT * FROM Access WHERE Username = '"+user+"'");
+	var num = IDX
+
+	if(num >= projects.length){
+		valid = 1;
+		return res.redirect('/home');
+	}
+
+
+	var PName = projects[num].PName;
+	var admin = projects[num].Admin;	
+	
+	var mergeProjects = await db.allAsync("SELECT * FROM Access WHERE Username = '"+user+"' AND NOT PName = '"+PName+"'");
+
+	var public_path = __dirname.replace('routes',''),
+		main_path = public_path + 'public/projects/',
+		project_path = main_path + admin + '-' + PName,
+		path = project_path + '/' + PName + '.db',
+		training_path = project_path + '/training',
+		log_path = training_path + '/logs/',
+		python_path = training_path + '/python',
+		python_path_file = training_path + '/Paths.txt',
+		darknet_path_file = training_path + '/darknetPaths.txt',
+		weights_path = training_path + '/weights';
+
+	if(!fs.existsSync(training_path))
+	{
+		fs.mkdirSync(training_path);
+		fs.mkdirSync(log_path);
+		fs.mkdirSync(python_path);
+		fs.mkdirSync(weights_path);
+		fs.writeFile(python_path_file, "", function(err){
+			if(err)
+			{
+				console.log(err);
+			}
+		});
+		fs.writeFile(darknet_path_file, "", function(err){
+			if(err)
+			{
+				console.log(err);
+			}
+		});
+	}
+	if(!fs.existsSync(weights_path))
+	{
+		fs.mkdirSync(weights_path);
+	}
+	if(!fs.existsSync(darknet_path_file))
+	{
+		fs.writeFile(darknet_path_file, "", function(err){
+			if(err)
+			{
+				console.log(err);
+			}
+		});
+	}
+	if(!fs.existsSync(python_path_file))
+	{
+		fs.writeFile(python_path_file, "", function(err){
+			if(err)
+			{
+				console.log(err);
+			}
+		});
+	}
+
+	var cfdb = new sqlite3.Database(path, (err) => {
+		if (err) {
+			return console.error(err.message);
+		}
+		console.log('Connected to cfdb.');
+	});
+
+	// create async database object functions
+	cfdb.getAsync = function (sql) {
+		var that = this;
+		return new Promise(function (resolve, reject) {
+			that.get(sql, function (err, row) {
+				if (err)
+				{
+					console.log("runAsync ERROR! ", err);
+					reject(err);
+				}
+				else
+					resolve(row);
+			});
+		}).catch(err => {
+			console.log(err)
+		});
+	};
+	cfdb.allAsync = function (sql) {
+		var that = this;
+		return new Promise(function (resolve, reject) {
+			that.all(sql, function (err, row) {
+				if (err)
+				{
+					console.log("runAsync ERROR! ", err);
+					reject(err);
+				}
+				else
+					resolve(row);
+			});
+		}).catch(err => {
+			console.log(err)
+		});
+	};		
+	
+
+	var results1 = await db.getAsync("SELECT * FROM `Projects` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+	var results2 = await cfdb.allAsync("SELECT * FROM `Classes`");
+	var results3 = await db.allAsync("SELECT * FROM `Access` WHERE PName= '" + PName + "' AND Admin = '"+ admin + "' AND Username != '"+user+"'");
+	var results4 = await db.allAsync("SELECT * FROM `Projects` WHERE PName = '" + PName + "' AND Admin != '" + user + "'");
+	var acc1 = await db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "' AND Admin = '"+ admin + "'");
+	var acc = [];
+	for(var i = 0; i < acc1.length; i++)
+	{
+		acc.push(acc1[i].Username);
+	}
+	var access = [];
+	for(var i = 0; i < results3.length; i++)
+	{
+		access.push(results3[i].Username);
+	}
+	var DAdmin = [];
+	for(var i = 0; i<results4.length; i++)
+	{
+		DAdmin.push(results4[i].Admin);
+	}
+	// close the database
+	cfdb.close(function(err){
+		if(err)
+		{
+			console.error(err);
+		}
+		else{
+			console.log("cfdb closed successfully");
+		}
+	});
+
+	var colors = [];
+	var i = 0;
+	while(colors.length < results2.length)
+	{
+		if(i >= colorsJSON.length)
+		{
+			i = 0;
+		}
+		colors.push(colorsJSON[i]);
+		i++;
+	}
+	
+	
+	var scripts = [];
+	scripts = await readdirAsync(python_path);
+
+	var weights = [];
+	weights = await readdirAsync(weights_path);
+	
+	var paths = fs.readFileSync(python_path_file, 'utf-8').split('\n').filter(Boolean);
+
+	var darknet_paths = fs.readFileSync(darknet_path_file, 'utf-8').split('\n').filter(Boolean);
+	
+	res.render('configV', {
+		title: 'config',
+		user: user,
+		Admin: results1.Admin,
+		DAdmin: DAdmin,
+		access: access,
+		acc: acc,
+		PName: PName,
+		IDX: IDX,
+		PDescription: results1.PDescription,
+		AutoSave: results1.AutoSave,
+		weights: weights,
+		scripts: scripts,
+		paths: paths,
+		darknet_paths: darknet_paths,
+		classes: results2,
+		colors: colors,
+		logged: req.query.logged,
+		mergeProjects: mergeProjects
+	});
+},
 
 	// download page
     getDownloadPage: async (req, res) => {
@@ -1262,7 +1538,9 @@ module.exports = {
 			curr_class = req.query.curr_class,
 			sortFilter = req.query.sort,
 			imageClass = req.query.class,
+			classFilter = req.query.classFilter,
 			user = req.cookies.Username;
+		
 		
 		if(IDX == undefined)
 		{
@@ -1390,14 +1668,17 @@ module.exports = {
 				}
 			}
 		}
+
 		// for(var b = 0; b < results2.length; b++){
 		// 	console.log(results2[b].IName);
 		// }
 		// console.log(rowid);
-		var results3 = await ldb.allAsync("SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'")
-        var results4 = await ldb.allAsync("SELECT * FROM `Images` WHERE IName = '" + String(IName) + "'")
-        var results5 = await db.getAsync("SELECT AutoSave FROM `Projects` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'")
-		var results6 = await ldb.allAsync("SELECT * FROM `Validation` WHERE IName = '" + String(IName) + "'")
+		await ldb.allAsync("UPDATE Images SET reviewImage = 0 WHERE IName = '" + IName + "'");
+
+		var results3 = await ldb.allAsync("SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'");
+        var results4 = await ldb.allAsync("SELECT * FROM `Images` WHERE IName = '" + String(IName) + "'");
+        var results5 = await db.getAsync("SELECT AutoSave FROM `Projects` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+		var results6 = await ldb.allAsync("SELECT * FROM `Validation` WHERE IName = '" + String(IName) + "'");
         var acc = await db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
         var access = [];
 		
@@ -1493,7 +1774,7 @@ module.exports = {
 		for (const [key, value] of Object.entries(stats)) {
 			statsO.push([key, value]);
 		  }
-
+		// console.log(results2);
 
         res.render('labelingV', {
             title: 'labeling',
@@ -1524,7 +1805,8 @@ module.exports = {
             logged: req.query.logged,
 			stats: statsO,
 			sortFilter: sortFilter,
-			imageClass: imageClass
+			imageClass: imageClass,
+			classFilter: classFilter
         });
 	}
     },
@@ -2210,6 +2492,137 @@ module.exports = {
 		});
         
         res.render('stats', {
+            title: 'stats',
+			user: req.cookies.Username,
+			access: access,
+			PName: PName,
+			Admin: admin,
+			IDX: IDX,
+            PDescription: results1.PDescription,
+            AutoSave: results1.AutoSave,
+			classes: classes,
+			counts: counts,
+			icounts: icounts,
+			complete: complete,
+            logged: req.query.logged
+        });
+    },
+
+	// Stats page
+    getValidationStatsPage: async (req, res) => {
+        console.log("getValidationStatsPage");
+	   
+		// get URL variables
+		var IDX = parseInt(req.query.IDX),
+			user = req.cookies.Username;
+
+		if(IDX == undefined)
+		{
+			IDX = 0;
+			valid = 1;
+			return res.redirect('/home');
+		}
+		if(user == undefined)
+		{
+			return res.redirect('/');
+		}
+
+		var projects = await db.allAsync("SELECT * FROM Access WHERE Username = '"+user+"'");
+
+		var num = IDX;
+
+		if(num >= projects.length){
+			valid = 1;
+			return res.redirect('/home');
+		}
+		var PName = projects[num].PName;
+		var admin = projects[num].Admin;
+		
+		var public_path = __dirname.replace('routes','');
+		var main_path = public_path + 'public/projects/';
+		var path = main_path + admin + '-' + PName + '/' + PName + '.db';
+		
+
+		var sdb = new sqlite3.Database(path, (err) => {
+			if (err) {
+				return console.error(err.message);
+			}
+			console.log('Connected to tdb.');
+		});
+
+		// create async database object functions
+		sdb.getAsync = function (sql) {
+			var that = this;
+			return new Promise(function (resolve, reject) {
+				that.get(sql, function (err, row) {
+					if (err)
+					{
+						console.log("runAsync ERROR! ", err);
+						reject(err);
+					}
+					else
+						resolve(row);
+				});
+			}).catch(err => {
+				console.log(err)
+			});
+		};
+		sdb.allAsync = function (sql) {
+			var that = this;
+			return new Promise(function (resolve, reject) {
+				that.all(sql, function (err, row) {
+					if (err)
+					{
+						console.log("runAsync ERROR! ", err);
+						reject(err);
+					}
+					else
+						resolve(row);
+				});
+			}).catch(err => {
+				console.log(err)
+			});
+		};		
+        var results1 = await db.getAsync("SELECT * FROM `Projects` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+		var results2 = await sdb.allAsync("SELECT * FROM `Classes`");
+		
+		var classes = [];
+		var counts = [];
+		var icounts = [];
+		var lcounts = 0;
+		for(var i = 0; i < results2.length; i++)
+		{
+			var results3 = await sdb.getAsync("SELECT COUNT(*) FROM Labels Where CName = '" + results2[i].CName + "'");
+			classes.push(results2[i].CName);
+			counts.push(results3["COUNT(*)"]);
+			var results4 = await sdb.allAsync("SELECT DISTINCT IName FROM Labels WHERE CName = '" + results2[i].CName + "'");
+			icounts.push(results4.length);
+		}
+		
+		var acc = await db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+        var access = [];
+		for(var i = 0; i < acc.length; i++)
+        {
+            access.push(acc[i].Username);
+		}
+
+
+		var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
+		var results6 = await sdb.allAsync("SELECT DISTINCT IName FROM Images WHERE reviewImage = 1");
+		var complete = Math.trunc(100*(results6.length/results5['COUNT(*)']));
+
+		// close the database
+		sdb.close(function(err){
+			if(err)
+			{
+				console.error(err);
+			}
+			else{
+				console.log("sdb closed successfully");
+			}
+		});
+        
+        res.render('statsV', {
             title: 'stats',
 			user: req.cookies.Username,
 			access: access,

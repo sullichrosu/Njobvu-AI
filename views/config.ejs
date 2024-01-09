@@ -268,6 +268,42 @@
 				</div>
 			</div>
 		</div>
+
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
+					Merge Projects Locally
+				</div>
+				<div class="card-body">
+					<p class="card-text">
+						<form class="add-User-form" action="/mergeLocal" method="POST" enctype="multipart/form-data" id="mergeLocalForm">
+							<div class="form-group row">
+								<label class="col-md-4 col-form-label" for="merge_project">Select Project Name, Admin</label>
+
+								<div class="col-md">
+										<!-- <label for="Darknet">Select Darknet</label> -->
+										<select name="mergeLocal" id="mergeLocalOption" style="text-align-last: center;">
+											<% for(var i=0; i<mergeProjects.length; i++) {%>
+												<option><%= mergeProjects[i]['PName'] %>, <%= mergeProjects[i]['Admin'] %></option>
+											<% } %>
+										</select>
+								</div>
+								<div class="col-md-2 text-right">
+									<% if(user == Admin) {%>
+										<input type="submit" class="btn btn-primary" value="submit" style="border-radius: 0">
+									<%}else {%>
+										<a href="#" role="button" class="btn btn-primary disabled" value="MergeLocal" style="border-radius: 0">submit</a>
+									<%}%>
+								</div>
+							</div>
+						</form>
+						<div class="col text-center">
+							<label for="progress" id="progress"></label>
+						</div>
+					</p>
+				</div>
+			</div>
+		</div>
 	
 		<% if(weights.length > 0) {%>
 		<div class="col-md-12">
@@ -520,6 +556,53 @@
 		}
 		request.send(formData);
 		console.log(formData);
+	});
+
+</script>
+
+<script>
+
+	document.forms['mergeLocalForm'].addEventListener('submit', (event) => {
+		event.preventDefault();
+			
+		console.log("handleLocalMerge");
+		var formData = new FormData();
+		var [mergeName, mergeAdmin] = document.getElementById('mergeLocalOption').value.split(',');
+
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+		formData.append("IDX", "<%= IDX %>");
+		formData.append("mergeName", mergeName);
+		formData.append("mergeAdmin", mergeAdmin);
+
+		var request = new XMLHttpRequest();
+		request.open("post", event.target.action, true);
+		request.onreadystatechange = function receiveResponse() {
+			if(this.readyState == 4)
+			{
+				if(this.status == 200)
+				{
+					var mssg = this.response
+					console.log("mssg: ", mssg)
+					console.log('mssg["Success"]: ', mssg["Success"]);
+					alert(this.response);
+					window.location.reload();
+				}
+				else
+				{
+					if(isValid(this.response))
+					{
+						alert("Something went wrong! ", this.response);
+					}
+					else
+					{
+						alert("Something went wrong!")
+						console.log("response: ", this.response)
+					}
+				}
+			}
+		}
+		request.send(formData);
 	});
 
 </script>

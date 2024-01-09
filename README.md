@@ -1,4 +1,4 @@
-**Njovu-AI TOOL**
+**OSU Njobvu-AI**
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -33,11 +33,11 @@ Node.js
 **Windows:**
 Use the created shortcut on your desktop
 *or*
-Run Njovu-AI.exe in the root directory of the Njovu-AI
+Run Labeling-Tool.exe in the root directory of the Labeling Tool
 
 
 **All Platforms:**
-1) Using the terminal, navigate to the root directory of the Njovu-AI.
+1) Using the terminal, navigate to the root directory of the Labeling Tool.
 2) Run "node server.js".
 3) Go to "http://localhost:8080".
 
@@ -64,11 +64,19 @@ Run Njovu-AI.exe in the root directory of the Njovu-AI
 1) Navigate to the home page by logging in.
 2) Click "Create Project" in the upper right hand corner.
 3) Enter the name of the project. The name must be unique to the projects you have access to.
-4) Upload a zip file of images. Do NOT upload a folder.
+4) Upload a zip file of images or a single video file. Do NOT upload a folder.
 5) Add your classes. These are comma separated names. "cat,dog,large mouse" will be entered as [cat][dog][large mouse].
 6) Hit submit to create your project and upload your zipfile. When the upload is done, you will be redirected to the home page.
+7) If you selected a video file, fill the incoming prompt with the number of frames you wish your video to be divided by.
 
 ![alt text](public/images/CreatePage.png)
+
+**(Optional) Add Image Classification to new photos**
+1) Follow previous steps but don't hit submit
+2) Select "Check to Enable Image Classification"
+3) Select a .data, .cfg, and .weight from your desired training set. Ensure that they are compatible with yolov4.
+4) Upload a zip file containg the configuration and weight files. Do NOT upload a folder.
+5) Hit submit. Upon completion, your project will be created with every image classified by the uploaded weights file.
 ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -279,10 +287,20 @@ You can delete a run, including all logs, weights, and any other output file ass
 5) Edit the subdivision size
 6) Hit "Train"
 
+----------------------------------------------------------------------------------------------------------------------
 
+**Server Configuration:**
+======================================================================================================================
 
+**Cloud Usage**
+You can host Njobvu-AI on the cloud to enable users to access it via the internet.
 
-
+1) Within the Njobvu-AI directory navigate to /controllers/training/config
+2) Open the file *config.json*
+3) Fill the parameters with a specific port, and hostname.
+4) If your connection is secure, fill the parameters with the location of your sites SSL key and ceritification. Also add this line to the options variable in server.js:   host: '*your hostname here*'  
+5) Run node server.js
+6) (Optional) It is reccomended to use a program like screen to keep your server running uninterrupted on the host machine
 
 
 

@@ -10,7 +10,7 @@
 <div id="labeling" class="row" style="margin-left: 0; margin-right: 0;">
     <form action ="updateLabels" method="post" id="submit-project">
         <!--Classes bar -->
-        <div class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
+        <div id="class-list" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
               <% for(var i=0; i<classes.length; i++) {%>
                   <% if(classes[i] == curr_class) {%>
                       <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection selected-class" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
@@ -18,6 +18,10 @@
                       <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
                   <% } %>
               <% } %>
+              <button onclick="toggleClassList()" type="button" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn" style="background-color: lightblue; border-radius: 0; border: 5px solid black">Hide Class List</button>
+        </div>
+        <div id="showClassesButton" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="display: none; background-color: #262C2F">
+          <button onclick="toggleClassList()" type="button" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn" style="background-color: lightblue; border-radius: 0; border: 5px solid black">Show Class List</button>
         </div>
         <!-- prev/next image arrows bar -->
         <div class="mb-0 col-md-12 row text-center mx-auto nopadding" style="background-color: #262C2F; color: white">
@@ -279,4 +283,21 @@
     </div>
 </div>
 </body>
+
+<script>
+  function toggleClassList() {
+    var classList = document.getElementById("class-list");
+    var showClass = document.getElementById("showClassesButton");
+    if(classList.style.display == "none"){
+      classList.style.display = "";
+      showClass.style.display = "none";
+      
+    }
+    else{
+      classList.style.display = "none";
+      showClass.style.display = "";
+    }
+  }
+</script>
+
 <%- include('includes/footer') %>

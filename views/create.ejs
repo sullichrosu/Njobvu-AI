@@ -10,7 +10,7 @@
                         <input id = "project_name" name="project_name" type="text" class="form-control" id="project-name" placeholder="Project Name" required>
                     </div>
                     <div class="form-group col-md-6">
-                        <label for="upload-images">Upload Images (.zip)</label>
+                        <label for="upload-images">Upload Images or Videos (.zip or .mp4/.avi/.mov)</label>
 						<input id = "upload_images" name="upload_images" type="file" class="form-control-file" id="upload-images" required>
                     </div>
                 </div>
@@ -65,8 +65,17 @@
 			var formData = new FormData();
 			const upload_images = document.getElementById('upload_images');
 			const files = upload_images.files[0];
+			if(String(files.name).endsWith('mp4' || 'mov' || 'avi')){
+				var frame_rate = prompt("Please enter a number for the framerate the video should be split by. (ex: 30)");
+				console.log("Uploading video to be parsed 1 image per" + frame_rate + "frames");
+				formData.append('upload_video', files);
+				formData.append('frame_rate', frame_rate);
+			}
+			else{
+				formData.append('upload_images', new Blob([files]));
+			}
+
 			const upload_bootstrap = document.getElementById('upload_bootstrap');
-			formData.append('upload_images', new Blob([files]));
 			if(document.getElementById('bootstrap_check').checked){
 				const filesB = upload_bootstrap.files[0];
 				formData.append('upload_bootstrap', new Blob([filesB]));

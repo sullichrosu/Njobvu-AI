@@ -30,6 +30,7 @@
     "express": "^4.16.4",
     "express-fileupload": "^1.1.6-alpha.6",
     "express-session": "^1.16.1",
+    "ffmpeg": "^0.0.4",
     "glob": "^7.1.5",
     "http": "0.0.0",
     "moment": "^2.24.0",

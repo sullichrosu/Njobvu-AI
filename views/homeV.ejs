@@ -14,7 +14,7 @@
 		<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
 		</div>
 		<div class="col-6" style="float: right">
-			<button type="button" class="btn btn-danger" style="float: right; margin-left: 15px" onclick="homePage()">Validation Mode</button>
+			<button type="button" class="btn btn-danger" style="float: right; margin-left: 15px" onclick="homePage()">Switch to Labeling Mode</button>
 	   </div>
 	</div>
     <div class="col-12">
@@ -281,26 +281,29 @@
 	}
 	async function changeValidation(Pname, Admin){
 
-		var formData = new FormData();
-		formData.append('PName', Pname);
-		formData.append('Admin', Admin);
-		formData.append('validMode', "1");
+		if(confirm("Disabling Validation mode will remove 'Needs Review' from all your images ")){
 
-		let options = {
-			method: 'POST', 
-			body: formData
-		}
+			var formData = new FormData();
+			formData.append('PName', Pname);
+			formData.append('Admin', Admin);
+			formData.append('validMode', "1");
 
-		let cred = await fetch('/changeValidation', options);
-		cred = await cred.json();
-		console.log("cred: ", cred);
-		if(cred.Success == "Yes"){
-			alert("Project has been removed from Validation.");
-			window.location.replace("/homeV");
-		}
-		else{
-			alert("An error occured. Please try again");
-			window.location.replace("/homeV");
+			let options = {
+				method: 'POST', 
+				body: formData
+			}
+
+			let cred = await fetch('/changeValidation', options);
+			cred = await cred.json();
+			console.log("cred: ", cred);
+			if(cred.Success == "Yes"){
+				alert("Project has been removed from Validation.");
+				window.location.replace("/homeV");
+			}
+			else{
+				alert("An error occured. Please try again");
+				window.location.replace("/homeV");
+			}
 		}
 	}
 </script>
