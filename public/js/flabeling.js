@@ -703,11 +703,13 @@ $(document).keydown(function (event) {
     else if (key == -12 || key == 16) { // left or a
         // prev
         $("#auto-prev").trigger('click');
+        $("#auto-prevV").trigger('click');
         $(location).attr('href', $("#prev").attr("href"))
     }
     else if (key == -10 || key == 19) { // right or d
         // next
         $("#auto-next").trigger('click');
+        $("#auto-nextV").trigger('click');
         $(location).attr('href', $("#next").attr("href"))
     }
     else if (key == 20){ // e

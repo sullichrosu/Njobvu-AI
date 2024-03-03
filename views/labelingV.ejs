@@ -9,7 +9,6 @@
 <body style="background-color: #4C4C4C;">
 <div id="labeling" class="row" style="margin-left: 0; margin-right: 0;">
     <form action ="updateLabels" method="post" id="submit-project">
-      <% if(classFilter != 'false') { %>
         <!--Classes bar -->
         <div id="class-list" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
               <% for(var i=0; i<classes.length; i++) {%>
@@ -19,17 +18,15 @@
                       <button type="button" value="<%= classes[i] %>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i] %></button>
                   <% } %>
               <% } %>
-              <a href="/labelingV?IDX=<%= IDX %>&IName=<%= IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=false">
+              <a href="/labelingV?IDX=<%= IDX %>&IName=<%= IName %>&curr_class=<%= curr_class %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=false">
               <button type="button" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn" style="background-color: lightblue; border-radius: 0; border: 5px solid black">Hide Class List</button>
               </a>
         </div>
-        <% } else { %>
-        <div id="showClassesButton" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
-          <a href="/labelingV?IDX=<%= IDX %>&IName=<%= IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=true">
+        <div id="showClassesButton" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="display: none; background-color: #262C2F">
+          <a href="/labelingV?IDX=<%= IDX %>&IName=<%= IName %>&curr_class=<%= curr_class %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true">
             <button type="button" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn" style="background-color: lightblue; border-radius: 0; border: 5px solid black">Show Class List</button>
           </a>
         </div>
-        <% } %>
         <!-- prev/next image arrows bar -->
         <div class="mb-0 col-md-12 row text-center mx-auto nopadding" style="background-color: #262C2F; color: white">
           <% if(prev_IName != -1) { %>
@@ -164,7 +161,7 @@
             </div>
             <div class="modal-body row">
                 <div class="col-12">
-	          		<a href="/projectV?IDX=<%= IDX %>" class="mr-1 ml-1 btn btn-secondary col text-center"><i class="fas fa-long-arrow-left"></i> Back to Project Page</a>
+	          		<a href="/projectV?IDX=<%= IDX %>&page=1&perPage=10&sort=<%= sortFilter %>&class=<%= imageClass %>" class="mr-1 ml-1 btn btn-secondary col text-center"><i class="fas fa-long-arrow-left"></i> Back to Project Page</a>
                 </div>
                 <div class="col-12">
                     <table class="table table-striped">
@@ -356,23 +353,22 @@
     }
     
   }
-
-  // function toggleClassList() {
-  //   var url = window.location.href;
-  //   var display = url.split('&');
-  //   console.log(display);
-  //   var displayChoice = display[display.length - 1].split('=');
-
-  //   console.log(displayChoice);
-  //   displayChoice[1] = 'true';
-
-
-  //   display[display.length - 1] = displayChoice.join('=');
-
-
-  // }
 </script>
 
+<script>
+  var classList = document.getElementById("class-list");
+  var showClass = document.getElementById("showClassesButton");
+  var classFilter = '<%= classFilter %>';
+    if(classFilter != "false"){
+      classList.style.display = "";
+      showClass.style.display = "none";
+      
+    }
+    else{
+      classList.style.display = "none";
+      showClass.style.display = "";
+    }
+</script>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {

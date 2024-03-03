@@ -568,7 +568,7 @@ module.exports = {
 			results1 = await pdb.allAsync("SELECT * FROM `Images` WHERE reviewImage=1 LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
 		}
 		else if(sortFilter == 'confidence' && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
-			var images = await pdb.allAsync("SELECT * FROM `Labels`");
+			var images = await pdb.allAsync("SELECT * FROM `Images`");
 			var confidenceImages = await pdb.allAsync("SELECT Confidence, IName FROM `Validation`");
 			const highestConf = {};
 			confidenceImages.forEach(item => {
@@ -581,6 +581,11 @@ module.exports = {
 			images.sort((a, b) => {
 				const confidenceA = highestConf[a.IName] || 0;
 				const confidenceB = highestConf[b.IName] || 0;
+
+				if (confidenceA == confidenceB) {
+					return a.IName.localeCompare(b.IName);
+				}
+
 				return confidenceB - confidenceA;
 			  });
 
@@ -602,6 +607,11 @@ module.exports = {
 			imagesWithClass.sort((a, b) => {
 				const confidenceA = highestConf[a.IName] || 0;
 				const confidenceB = highestConf[b.IName] || 0;
+
+				if (confidenceA == confidenceB) {
+					return a.IName.localeCompare(b.IName);
+				}
+
 				return confidenceB - confidenceA;
 			  });
 
@@ -1530,7 +1540,7 @@ getValidationConfigPage: async (req, res) => {
 
 
     // labeling page
-    getValidationLabelingPage: async (req, res) => { //tp1
+    getValidationLabelingPage: async (req, res) => { 
         console.log("getValidationLabelingPage");
        
 		var IDX = parseInt(req.query.IDX),
@@ -1637,9 +1647,89 @@ getValidationConfigPage: async (req, res) => {
 		}
 
 		var results2 = Array();
-		if(imageClass == null || imageClass == 'null' || !Classes.includes(imageClass)){
-			results2 = await ldb.allAsync("SELECT * FROM `Images`")
-		} else{
+		if((imageClass == null || imageClass == 'null' || !Classes.includes(imageClass)) && (sortFilter == "null" || sortFilter == null) || (sortFilter=="Confidence" && imageClass == 'null')){ 
+			results2 = await ldb.allAsync("SELECT * FROM `Images`");
+		}
+		else if(sortFilter == "needs_review" && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
+			results2 = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage=1");
+		}
+		else if(sortFilter == 'confidence' && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
+			var images = await ldb.allAsync("SELECT * FROM `Images`");
+			var confidenceImages = await ldb.allAsync("SELECT Confidence, IName FROM `Validation`");
+			const highestConf = {};
+			confidenceImages.forEach(item => {
+				const { Confidence, IName } = item;
+				if (!(IName in highestConf) || Confidence > highestConf[IName]) {
+					highestConf[IName] = Confidence;
+				}
+			});
+
+			images.sort((a, b) => {
+				const confidenceA = highestConf[a.IName] || 0;
+				const confidenceB = highestConf[b.IName] || 0;
+
+				if (confidenceA == confidenceB) {
+					return a.IName.localeCompare(b.IName);
+				}
+
+				return confidenceB - confidenceA;
+			  });
+
+			for(var d = 0; d < images.length; d++){
+				var imageData = await (ldb.allAsync("SELECT * FROM `Images` WHERE IName = '" + images[d].IName + "'"));
+				results2.push(imageData[0]);
+			}
+		}
+		else if(sortFilter == 'confidence' && imageClass != null && Classes.includes(imageClass)){
+			var imagesWithClass = await ldb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
+			var confidenceImages = await ldb.allAsync("SELECT Confidence, IName FROM `Validation` WHERE CName = '" + imageClass + "'");
+			const highestConf = {};
+			confidenceImages.forEach(item => {
+				const { Confidence, IName } = item;
+				if (!(IName in highestConf) || Confidence > highestConf[IName]) {
+					highestConf[IName] = Confidence;
+				}
+			});
+			imagesWithClass.sort((a, b) => {
+				const confidenceA = highestConf[a.IName] || 0;
+				const confidenceB = highestConf[b.IName] || 0;
+
+				if (confidenceA == confidenceB) {
+					return a.IName.localeCompare(b.IName);
+				}
+
+				return confidenceB - confidenceA;
+			  });
+
+			for(var d = 0; d < imagesWithClass.length; d++){
+				var imageData = await (ldb.allAsync("SELECT * FROM `Images` WHERE IName = '" + imagesWithClass[d].IName + "'"));
+				results2.push(imageData[0]);
+			}
+		}
+		else if(sortFilter == 'has_class'){
+			if(imageClass != 'null'){
+				var imagesWithClass;
+				imagesWithClass = await ldb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
+			}
+			else{
+				imagesWithClass = await ldb.allAsync("SELECT DISTINCT IName FROM `Labels`");
+			}
+			imagesWithClass.sort((a, b) => {
+				if (a.IName < b.IName) {
+				  return -1;
+				} else if (a.IName > b.IName) {
+				  return 1;
+				} else {
+				  return 0;
+				}
+			  });
+
+			for(var d = 0; d < imagesWithClass.length; d++){
+				var imageData = await (ldb.allAsync("SELECT * FROM `Images` WHERE IName = '" + imagesWithClass[d].IName + "'"));
+				results2.push(imageData[0]);
+			}
+		}
+        else{
 			var imagesWithClass = await ldb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
 			imagesWithClass.sort((a, b) => {
 				if (a.IName < b.IName) {
@@ -1657,22 +1747,14 @@ getValidationConfigPage: async (req, res) => {
 			}
 		}
 		var rowid;
-		if(imageClass == null || imageClass == 'null'  || !Classes.includes(imageClass)){
-			rowid = await ldb.getAsync("SELECT rowid FROM Images WHERE IName = '" + IName +"'"); 
-		}
-		else{
-			for(var b = 0; b < results2.length; b++){
-				if(IName == results2[b].IName) {
-					rowid = {rowid: b+1}
-					break;
-				}
+
+		for(var b = 0; b < results2.length; b++){
+			if(IName == results2[b].IName) {
+				rowid = {rowid: b+1}
+				break;
 			}
 		}
 
-		// for(var b = 0; b < results2.length; b++){
-		// 	console.log(results2[b].IName);
-		// }
-		// console.log(rowid);
 		await ldb.allAsync("UPDATE Images SET reviewImage = 0 WHERE IName = '" + IName + "'");
 
 		var results3 = await ldb.allAsync("SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'");
@@ -1735,7 +1817,6 @@ getValidationConfigPage: async (req, res) => {
 		{
 			next_IName = results2[curr_index]["IName"]
 		}
-
 		// close the database
 		ldb.close(function(err){
 			if(err)
