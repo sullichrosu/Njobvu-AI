@@ -15,6 +15,7 @@ Node.js
 
 
 **INSTALLATION:**
+======================================================================================================================
 
 **Windows:**
 1) Extract the downloaded zip file.
@@ -84,6 +85,7 @@ Run Labeling-Tool.exe in the root directory of the Labeling Tool
 
 
 **LABELING:**
+======================================================================================================================
 
 ![alt text](public/images/NumberedLabelingPage.PNG)
 
@@ -291,6 +293,38 @@ You can delete a run, including all logs, weights, and any other output file ass
 6) Hit "Train"
 
 ----------------------------------------------------------------------------------------------------------------------
+
+
+**VALIDATION**
+======================================================================================================================
+
+**Prep**
+1) On main project page, click "Enable Validation" next to desired project
+2) Click "Switch to Review Mode"
+3) Select project
+4) All images will have "Needs Review" flag enabled by default. This will disappear once an image has been reviewed.
+
+**Sorting and Filtering**
+1) Options to filter by non-empty images ("Has Class"), "Needs Review" flag, and sort by confidence score
+2) Clas dropdown menu allows filtering by class
+3) These can be used in combination (e.g., filter by class, then sort by confidence score)
+
+**Validating Predictions**
+1) When viewing an image in Review mode, predicted boxes are displayed on the image and side bar
+2) Incorrect classes may be changed using the sidebar dropdown menus
+3) Boxes may be also be added or removed here as in Labeling Mode
+
+**Configuration Page**
+1) Options to download the projectin various format as in Labeling Mode
+2) "Summary File" will include validated and corrected predictions; "Initial Classification" provides predictions only
+3) New classes may be added here if necessary
+
+**Stats Page**
+1) Review Progress shows percentage of images in the project still with "Needs Review" flag
+2) Table shows the number of labels and images predicted to contain each class
+
+----------------------------------------------------------------------------------------------------------------------
+
 
 **Server Configuration:**
 ======================================================================================================================
