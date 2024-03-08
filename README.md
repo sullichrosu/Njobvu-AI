@@ -1,5 +1,8 @@
-**OSU Njobvu-AI**
+![Black-and-white logo with an elephant and text reading NJOBVU-AI](/assets/njobvu_square_light_buffer.png)
 
+Njobvu-AI is an open-source tool for collaborative image labeling and implementation of computer vision algorithms. Njobvu-AI leverages the neural network frameworks YOLO and Tensorflow to enable in-house computer vision model training and image classification.
+
+Users can annotate images with bounding boxes, use these datasets to train custom models, and apply these models to new images for classification. The validation mode allows users to review and correct model predictions and download data in various formats. Njobvu-AI can be run on both desktop and server hardware using Node.js, allowing users to collaborate on data labeling and image review locally or online.
 
 ----------------------------------------------------------------------------------------------------------------------
 
