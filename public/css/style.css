@@ -125,6 +125,7 @@ a:hover {
         background: black;
     }
 #header .navbar-nav > li > a {padding-top:1px !important; padding-bottom:1px !important;}
+.navbar-brand img{max-height: 32px !important; transform: translate(0, -10%);}
 /* #header .navbar {max-height:32px !important} */
 /*
     Home
