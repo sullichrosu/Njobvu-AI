@@ -1,7 +1,7 @@
 ---
 title: 'Njobvu-AI: An open-source tool for collaborative image labeling and implementation of computer vision models'
 tags:
-  - Python
+  - Node.js
   - Camera Traps
   - Computer Vision
   - Data Tagging
@@ -12,39 +12,38 @@ authors:
     affiliation: 1 
   - name: Jonathan S. Koning
     affiliation: 1
-  - name: Mazen Alotaibi
-    affiliation: 1
   - name: Cara L. Appel
+    orcid: 0000-0002-4761-606X
     affiliation: "2, 3"
   - name: Christopher M. Sullivan
-    affiliation: 1
-  - name: Thon Chao
-    affiliation: 4
+    orcid: 0000-0003-3344-5201
+    affiliation: "1, 4"
   - name: Lisa Truong
+    orcid: 0000-0003-1751-4617
     affiliation: 5
   - name: Robyn L. Tanguay
+    orcid: 0000-0001-6190-3682
     affiliation: 5
-  - name: Pankaj Jaiswal
-    affiliation: 6
   - name: Taal Levi
+    orcid: 0000-0003-1853-8311
     affiliation: 2
-  - name: Damon B. Lesmeisiter
+  - name: Damon B. Lesmeister
+    orcid: 0000-0003-1102-0122
     affiliation: "2, 3"
 
 affiliations:
  - name: Center for Quantitative Life Sciences, Oregon State University, Corvallis, Oregon, USA
    index: 1
- - name: Department of Fisheries, Wildlife, and Conservation Sciences, Oregon State University, Corvallis Oregon, USA
+ - name: Department of Fisheries, Wildlife, and Conservation Sciences, Oregon State University, Corvallis, Oregon, USA
    index: 2
- - name: USDA Forest Service, Pacific Northwest Research Station, Corvallis Oregon, USA
+ - name: USDA Forest Service, Pacific Northwest Research Station, Corvallis, Oregon, USA
    index: 3
- - name: Department of Integrative Biology, Oregon State University, Corvallis, Oregon, USA
+ - name: College of Earth, Ocean, and Atmospheric Sciences, Oregon State University, Corvallis, Oregon, USA
    index: 4
  - name: Department of Environmental and Molecular Toxicology, Oregon State University, Corvallis, Oregon, USA
    index: 5
- - name: Dept. of Botany and Plant Pathology, Oregon State University, Corvallis, Oregon, USA
-   index: 6
-date: 3 March 2024
+
+date: 12 March 2024
 
 ---
 
@@ -54,9 +53,9 @@ Practitioners interested in using computer vision models lack user-friendly and 
 
 # Statement of need
 
-Advancements in computer vision and machine learning techniques have led to increasing usage for applied research. Many groups use images, video, and acoustic data for projects across disciplines are interested in computer vision and machine learning to improve data processing workflows or solve novel problems. Unfortunately, using computer vision and machine learning requires substantial preparation prior to extracting information from unlabeled images, video, and audio data. Researchers typically start by labeling a subset of data with classes of interest. Labeled data are used to train object-recognition models to identify objects in new images.
+Advancements in computer vision and machine learning techniques have led to increasing usage for applied research. Many groups who use images, video, and acoustic data for projects across disciplines are interested in computer vision and machine learning to improve data processing workflows or solve novel problems. Unfortunately, using computer vision and machine learning requires substantial preparation prior to extracting information from unlabeled images, video, and audio data. Researchers typically start by labeling a subset of data with classes of interest. Labeled data are used to train object-recognition models to identify objects in new images.
 
-Currently there are many cloud-based and desktop tools to label training data, but often have limits around file size, multiple users, and proprietary software. These restrictions limit broad application and offer few options for working outside the web environment. Additionally, few tools allow users to train a custom computer vision model while retaining control over the training parameters and data ownership. Training custom models is therefore limited to experienced users of command-line programming or paid services. Here, we present Njobvu-AI (pronounced N-joh-voo AI), a free open-source tool that can be used both offline and online.
+Currently there are many cloud-based and desktop tools to label training data, but they often have limits around file size, multiple users, and proprietary software. These restrictions limit broad application and offer few options for working outside the web environment. Additionally, few tools allow users to train a custom computer vision model while retaining control over the training parameters and data ownership. Training custom models is therefore limited to experienced users of command-line programming or paid services. Here, we present Njobvu-AI (pronounced N-joh-voo AI), a free open-source tool that can be used both offline and online.
 
 # Overview
 
@@ -68,13 +67,13 @@ We created a button to flag images for secondary review by other users. On the c
 
 Once users have completed labeling their training dataset, they can train a model on the TensorFlow or YOLO pages, which are two popular machine learning frameworks used in computer vision. On the TensorFlow page, a user can add multiple Python paths to accommodate the user’s relevant TensorFlow Python scripts. On the YOLO page, users can upload a pre-trained weights file and begin training using their labeled images. Pre-trained models may be downloaded and used for transfer learning, or users may wish to use previously trained models.
 
-Users can apply their trained model to locate and identify objects in new images. Njobvu-AI will upload, process, and label the set of new images. Each image will contain bounding box(es) around predicted objects. Users can review and modify the predicted labels if needed. Users can navigate to validation mode to assess model performance on unlabeled dataset, correct labels, view results, sort by class, bulk class changes, and individual photo statistics.
+Users can apply their trained model to locate and identify objects in new images. Njobvu-AI will upload, process, and label the set of new images. Each image will contain bounding box(es) around predicted objects. Users can review and modify the predicted labels if needed. Users can navigate to validation mode to assess model performance on unlabeled datasets, correct labels, view results, sort by class, bulk class changes, and individual photo statistics.
 
 Njobvu-AI is built on Node.js, so users can easily bring the system online using any web server hosting Node.js services. Njobvu-AI can be put into a cloud service and accessed from around the world if needed. Since we created Njobvu-AI as a small, contained package system, users can also install Node.js locally and run the tool on a desktop machine. We have successfully run the system on Windows, Mac, and Linux operating systems as well as x86 and POWER. Njobvu-AI is completely open source, allowing users to add custom formats and guarantee privacy.
 
 # Acknowledgements
 
-Funding was provided by USDA Forest Service, Pacific Northwest Research Station, and the National Institutes of Health under Award P30 ES030287. The findings and conclusions in this publication are those of the authors and should not be construed to represent any official U.S. Department of Agriculture, National Institutes of Health, or U.S. Government determination or policy. The use of trade or firm names in this publication is for reader information and does not imply endorsement by the U.S. Government of any product or service.
+We thank Mazen Alotaibi, Thon Chao, and Pankaj Jaiswal for their contributions to the development of this project. Funding was provided by USDA Forest Service Pacific Northwest Research Station and the National Institutes of Health under Award P30 ES030287. The findings and conclusions in this publication are those of the authors and should not be construed to represent any official U.S. Department of Agriculture, National Institutes of Health, or U.S. Government determination or policy. The use of trade or firm names in this publication is for reader information and does not imply endorsement by the U.S. Government of any product or service.
 
 # References
 
