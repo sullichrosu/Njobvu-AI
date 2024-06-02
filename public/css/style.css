@@ -245,7 +245,7 @@ a:hover {
     }
 
 .modalV {
-    width: 300px; /* Adjust the width as needed */
+    width: 350px; /* Adjust the width as needed */
     overflow-y: auto;
 
     position: fixed;

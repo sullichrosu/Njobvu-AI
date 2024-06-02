@@ -23,14 +23,15 @@
 		<h1 style="text-align: center;"><%= PName %></h1>
 	</div>
 	<div class="form-group col-md-2">
-		<label for="page">Page:</label>
-		<input type="number" id="page" name="page" min="1" max="<%=pages%>" value="<%=Number(current)%>" style="width: 25%;">
+		<div style="display: flex; gap: 5px; align-items: center; padding-bottom: 10px;">
+			<label for="page">Page:</label>
+			<input type="number" id="page" name="page" min="1" max="<%=pages%>" value="<%=Number(current)%>" style="width: 25%;">
 
-		<label for="perpage">PerPage:</label>
-		<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
-		
+			<label for="perpage">PerPage:</label>
+			<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
+		</div>
 		<label for="sort">Sort By:</label>
-		<div>
+		<div style="display: flex; gap: 5px; align-items: center;">
 			<select name="Filter" id="filter">
 				<option>Choose Filter</option>
 				<option value="null">Reset Filter</option>
@@ -46,24 +47,25 @@
 				<% } %>
 			</select>
 		</div>
-
-		<form class="Batch Change" action="/batch-change-class" enctype="multipart/form-data" id="batch-change-class">
-			<label for="batchchange">Batch Change Classes</label>
-			<div>
-				<select name="class1" id="batchclass1">
-					<% for(var f=0; f<projectClasses.length; f++) {%>
-						<option><%= projectClasses[f] %></option>
-					<% } %>
-				</select>
-				<label>to</label>
-				<select name="class2" id="batchclass2">
-					<% for(var f=0; f<projectClasses.length; f++) {%>
-						<option><%= projectClasses[f] %></option>
-					<% } %>
-				</select>
-				<button id="batchbttn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">Change</button>
-			</div>
-		</form>
+		<div style="padding-top: 20px; padding-bottom: 5px;">
+			<form class="Batch Change" action="/batch-change-class" enctype="multipart/form-data" id="batch-change-class">
+				<label for="batchchange">Batch Change Classes</label>
+				<div style="display: flex; gap: 5px; align-items: center;">
+					<select name="class1" id="batchclass1">
+						<% for(var f=0; f<projectClasses.length; f++) {%>
+							<option><%= projectClasses[f] %></option>
+						<% } %>
+					</select>
+					<label>to</label>
+					<select name="class2" id="batchclass2">
+						<% for(var f=0; f<projectClasses.length; f++) {%>
+							<option><%= projectClasses[f] %></option>
+						<% } %>
+					</select>
+					<button id="batchbttn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">Change</button>
+				</div>
+			</form>
+		</div>
 
 
 	</div>

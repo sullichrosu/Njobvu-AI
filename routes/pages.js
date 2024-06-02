@@ -54,7 +54,7 @@ module.exports = {
 
         var qnum = 0;
         var test = await db.allAsync("SELECT * FROM `Access` WHERE Username = '"+user+"' LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
-        var projects = await db.allAsync("SELECT * FROM `Access` WHERE Username = '"+user+"'"); 
+		var projects = await db.allAsync("SELECT * FROM `Access` WHERE Username = '"+user+"'"); 
 		var results1 = []
 
 		var test2 = []
@@ -159,6 +159,7 @@ module.exports = {
 			}
             
         }
+
         res.render('home', {
             title: 'home',
             user: user,
@@ -167,7 +168,7 @@ module.exports = {
 			list_counter: list_counter,
 			page: page,
             current: page,
-            pages: Math.ceil(projects.length/perPage),
+            pages: Math.ceil(results1.length/perPage),
             perPage: perPage,
             logged: req.query.logged,
             needs_review: review_counter
@@ -195,7 +196,7 @@ module.exports = {
 
         var qnum = 0;
         var test = await db.allAsync("SELECT * FROM `Access` WHERE Username = '"+user+"' LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
-        var projects = await db.allAsync("SELECT * FROM `Access` WHERE Username = '"+user+"'");
+		var projects = await db.allAsync("SELECT * FROM `Access` WHERE Username = '"+user+"'");
 		var results1 = []
 
 		var test2 = []
@@ -310,7 +311,7 @@ module.exports = {
 			list_counter: list_counter,
 			page: page,
             current: page,
-            pages: Math.ceil(projects.length/perPage),
+            pages: Math.ceil(results1.length/perPage),
             perPage: perPage,
             logged: req.query.logged,
             needs_review: review_counter
@@ -660,8 +661,6 @@ module.exports = {
 				results1.push(imageData[0]);
 			}
 		}
-
-        var results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
 		
 		var imageLabels = [];
         var list_counter = [];
@@ -732,7 +731,7 @@ module.exports = {
 			classes: imageLabels,
             list_counter: list_counter,
             current: page,
-            pages: Math.ceil(results2['COUNT(*)']/perPage),
+            pages: Math.ceil(results1.length/perPage),
             perPage: perPage,
             logged: req.query.logged,
 			sortFilter: sortFilter,
@@ -1747,7 +1746,6 @@ getValidationConfigPage: async (req, res) => {
 			}
 		}
 		var rowid;
-
 		for(var b = 0; b < results2.length; b++){
 			if(IName == results2[b].IName) {
 				rowid = {rowid: b+1}
@@ -1855,7 +1853,6 @@ getValidationConfigPage: async (req, res) => {
 		for (const [key, value] of Object.entries(stats)) {
 			statsO.push([key, value]);
 		  }
-		// console.log(results2);
 
         res.render('labelingV', {
             title: 'labeling',
@@ -2690,7 +2687,7 @@ getValidationConfigPage: async (req, res) => {
 
 		var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
 		var results6 = await sdb.allAsync("SELECT DISTINCT IName FROM Images WHERE reviewImage = 1");
-		var complete = Math.trunc(100*(results6.length/results5['COUNT(*)']));
+		var complete = 100 - Math.trunc(100*(results6.length/results5['COUNT(*)']));
 
 		// close the database
 		sdb.close(function(err){

@@ -68,7 +68,8 @@
                 <a >Image Labels:</a>
                 <% for(var i=0; i < labelConf.length; i++) {%>
                   <div class="imageLabels">
-                    <div>
+                    <div style="display: flex;align-items: center;padding-bottom: 5px;">
+                      <button type="button" onclick="deleteLabel('<%= String(labelConf[i].LID) %>')" class="btn btn-danger">X</button>
                       <a class ="mr-0 ml-0 btn col text-center">
                         ID: <%= labelConf[i].LID %>, Conf: <%= Math.round(Number(labelConf[i].Confidence)) %>%
                       </a>
@@ -390,8 +391,51 @@
       }).then((body) => {
         console.log(body);
 
-        window.location.reload();
-    
+        if('<%= sortFilter %>' == 'needs_review'){
+          if('<%= images_length %>' == 1){
+              //project page
+              window.location.replace("/projectV?IDX=<%= IDX %>&page=1&perPage=10&sort=null&class=null")
+            }
+            else if ('<%= curr_index %>' < '<%= images_length %>') {
+              //move forward
+              window.location.replace("/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=needs_review&class=null&classFilter=<%= classFilter %>")
+            }
+            else{
+              //move backwards
+              window.location.replace("/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=needs_review&class=null&classFilter=<%= classFilter %>")
+            }
+        }
+        else if('<%= imageClass %>' !== 'null'){
+          var remainingClasses = new Set();
+          '<% for(var i = 0; i < labelConf.length; i++){ %>'
+          if('<%= labelConf[i].LID %>' !== this.getAttribute('data-lid')){
+            remainingClasses.add('<%= labelConf[i].CName %>')
+          }
+          '<% } %>'
+          console.log(remainingClasses);
+          if(!remainingClasses.has('<%= imageClass %>')){
+            console.log("FILTER DOES NOT MATCH");
+
+            if('<%= images_length %>' == 1){
+              //project page
+              window.location.replace("/projectV?IDX=<%= IDX %>&page=1&perPage=10&sort=null&class=null")
+            }
+            else if ('<%= curr_index %>' < '<%= images_length %>') {
+              //move forward
+              window.location.replace("/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=<%= imageClass %>&classFilter=<%= classFilter %>")
+            }
+            else{
+              //move backwards
+              window.location.replace("/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=null&class=<%= imageClass %>&classFilter=<%= classFilter %>")
+            }
+          }
+          else{
+            window.location.reload();
+          }
+        }
+        else{
+          window.location.reload();
+        }
       }).catch((error) => {
         console.log(error);
       });
@@ -399,4 +443,35 @@
     });
   });
 });
+</script>
+
+<script>
+  function deleteLabel(labelID){
+
+    var result = confirm("Are you sure you want to delete this label? This action is not reversible.");
+    var LabelArray = [labelID];
+    console.log(result)
+    if (result) {
+      console.log("Deleted label " + labelID);
+      var formData = new FormData();
+      formData.append("IDX", "<%= IDX %>");
+      formData.append("LabelArray", LabelArray);
+      formData.append("PName", "<%= PName %>");
+      formData.append("Admin", "<%= Admin %>");
+
+      fetch('/deleteLabel', {
+          method: 'POST',
+          body: formData 
+      }).then((resp) => {
+        return resp.json();
+      }).then((body) => {
+        console.log(body);
+
+        window.location.reload();
+      
+      }).catch((error) => {
+        console.log(error);
+      });
+    }
+  }
 </script>
