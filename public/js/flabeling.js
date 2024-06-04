@@ -156,7 +156,7 @@ var Rectangles = (function () {
 			// activeObj.stroke = classes[curr_class].style.backgroundColor;
 			activeObj.stroke = classes[allClasses.indexOf(curr_class)].style.backgroundColor;
 			// activeObj.stroke = classNames[0].style.backgroundColor;
-            activeObj.strokeWidth = 1;
+            activeObj.strokeWidth = 2;
             activeObj.fill = activeObj.stroke.replace(')', ', 0.33)').replace('rgb', 'rgba');
 
             left_x = Math.min(origX, Math.max(pointer.x, 0))
@@ -469,7 +469,7 @@ for (var i = 0; i < list_labels.length; i += 6) {
     var rect = new fabric.Rect({
         id: list_labels[i].value,
         stroke: classes[allClasses.indexOf(list_labels[i + 1].value)].style.backgroundColor,
-        strokeWidth: 1,
+        strokeWidth: 2,
         fill: "transparent",
         left: parseInt(list_labels[i + 2].value) * diff_width_ratio,
         top: parseInt(list_labels[i + 3].value) * diff_width_ratio,

@@ -1963,7 +1963,7 @@ api.post('/downloadDataset', async (req, res) => {
 				data = data + count.count + ": " + classname[j].CName + '\t';
 			}
 			var review = await dddb.getAsync("SELECT reviewImage FROM Images WHERE IName = '"+ results2[i].IName +"'");
-			data = data + '\t' + review.reviewImage + '\t' + '\n';
+			data = data + review.reviewImage + '\t' + '\n';
 		}
 		
 		// Create race condition

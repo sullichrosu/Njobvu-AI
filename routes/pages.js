@@ -558,15 +558,18 @@ module.exports = {
 			Classes.push(projectClasses[i].CName);
 		}
 		var results1 = Array();
+		var results2 = {'COUNT(*)': 1};
 
 		
         // var results1 = await pdb.allAsync("SELECT * FROM `Images` LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
 
 		if((imageClass == null || imageClass == 'null' || !Classes.includes(imageClass)) && (sortFilter == "null" || sortFilter == null) || (sortFilter=="Confidence" && imageClass == 'null')){ 
 			results1 = await pdb.allAsync("SELECT * FROM `Images` LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
+			results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
 		}
 		else if(sortFilter == "needs_review" && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
 			results1 = await pdb.allAsync("SELECT * FROM `Images` WHERE reviewImage=1 LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
+			results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images WHERE reviewImage=1");
 		}
 		else if(sortFilter == 'confidence' && (imageClass == null || imageClass == 'null' || !Classes.includes(imageClass))){
 			var images = await pdb.allAsync("SELECT * FROM `Images`");
@@ -594,6 +597,7 @@ module.exports = {
 				var imageData = await (pdb.allAsync("SELECT * FROM `Images` WHERE IName = '" + images[d].IName + "'"));
 				results1.push(imageData[0]);
 			}
+			results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
 		}
 		else if(sortFilter == 'confidence' && imageClass != null && Classes.includes(imageClass)){
 			var imagesWithClass = await pdb.allAsync("SELECT DISTINCT IName FROM `Labels` WHERE CName = '" + imageClass + "'");
@@ -620,6 +624,7 @@ module.exports = {
 				var imageData = await (pdb.allAsync("SELECT * FROM `Images` WHERE IName = '" + imagesWithClass[d].IName + "'"));
 				results1.push(imageData[0]);
 			}
+
 		}
 		else if(sortFilter == 'has_class'){
 			if(imageClass != 'null'){
@@ -731,7 +736,7 @@ module.exports = {
 			classes: imageLabels,
             list_counter: list_counter,
             current: page,
-            pages: Math.ceil(results1.length/perPage),
+            pages: Math.ceil(results2['COUNT(*)']/perPage),
             perPage: perPage,
             logged: req.query.logged,
 			sortFilter: sortFilter,
