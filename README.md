@@ -1,4 +1,5 @@
 ![Black-and-white logo with an elephant and text reading NJOBVU-AI](/assets/njobvu_square_light_buffer.png)
+![Workflow showing processing steps using Njobvu-AI software](/assets/EI_fig1.png)
 
 Njobvu-AI is an open-source tool for collaborative image labeling and implementation of computer vision algorithms. Njobvu-AI leverages the neural network frameworks YOLO and Tensorflow to enable in-house computer vision model training and image classification.
 
@@ -18,15 +19,17 @@ Node.js
 ======================================================================================================================
 
 **Windows:**
-1) Extract the downloaded zip file.
-2) Run InstallMe.exe and follow instructions.
-3) If you are redirected to the Node.js website, you must install Node.js then restart the InstallMe.exe.
-4) After installation is complete, there should now be a labeling-tool shortcut on your desktop.
+1) [Download repository code](https://github.com/sullichrosu/Njobvu-AI#:~:text=with%20GitHub%20Desktop-,Download%20ZIP).
+2) Extract the downloaded zip file.
+3) Run InstallMe.exe and follow instructions.
+4) If you are redirected to the Node.js website, you must install Node.js then restart the InstallMe.exe.
+5) After installation is complete, there should now be a labeling-tool shortcut on your desktop.
 
 **Linux and MacOS:**
-1) Extract the downloaded zip file.
-2) Using the terminal, navigate to the extracted directory.
-3) Run "npm i" and "npm i --save sqlite3".
+1) [Download repository code](https://github.com/sullichrosu/Njobvu-AI#:~:text=with%20GitHub%20Desktop-,Download%20ZIP).
+2) Extract the downloaded zip file.
+3) Using the terminal, navigate to the extracted directory.
+4) Run the commands `npm i` and `npm i --save sqlite3`.
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -42,8 +45,8 @@ Run Labeling-Tool.exe in the root directory of the Labeling Tool
 
 **All Platforms:**
 1) Using the terminal, navigate to the root directory of the Labeling Tool.
-2) Run "node server.js".
-3) Go to "http://localhost:8080".
+2) Run `node server.js`.
+3) Navigate to [http://localhost:8080](http://localhost:8080).
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -51,7 +54,7 @@ Run Labeling-Tool.exe in the root directory of the Labeling Tool
 
 **CREATE AN ACCOUNT:**
 
-1) Go to "http://localhost:8080"
+1) Go to [http://localhost:8080](http://localhost:8080)
 2) On the Login page, click "Signup".
 3) Fillout the form.
 *Please note that the server is being run on your device and none of this information is sent to nor used by any third party.*
@@ -299,18 +302,18 @@ You can delete a run, including all logs, weights, and any other output file ass
 ======================================================================================================================
 
 **Prep**
-1) On main project page, click "Enable Validation" next to desired project
+1) On the main page, click "Enable Validation" next to desired project
 2) Click "Switch to Review Mode"
 3) Select project
 4) All images will have "Needs Review" flag enabled by default. This will disappear once an image has been reviewed.
 
 **Sorting and Filtering**
-1) Options to filter by non-empty images ("Has Class"), "Needs Review" flag, and sort by confidence score
-2) Clas dropdown menu allows filtering by class
+1) The first dropdown menu allows for filtering by non-empty images ("Has Class"), "Needs Review" flag, and sorting by confidence score
+2) The second dropdown menu allows for filtering by class
 3) These can be used in combination (e.g., filter by class, then sort by confidence score)
 
 **Validating Predictions**
-1) When viewing an image in Review mode, predicted boxes are displayed on the image and side bar
+1) When viewing an image in Review Mode, predicted boxes are displayed on the image and sidebar
 2) Incorrect classes may be changed using the sidebar dropdown menus
 3) Boxes may be also be added or removed here as in Labeling Mode
 
@@ -332,12 +335,12 @@ You can delete a run, including all logs, weights, and any other output file ass
 **Cloud Usage**
 You can host Njobvu-AI on the cloud to enable users to access it via the internet.
 
-1) Within the Njobvu-AI directory navigate to /controllers/training/config
+1) Within the Njobvu-AI directory navigate to `/controllers/training/config`
 2) Open the file *config.json*
 3) Fill the parameters with a specific port, and hostname.
 4) If your connection is secure, fill the parameters with the location of your sites SSL key and ceritification. Also add this line to the options variable in server.js:   host: '*your hostname here*'  
-5) Run node server.js
-6) (Optional) It is reccomended to use a program like screen to keep your server running uninterrupted on the host machine
+5) Run `node server.js`
+6) (Optional) It is reccomended to use a program like `screen` to keep your server running uninterrupted on the host machine
 
 
 
