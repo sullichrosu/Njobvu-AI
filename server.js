@@ -32,6 +32,17 @@ managedDbClient.migrate();
 
 const allProjectsPath = path.join(__dirname, "public", "projects");
 
+try {
+  if (!fs.existsSync(allProjectsPath)) {
+    fs.mkdirSync(allProjectsPath, { recursive: true }); // recursive: true creates parent directories if they don't exist
+    console.log(`Directory '${allProjectsPath}' created.`);
+  } else {
+    console.log(`Directory '${allProjectsPath}' already exists.`);
+  }
+} catch (err) {
+  console.error(`Error creating directory: ${err.message}`);
+}
+
 for (const project of fs.readdirSync(allProjectsPath)) {
     const projectPath = path.join(allProjectsPath, project);
 
