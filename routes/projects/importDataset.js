@@ -15,7 +15,7 @@ const importDataset = async (req, res) => {
 
         const importType = req.body['import-type'];
         const projectName = req.body.projectName;
-        const dbName = req.body.dbName;
+        const dbName = req.body.dbName || projectName;
         const classificationDir = req.body.classificationDir;
         const username = req.cookies.Username;
 
@@ -139,6 +139,9 @@ const importDataset = async (req, res) => {
                 await queries.managed.grantUserAccess(username, projectName, username);
 
                 // add the new project's database client to the global pool of active clients
+                if (!global.projectDbClients) {
+                    global.projectDbClients = {};
+                }
                 const newDbPath = path.join(projectPath, `${projectName}.db`);
                 global.projectDbClients[projectPath] = new Client(newDbPath);
 

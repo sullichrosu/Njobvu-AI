@@ -527,6 +527,23 @@ describe('Project Routes - Basic Tests', () => {
     expect(res.body.success).toBe(true);
   });
 
+  /* * this tests if the import-dataset route responds to classification dataset archive import requests.
+  * This test expects a status code 200.
+  */
+  it('should successfully import classification dataset archive', async () => {
+    const res = await request(app)
+      .post('/api/projects/import-dataset')
+      .send({
+        projectName: 'test-classification-project',
+        dbName: 'test-classification-project',
+        'import-type': 'classification'
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
   /* * this tests if the import-ifcb route responds to IFCB archive imports.
   * This test expects a status code 400 when no .roi files are found.
   */
