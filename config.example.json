@@ -5,6 +5,7 @@
     "default_python_venv_path": "",
     "default_darknet_path": "/usr/local/darknet",
     "default_yolo_path": "/usr/local/bin/yolo",
+    "default_7z_path": "/usr/bin/7z",
     "training_max_buffer_size": 5,
     "ssl_key_path": "",
     "ssl_cert_path": ""

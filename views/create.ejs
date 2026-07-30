@@ -24,6 +24,9 @@
                         <a id="tab-kwcoco" class="nav-link" href="#" onclick="switchFlow('kwcoco')" style="border-radius: 0">KW Coco Archive</a>
                     </li>
                     <li class="nav-item">
+                        <a id="tab-ifcb" class="nav-link" href="#" onclick="switchFlow('ifcb')" style="border-radius: 0">IFCB Archive</a>
+                    </li>
+                    <li class="nav-item">
                         <a id="tab-bootstrap" class="nav-link" href="#" onclick="switchFlow('bootstrap')" style="border-radius: 0">Bootstrap With Model(s)</a>
                     </li>
                 </ul>
@@ -116,6 +119,27 @@
                 </div>
             </form>
 
+            <form class="add-project-form flow-content" action="/api/projects/import-ifcb" method='POST' enctype="multipart/form-data" id="ifcbForm">
+                <h3>Import IFCB Project</h3>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="ifcb_project_name">Project Name</label>
+                        <input id="ifcb_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="ifcb_archive">Upload IFCB Archive (.zip) <span style="color: red;">*</span></label>
+                        <input id="ifcb_archive" name="ifcb_archive" aria-label="IFCB Archive" type="file" class="form-control-file" required>
+                        <p>Should contain .roi and .adc files (and optionally .hdr files)</p>
+                    </div>
+                </div>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <input type="submit" aria-label="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                </div>
+            </form>
+
             <form class="add-project-form flow-content" action="/createP" method='POST' enctype="multipart/form-data" id="bootstrapForm">
                 <h3>Add New Project</h3>
                 <div class="form-row">
@@ -170,6 +194,7 @@
         document.getElementById('tab-blank').classList.remove('active');
         document.getElementById('tab-yolo').classList.remove('active');
         document.getElementById('tab-kwcoco').classList.remove('active');
+        document.getElementById('tab-ifcb').classList.remove('active');
         document.getElementById('tab-bootstrap').classList.remove('active');
 
         document.getElementById('tab-' + flow).classList.add('active');
@@ -208,6 +233,7 @@
             if (formId === 'yoloForm') nameFieldId = 'yolo_project_name';
             if (formId === 'kwcocoForm') nameFieldId = 'coco_project_name';
             if (formId === 'bootstrapForm') nameFieldId = 'bootstrap_project_name';
+            if (formId === 'ifcbForm') nameFieldId = 'ifcb_project_name';
 
             const projectName = document.getElementById(nameFieldId).value;
             if (!validateProjectName(projectName)) {

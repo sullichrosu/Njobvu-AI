@@ -81,6 +81,7 @@ jest.mock('../../queries/queries', () => ({
     createClass: jest.fn().mockResolvedValue({ row: { success: true } }),
     addImages: jest.fn().mockResolvedValue({ row: { success: true } }),
     deleteImage: jest.fn().mockResolvedValue({ row: { success: true } }),
+    sql: jest.fn().mockResolvedValue({ row: { success: true } }),
   },
 }));
 
@@ -88,6 +89,7 @@ jest.mock('../../queries/queries', () => ({
 jest.mock('fs', () => ({
   existsSync: jest.fn().mockReturnValue(false),
   mkdirSync: jest.fn(),
+  rmSync: jest.fn(),
   writeFile: jest.fn((path, data, callback) => callback(null)),
   writeFileSync: jest.fn(),
   readdirSync: jest.fn().mockReturnValue([]),
@@ -107,7 +109,8 @@ jest.mock('express-fileupload', () => jest.fn(() => (req, res, next) => {
     coco_archive: { name: 'coco_archive.zip', mv: jest.fn().mockResolvedValue() },
     viame_model: { name: 'viame.pt', mv: jest.fn().mockResolvedValue() },
     dataset: { name: 'dataset.zip', mv: jest.fn().mockResolvedValue() },
-    weights: { name: 'weights.pt', mv: jest.fn().mockResolvedValue() }
+    weights: { name: 'weights.pt', mv: jest.fn().mockResolvedValue() },
+    ifcb_archive: { name: 'ifcb_archive.zip', mv: jest.fn().mockResolvedValue() }
   };
   next();
 }));
@@ -522,5 +525,130 @@ describe('Project Routes - Basic Tests', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  /* * this tests if the import-ifcb route responds to IFCB archive imports.
+  * This test expects a status code 400 when no .roi files are found.
+  */
+  it('should respond to import-ifcb route with 400 if no roi files found', async () => {
+    const res = await request(app)
+      .post('/api/projects/import-ifcb')
+      .send({
+        project_name: 'test-ifcb-project',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toContain('No .roi files found');
+  });
+
+  /* * this tests if the import-ifcb route successfully imports IFCB archives.
+  * This test expects a status code 200.
+  */
+  it('should successfully import IFCB archive when roi files exist', async () => {
+    const fs = require('fs');
+    const originalReaddirSync = fs.readdirSync;
+    const originalExistsSync = fs.existsSync;
+    const originalStatSync = fs.statSync;
+
+    fs.readdirSync = jest.fn().mockImplementation((path) => {
+      if (path && (path.includes('uploads') || path.includes('tmp'))) {
+        return ['test.roi', 'test.adc'];
+      }
+      return [];
+    });
+    fs.existsSync = jest.fn().mockImplementation((path) => {
+      if (path && path.includes('test-ifcb-project-2')) {
+        return false;
+      }
+      return true;
+    });
+    fs.statSync = jest.fn().mockReturnValue({ isDirectory: () => false });
+
+    const res = await request(app)
+      .post('/api/projects/import-ifcb')
+      .send({
+        project_name: 'test-ifcb-project-2',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    // Restore
+    fs.readdirSync = originalReaddirSync;
+    fs.existsSync = originalExistsSync;
+    fs.statSync = originalStatSync;
+  });
+
+  /* * this tests if the import-ifcb route successfully imports IFCB archives with annotations from a CSV.
+  * This test expects a status code 200.
+  */
+  it('should successfully import IFCB archive with annotations when CSV file exists', async () => {
+    const fs = require('fs');
+    const originalReaddirSync = fs.readdirSync;
+    const originalExistsSync = fs.existsSync;
+    const originalStatSync = fs.statSync;
+    const originalReadFileSync = fs.readFileSync;
+    const originalOpenSync = fs.openSync;
+    const originalReadSync = fs.readSync;
+    const originalCloseSync = fs.closeSync;
+
+    fs.readdirSync = jest.fn().mockImplementation((path) => {
+      if (path && (path.includes('uploads') || path.includes('tmp'))) {
+        return ['test.roi', 'test.adc', 'labels.csv'];
+      }
+      if (path && path.includes('images')) {
+        return ['D2_221129T115128_IFCB122_00015.png'];
+      }
+      return [];
+    });
+    fs.existsSync = jest.fn().mockImplementation((path) => {
+      if (path && path.includes('test-ifcb-project-csv')) {
+        return false;
+      }
+      return true;
+    });
+    fs.statSync = jest.fn().mockReturnValue({ isDirectory: () => false });
+
+    // Mock CSV contents with different prefix to test year prefix normalization (D2_22 vs D2022)
+    fs.readFileSync = jest.fn().mockImplementation((path) => {
+      if (path && path.includes('labels.csv')) {
+        return 'roi,class,classID\nD20221129T115128_IFCB122_00015,Alexandrium catenella,109470\n';
+      }
+      return '';
+    });
+
+    // Mock file descriptor operations for image size probing
+    fs.openSync = jest.fn().mockReturnValue(123);
+    fs.readSync = jest.fn();
+    fs.closeSync = jest.fn();
+
+    // Mock global probe
+    const originalProbe = global.probe;
+    global.probe = {
+      sync: jest.fn().mockReturnValue({ width: 100, height: 120 })
+    };
+
+    const res = await request(app)
+      .post('/api/projects/import-ifcb')
+      .send({
+        project_name: 'test-ifcb-project-csv',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    // Restore
+    fs.readdirSync = originalReaddirSync;
+    fs.existsSync = originalExistsSync;
+    fs.statSync = originalStatSync;
+    fs.readFileSync = originalReadFileSync;
+    fs.openSync = originalOpenSync;
+    fs.readSync = originalReadSync;
+    fs.closeSync = originalCloseSync;
+    global.probe = originalProbe;
   });
 });
