@@ -49,13 +49,13 @@
                     <li class="nav-item">
                         <a class="nav-link <%= activePage === 'project' ? 'active' : '' %>"
                             href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">
-                            <font color="<%= activePage === 'project' ? '#000000' : '#FFFFFF' %>">Label</font>
+                            <font color="<%= activePage === 'project' ? '#000000' : '#FFFFFF' %>">Annotate</font>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <%= activePage === 'Annotate' ? 'active' : '' %>"
-                            href="/annotate?IDX=<%= IDX %>" style="border-radius: 0">
-                            <font color="<%= activePage === 'Annotate' ? '#000000' : '#FFFFFF' %>">Annotate</font>
+                        <a class="nav-link <%= activePage === 'Label' ? 'active' : '' %>"
+                            href="/labeling?IDX=<%= IDX %>" style="border-radius: 0">
+                            <font color="<%= activePage === 'Label' ? '#000000' : '#FFFFFF' %>">Label</font>
                         </a>
                     </li>
                     <li class="nav-item">
