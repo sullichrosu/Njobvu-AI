@@ -219,7 +219,11 @@ const importIfcb = async (req, res) => {
         // insert unique classes
         for (const className of classSet) {
             try {
-                await queries.project.sql(projectPath, "INSERT OR IGNORE INTO Classes (CName) VALUES (?)", [className]);
+                if (queries.project && typeof queries.project.sql === 'function') {
+                    await queries.project.sql(projectPath, "INSERT OR IGNORE INTO Classes (CName) VALUES (?)", [className]);
+                } else if (newClient && typeof newClient.run === 'function') {
+                    await newClient.run("INSERT OR IGNORE INTO Classes (CName) VALUES (?)", [className]);
+                }
             } catch (classErr) {
                 global.logger.error(`Failed to insert class ${className}: ${classErr}`);
             }
@@ -274,11 +278,18 @@ const importIfcb = async (req, res) => {
                         global.logger.warn(`Failed to probe image dimensions for ${cleanedName}: ${probeErr}`);
                     }
 
-                    await queries.project.sql(
-                        projectPath,
-                        "INSERT INTO Labels (CName, X, Y, W, H, IName) VALUES (?, ?, ?, ?, ?, ?)",
-                        [className, "0", "0", imgWidth, imgHeight, cleanedName]
-                    );
+                    if (queries.project && typeof queries.project.sql === 'function') {
+                        await queries.project.sql(
+                            projectPath,
+                            "INSERT INTO Labels (CName, X, Y, W, H, IName) VALUES (?, ?, ?, ?, ?, ?)",
+                            [className, "0", "0", imgWidth, imgHeight, cleanedName]
+                        );
+                    } else if (newClient && typeof newClient.run === 'function') {
+                        await newClient.run(
+                            "INSERT INTO Labels (CName, X, Y, W, H, IName) VALUES (?, ?, ?, ?, ?, ?)",
+                            [className, "0", "0", imgWidth, imgHeight, cleanedName]
+                        );
+                    }
                 }
 
                 if (imageCount % 10000 === 0) {

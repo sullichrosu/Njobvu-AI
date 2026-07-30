@@ -81,6 +81,7 @@ jest.mock('../../queries/queries', () => ({
     createClass: jest.fn().mockResolvedValue({ row: { success: true } }),
     addImages: jest.fn().mockResolvedValue({ row: { success: true } }),
     deleteImage: jest.fn().mockResolvedValue({ row: { success: true } }),
+    sql: jest.fn().mockResolvedValue({ row: { success: true } }),
   },
 }));
 
