@@ -117,7 +117,7 @@ async function getReviewPage(req, res) {
         selectedClass: req.query.class,
         IDX: IDX,
         admin: admin,
-        activePage: "Annotate",
+        activePage: "Label",
     });
 }
 

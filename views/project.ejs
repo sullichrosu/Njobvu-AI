@@ -31,7 +31,7 @@
 			<tbody>
 				<% for(var i=0; i<images.length; i++) {%>
 				<tr>
-					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/labeling?IDX=<%= IDX %>&IName=<%= images[i].IName %>"><%= images[i].IName %></a></td>
+					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/annotate?IDX=<%= IDX %>&IName=<%= images[i].IName %>"><%= images[i].IName %></a></td>
 					<!-- input checkbox for review here -->
 					<td class="text-left"> 
 					    <% if(images[i].reviewImage != 0) {%>
@@ -39,7 +39,7 @@
 						<%}%>
 					</td>
 					<td class="text-right"><%= list_counter[i] %></td>
-					<td class="text-right"><a class="btn btn-primary" href="/labeling?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0">Label</a>
+					<td class="text-right"><a class="btn btn-primary" href="/annotate?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0">Annotate</a>
 					<td class="text-right"> <button type="button" class="button btn-danger" style="border-radius: 0" 
 					    onclick="deleteImage('<%= String(images[i].IName) %>')" aria-label="Delete image <%= images[i].IName %>">X</a></td>
 				</tr>
@@ -103,8 +103,8 @@
 
 
 <script>
-    function annotatePage(IDX){
-        window.location.href = `/annotate?IDX=${IDX}`;
+    function labelingPage(IDX){
+        window.location.href = `/labeling?IDX=${IDX}`;
     }
 </script>
 
