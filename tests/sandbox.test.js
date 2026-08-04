@@ -77,12 +77,19 @@ describe("Run Summary Generator & Discovery", () => {
         expect(mdContent).toContain("# Run Summary: test_training_run");
     });
 
-    test("listAvailableRuns discovers run directories and metadata", () => {
-        const runs = listAvailableRuns(path.__dirname || __dirname);
-        expect(Array.isArray(runs)).toBe(true);
-        const testRun = runs.find(r => r.runName === "tmp_test_run");
+    test("listAvailableRuns discovers run directories and metadata with project filtering", () => {
+        const allRuns = listAvailableRuns(null, __dirname);
+        expect(Array.isArray(allRuns)).toBe(true);
+        const testRun = allRuns.find(r => r.runName === "tmp_test_run");
         expect(testRun).toBeDefined();
         expect(testRun.runType).toBe("training");
+
+        const filteredRuns = listAvailableRuns("tmp_test_run", __dirname);
+        expect(filteredRuns.length).toBeGreaterThan(0);
+        expect(filteredRuns[0].runName).toBe("tmp_test_run");
+
+        const nonExistentFilter = listAvailableRuns("non_existent_project_12345", __dirname);
+        expect(nonExistentFilter.length).toBe(0);
     });
 });
 
@@ -133,12 +140,13 @@ describe("Sandbox API Routes", () => {
         fs.rmSync(runDir, { recursive: true, force: true });
     });
 
-    test("GET /api/runs/list - returns list of available runs", async () => {
+    test("GET /api/runs/list - returns list of available runs filtered by project", async () => {
         const res = await request(app)
-            .get("/api/runs/list");
+            .get("/api/runs/list?projectName=test_project");
 
         expect(res.statusCode).toBe(200);
         expect(res.body.success).toBe(true);
+        expect(res.body.projectName).toBe("test_project");
         expect(Array.isArray(res.body.runs)).toBe(true);
     });
 });

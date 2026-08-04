@@ -435,11 +435,32 @@ function generateMarkdownSummary(summary) {
 /**
  * Scans run directories for active training and inference runs and returns summary metadata.
  * 
+ * @param {string|Object} [projectNameOrOptions] - Project name to filter by, or options object
  * @param {string} [baseRunsDir] - Base directory to scan (defaults to project runs directory)
  * @returns {Array<Object>} List of available runs with metadata
  */
-function listAvailableRuns(baseRunsDir) {
-    const rootPath = baseRunsDir || path.join(__dirname, "..", "runs");
+function listAvailableRuns(projectNameOrOptions, baseRunsDir) {
+    let projectName = null;
+    let rootDir = null;
+
+    if (typeof projectNameOrOptions === "object" && projectNameOrOptions !== null) {
+        projectName = projectNameOrOptions.projectName || projectNameOrOptions.PName || null;
+        rootDir = projectNameOrOptions.baseRunsDir || projectNameOrOptions.dir || baseRunsDir || null;
+    } else if (typeof projectNameOrOptions === "string") {
+        if (projectNameOrOptions.includes("/") || projectNameOrOptions.includes("\\")) {
+            rootDir = projectNameOrOptions;
+            projectName = baseRunsDir || null;
+        } else {
+            projectName = projectNameOrOptions;
+            rootDir = baseRunsDir || null;
+        }
+    } else {
+        rootDir = baseRunsDir || null;
+    }
+
+    const rootPath = rootDir || path.join(__dirname, "..", "runs");
+    const publicProjectsPath = path.join(__dirname, "..", "public", "projects");
+
     const searchDirs = [
         rootPath,
         path.join(rootPath, "detect"),
@@ -448,6 +469,13 @@ function listAvailableRuns(baseRunsDir) {
         path.join(rootPath, "detect", "train"),
         path.join(rootPath, "detect", "predict")
     ];
+
+    if (projectName) {
+        searchDirs.push(path.join(rootPath, projectName));
+        searchDirs.push(path.join(rootPath, "detect", projectName));
+        searchDirs.push(path.join(publicProjectsPath, projectName, "training"));
+        searchDirs.push(path.join(publicProjectsPath, projectName, "inference"));
+    }
 
     const discoveredRuns = [];
     const visitedPaths = new Set();
@@ -473,6 +501,46 @@ function listAvailableRuns(baseRunsDir) {
                         );
 
                         if (hasRunFiles) {
+                            let associatedProject = null;
+                            const argsPath = path.join(itemPath, "args.yaml");
+                            const summaryJsonPath = path.join(itemPath, "summary.json");
+                            const configJsonPath = path.join(itemPath, "config.json");
+
+                            if (fs.existsSync(summaryJsonPath)) {
+                                try {
+                                    const sData = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
+                                    associatedProject = sData.projectName || (sData.config && (sData.config.project || sData.config.PName));
+                                } catch (e) {}
+                            }
+                            if (!associatedProject && fs.existsSync(argsPath)) {
+                                try {
+                                    const parsedArgs = parseYamlSimple(fs.readFileSync(argsPath, "utf8"));
+                                    associatedProject = parsedArgs.project || parsedArgs.PName || parsedArgs.projectName;
+                                } catch (e) {}
+                            }
+                            if (!associatedProject && fs.existsSync(configJsonPath)) {
+                                try {
+                                    const cData = JSON.parse(fs.readFileSync(configJsonPath, "utf8"));
+                                    associatedProject = cData.project || cData.PName || cData.projectName;
+                                } catch (e) {}
+                            }
+
+                            if (projectName) {
+                                const cleanProj = projectName.trim().toLowerCase();
+                                const pathLower = itemPath.toLowerCase();
+                                const nameLower = item.toLowerCase();
+                                const assocLower = associatedProject ? String(associatedProject).toLowerCase() : "";
+
+                                const matchesProject = 
+                                    pathLower.includes(cleanProj) ||
+                                    nameLower.includes(cleanProj) ||
+                                    (assocLower && assocLower.includes(cleanProj));
+
+                                if (!matchesProject) {
+                                    return;
+                                }
+                            }
+
                             const isTraining = subFiles.includes("results.csv") || subFiles.includes("args.yaml") || itemPath.includes("train");
                             const runType = isTraining ? "training" : "inference";
                             const hasSummary = subFiles.includes("summary.json") || subFiles.includes("run_summary.md");
@@ -481,6 +549,7 @@ function listAvailableRuns(baseRunsDir) {
 
                             discoveredRuns.push({
                                 runName: item,
+                                projectName: associatedProject || projectName || null,
                                 runPath: path.resolve(itemPath),
                                 relPath: path.relative(path.join(__dirname, ".."), itemPath),
                                 runType,
