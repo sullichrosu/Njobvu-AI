@@ -33,22 +33,22 @@
             </div>
 
             <form class="add-project-form flow-content active" action="/createP" method='POST' enctype="multipart/form-data" id="blankForm">
-                <h3>Add New Project</h3>
+                <h3>Add New Project <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create a new dataset workspace for object detection or image classification">?</span></h3>
                 <div class="form-row">
                     <div class="form-group col-md-6">
-                        <label for="blank_project_name">Project Name</label>
+                        <label for="blank_project_name">Project Name <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Unique alphanumeric identifier for your project workspace">?</span></label>
                         <input id="blank_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
                     </div>
                     <div class="form-group col-md-6">
                         <label for="blank_upload_images">
-                            Upload Images or Videos (.zip or .mp4/.avi/.mov) (Optional)
+                            Upload Images or Videos (.zip or .mp4/.avi/.mov) (Optional) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Upload zip containing images or video files to automatically extract frames">?</span>
                         </label>
                         <input id="blank_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group col-md-12">
-                        <label for="blank_input_classes">Input classes (separated with commas)</label>
+                        <label for="blank_input_classes">Input classes (separated with commas) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Comma-separated class names (e.g. car,truck,pedestrian) without leading or trailing spaces">?</span></label>
                         <input id="blank_input_classes" name="input_classes" aria-label="Input classes. Separated by commas." type="text" class="form-control" placeholder="cat,dog,large mouse" required>
                         <p>Do not add leading or trailing spaces between classes</p>
                     </div>
