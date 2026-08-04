@@ -47,10 +47,14 @@ async function handleRunSummary(req, res) {
 
 async function handleListRuns(req, res) {
     try {
-        const baseRunsDir = (req.query && req.query.baseRunsDir) || (req.body && req.body.baseRunsDir);
-        const runs = listAvailableRuns(baseRunsDir);
+        const projectName = (req.query && (req.query.projectName || req.query.PName)) || 
+                            (req.body && (req.body.projectName || req.body.PName)) || null;
+        const baseRunsDir = (req.query && req.query.baseRunsDir) || (req.body && req.body.baseRunsDir) || null;
+
+        const runs = listAvailableRuns(projectName, baseRunsDir);
         return res.status(200).json({
             success: true,
+            projectName: projectName || null,
             runs
         });
     } catch (err) {

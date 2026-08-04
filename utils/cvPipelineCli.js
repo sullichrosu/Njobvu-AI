@@ -44,10 +44,12 @@ async function main() {
         }
     } else if (command === "list-runs") {
         const dirIdx = args.indexOf("--dir");
+        const projIdx = args.indexOf("--project");
         const baseRunsDir = dirIdx !== -1 ? args[dirIdx + 1] : null;
+        const projectName = projIdx !== -1 ? args[projIdx + 1] : null;
 
         try {
-            const runs = listAvailableRuns(baseRunsDir);
+            const runs = listAvailableRuns(projectName, baseRunsDir);
             console.log(JSON.stringify(runs, null, 2));
             process.exit(0);
         } catch (err) {
@@ -59,7 +61,7 @@ async function main() {
         console.log("Commands:");
         console.log("  run-python --script <path> | --code <code> [--role <role>]");
         console.log("  summarize-run --dir <path>");
-        console.log("  list-runs [--dir <path>]");
+        console.log("  list-runs [--project <projectName>] [--dir <path>]");
         process.exit(0);
     }
 }
