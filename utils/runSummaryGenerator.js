@@ -432,8 +432,76 @@ function generateMarkdownSummary(summary) {
     return md;
 }
 
+/**
+ * Scans run directories for active training and inference runs and returns summary metadata.
+ * 
+ * @param {string} [baseRunsDir] - Base directory to scan (defaults to project runs directory)
+ * @returns {Array<Object>} List of available runs with metadata
+ */
+function listAvailableRuns(baseRunsDir) {
+    const rootPath = baseRunsDir || path.join(__dirname, "..", "runs");
+    const searchDirs = [
+        rootPath,
+        path.join(rootPath, "detect"),
+        path.join(rootPath, "train"),
+        path.join(rootPath, "inference"),
+        path.join(rootPath, "detect", "train"),
+        path.join(rootPath, "detect", "predict")
+    ];
+
+    const discoveredRuns = [];
+    const visitedPaths = new Set();
+
+    searchDirs.forEach(dir => {
+        if (!fs.existsSync(dir)) return;
+        try {
+            const items = fs.readdirSync(dir);
+            items.forEach(item => {
+                const itemPath = path.join(dir, item);
+                if (visitedPaths.has(itemPath)) return;
+                
+                try {
+                    const stat = fs.statSync(itemPath);
+                    if (stat.isDirectory()) {
+                        visitedPaths.add(itemPath);
+                        const subFiles = fs.readdirSync(itemPath);
+                        
+                        const hasRunFiles = subFiles.some(f => 
+                            f === "results.csv" || f === "args.yaml" || f === "summary.json" ||
+                            f === "run_summary.md" || f === "config.json" || f.endsWith(".pt") ||
+                            f.endsWith(".png") || f.endsWith(".jpg") || f === "weights"
+                        );
+
+                        if (hasRunFiles) {
+                            const isTraining = subFiles.includes("results.csv") || subFiles.includes("args.yaml") || itemPath.includes("train");
+                            const runType = isTraining ? "training" : "inference";
+                            const hasSummary = subFiles.includes("summary.json") || subFiles.includes("run_summary.md");
+                            const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".bmp"];
+                            const imageCount = subFiles.filter(f => imageExtensions.includes(path.extname(f).toLowerCase())).length;
+
+                            discoveredRuns.push({
+                                runName: item,
+                                runPath: path.resolve(itemPath),
+                                relPath: path.relative(path.join(__dirname, ".."), itemPath),
+                                runType,
+                                hasSummary,
+                                artifactCount: subFiles.length,
+                                imageCount,
+                                lastModified: stat.mtime.toISOString()
+                            });
+                        }
+                    }
+                } catch (e) {}
+            });
+        } catch (e) {}
+    });
+
+    return discoveredRuns;
+}
+
 module.exports = {
     generateRunSummary,
+    listAvailableRuns,
     parseYamlSimple,
     parseResultsCsvStream
 };

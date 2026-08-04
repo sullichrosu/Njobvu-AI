@@ -90,11 +90,13 @@ const uploadInferenceFile = require("./inference/uploadInferenceFile");
 const inceptionInference = require("./inference/inceptionInference");
 const addYoloInferenceToDataset = require("./inference/addYoloInferenceToDataset");
 
-const { executePythonSandbox, handleRunSummary } = require("../controllers/sandboxController");
+const { executePythonSandbox, handleRunSummary, handleListRuns } = require("../controllers/sandboxController");
 
 // SANDBOX & RUN SUMMARY ROUTES
 api.post("/api/sandbox/python", executePythonSandbox);
 api.post("/api/runs/summary", handleRunSummary);
+api.get("/api/runs/list", handleListRuns);
+api.post("/api/runs/list", handleListRuns);
 
 // INFERENCE ROUTES
 api.post("/yolo-inf", yoloInference);
