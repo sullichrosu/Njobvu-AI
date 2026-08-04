@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const app = require("../app");
 const { runSandboxedPython, sanitizeCode } = require("../utils/sandboxedPythonRunner");
-const { generateRunSummary, listAvailableRuns } = require("../utils/runSummaryGenerator");
+const { generateRunSummary, listAvailableRuns, buildRunDocumentContext, persistCustomSummary } = require("../utils/runSummaryGenerator");
 
 describe("Sandboxed Python Execution Runner", () => {
     test("sanitizes forbidden python code patterns", () => {
@@ -32,13 +32,13 @@ describe("Sandboxed Python Execution Runner", () => {
     test("handles code timeout appropriately", async () => {
         const result = await runSandboxedPython({
             code: "import time\ntime.sleep(2)",
-            userRole: "user",
+            userRole: "admin",
             timeout: 200
         });
 
         expect(result.success).toBe(false);
-        expect(result.timedOut).toBe(true);
-    }, 10000);
+        expect(result.error).toContain("timed out");
+    });
 });
 
 describe("Run Summary Generator & Discovery", () => {
@@ -103,6 +103,23 @@ describe("Run Summary Generator & Discovery", () => {
         const nonExistentFilter = listAvailableRuns("non_existent_project_12345", __dirname);
         expect(nonExistentFilter.length).toBe(0);
     });
+
+    test("buildRunDocumentContext compiles run artifacts into LLM prompt context block", async () => {
+        const contextText = await buildRunDocumentContext(testRunDir, { runName: "tmp_test_run" });
+        expect(typeof contextText).toBe("string");
+        expect(contextText).toContain("RUN DOCUMENT ARTIFACT CONTEXT");
+        expect(contextText).toContain("epochs: 10");
+        expect(contextText).toContain("results.csv");
+    });
+
+    test("persistCustomSummary writes custom LLM narrative to run_summary.md and summary.json", () => {
+        const narrative = "# Custom LLM Performance Report\n\nModel trained for 3 epochs with peak mAP50 of 85%.";
+        const updated = persistCustomSummary(testRunDir, narrative);
+
+        expect(updated.customNarrative).toBe(narrative);
+        const mdContent = fs.readFileSync(path.join(testRunDir, "run_summary.md"), "utf8");
+        expect(mdContent).toBe(narrative);
+    });
 });
 
 describe("Sandbox API Routes", () => {
@@ -160,5 +177,38 @@ describe("Sandbox API Routes", () => {
         expect(res.body.success).toBe(true);
         expect(res.body.projectName).toBe("test_project");
         expect(Array.isArray(res.body.runs)).toBe(true);
+    });
+
+    test("POST /api/runs/context - returns document artifact context for LLM", async () => {
+        const runDir = path.join(__dirname, "tmp_api_context_run");
+        fs.mkdirSync(runDir, { recursive: true });
+        fs.writeFileSync(path.join(runDir, "args.yaml"), "epochs: 5", "utf8");
+
+        const res = await request(app)
+            .post("/api/runs/context")
+            .send({ runDir });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.contextText).toContain("RUN DOCUMENT ARTIFACT CONTEXT");
+
+        fs.rmSync(runDir, { recursive: true, force: true });
+    });
+
+    test("POST /api/runs/persist-summary - persists custom narrative summary", async () => {
+        const runDir = path.join(__dirname, "tmp_api_context_run");
+        fs.mkdirSync(runDir, { recursive: true });
+
+        const customNarrative = "# Custom Narrative API Test\nModel achieved 85% mAP50.";
+
+        const res = await request(app)
+            .post("/api/runs/persist-summary")
+            .send({ runDir, customNarrative });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.summary.customNarrative).toBe(customNarrative);
+
+        fs.rmSync(runDir, { recursive: true, force: true });
     });
 });

@@ -810,12 +810,179 @@ function listAvailableRuns(projectNameOrOptions, baseRunsDir) {
     return discoveredRuns;
 }
 
+/**
+ * Compiles complete run document artifacts (args.yaml, config.json, results.csv, metrics.json, logs, weights)
+ * into a structured LLM prompt context block so the LLM can interpret metrics and generate custom analysis.
+ * 
+ * @param {string} runDir - Directory path of the target run or project folder
+ * @param {Object} [options]
+ * @returns {Promise<string>} Structured text context block for LLM prompting
+ */
+async function buildRunDocumentContext(runDir, options = {}) {
+    if (!runDir || !fs.existsSync(runDir)) {
+        const projectName = options.projectName || options.PName || null;
+        if (projectName) {
+            const discovered = listAvailableRuns(projectName);
+            if (discovered.length > 0) {
+                runDir = discovered[0].runPath;
+            }
+        }
+    }
+
+    if (!runDir || !fs.existsSync(runDir)) {
+        throw new Error(`Run directory does not exist: ${runDir || 'unspecified'}`);
+    }
+
+    const stat = fs.statSync(runDir);
+    if (!stat.isDirectory()) {
+        throw new Error(`Path is not a directory: ${runDir}`);
+    }
+
+    const topFiles = fs.readdirSync(runDir);
+    const hasDirectRunFiles = topFiles.some(f => 
+        f === "results.csv" || f === "args.yaml" || f === "labels.jpg" ||
+        (f === "config.json" && !topFiles.includes("projects"))
+    );
+
+    let contextText = "";
+
+    if (!hasDirectRunFiles) {
+        const availableRuns = listAvailableRuns(options.projectName || runDir, options.baseRunsDir);
+        contextText += `=== AGGREGATED PROJECT RUN ARTIFACT CONTEXT ===\n`;
+        contextText += `Project / Path: ${options.projectName || path.basename(runDir)}\n`;
+        contextText += `Total Discovered Runs: ${availableRuns.length}\n\n`;
+
+        for (let i = 0; i < Math.min(availableRuns.length, 5); i++) {
+            const r = availableRuns[i];
+            try {
+                const subContext = await buildSingleRunDocumentContext(r.runPath, { runName: r.runName });
+                contextText += `--- RUN [${i + 1}/${availableRuns.length}]: ${r.runName} (${r.runType}) ---\n`;
+                contextText += `${subContext}\n\n`;
+            } catch (e) {}
+        }
+        contextText += `===============================================\n`;
+        return contextText;
+    }
+
+    return await buildSingleRunDocumentContext(runDir, options);
+}
+
+async function buildSingleRunDocumentContext(runDir, options = {}) {
+    const runName = options.runName || path.basename(runDir);
+    const allFileEntries = getFilesRecursive(runDir);
+
+    let configContent = "None found";
+    const argsPath = path.join(runDir, "args.yaml");
+    const configJsonPath = path.join(runDir, "config.json");
+    if (fs.existsSync(argsPath)) {
+        configContent = fs.readFileSync(argsPath, "utf8");
+    } else if (fs.existsSync(configJsonPath)) {
+        configContent = fs.readFileSync(configJsonPath, "utf8");
+    }
+
+    let resultsCsvExcerpts = "No results.csv found";
+    const resultsCsvPath = path.join(runDir, "results.csv");
+    if (fs.existsSync(resultsCsvPath)) {
+        const rawCsv = fs.readFileSync(resultsCsvPath, "utf8");
+        const lines = rawCsv.split("\n").filter(l => l.trim().length > 0);
+        if (lines.length <= 15) {
+            resultsCsvExcerpts = rawCsv;
+        } else {
+            const header = lines[0];
+            const firstFew = lines.slice(1, 4).join("\n");
+            const lastFew = lines.slice(-6).join("\n");
+            resultsCsvExcerpts = `${header}\n${firstFew}\n... [${lines.length - 10} epochs omitted] ...\n${lastFew}`;
+        }
+    }
+
+    const logDiagnostics = await parseLogFilesStream(runDir, allFileEntries);
+    const weightsInfo = parseWeightFiles(runDir, allFileEntries);
+
+    let summaryJsonData = null;
+    const summaryJsonPath = path.join(runDir, "summary.json");
+    if (fs.existsSync(summaryJsonPath)) {
+        try {
+            summaryJsonData = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
+        } catch (e) {}
+    }
+
+    let contextText = `=== RUN DOCUMENT ARTIFACT CONTEXT ===\n`;
+    contextText += `Run Name: ${runName}\n`;
+    contextText += `Run Directory: ${path.resolve(runDir)}\n`;
+    contextText += `Artifact Count: ${allFileEntries.length} files\n\n`;
+
+    contextText += `--- Configuration & Hyperparameters ---\n${configContent}\n\n`;
+    contextText += `--- Training Metrics & Results (results.csv) ---\n${resultsCsvExcerpts}\n\n`;
+
+    if (summaryJsonData && summaryJsonData.metrics) {
+        contextText += `--- Processed Summary Metrics ---\n${JSON.stringify(summaryJsonData.metrics, null, 2)}\n\n`;
+    }
+
+    contextText += `--- Model Checkpoints / Weights ---\n`;
+    if (weightsInfo.length > 0) {
+        weightsInfo.forEach(w => {
+            contextText += `- ${w.name} (${w.sizeMB}) at ${w.relPath}\n`;
+        });
+    } else {
+        contextText += `No model weight files found.\n`;
+    }
+    contextText += `\n`;
+
+    contextText += `--- Execution Logs & Diagnostics ---\n`;
+    contextText += `Hardware: ${logDiagnostics.detectedHardware}\n`;
+    contextText += `Status: ${logDiagnostics.completionStatus}\n`;
+    if (logDiagnostics.warnings && logDiagnostics.warnings.length > 0) {
+        contextText += `Warnings:\n${logDiagnostics.warnings.join("\n")}\n`;
+    }
+    if (logDiagnostics.errors && logDiagnostics.errors.length > 0) {
+        contextText += `Errors:\n${logDiagnostics.errors.join("\n")}\n`;
+    }
+    contextText += `====================================\n`;
+
+    return contextText;
+}
+
+/**
+ * Persists an LLM-generated narrative summary report into run_summary.md and summary.json within runDir.
+ * 
+ * @param {string} runDir - Target run directory
+ * @param {string} customNarrative - Markdown narrative synthesized by the LLM
+ * @param {Object} [options]
+ * @returns {Object} Updated summary object
+ */
+function persistCustomSummary(runDir, customNarrative, options = {}) {
+    if (!runDir || !fs.existsSync(runDir)) {
+        throw new Error(`Run directory does not exist: ${runDir}`);
+    }
+
+    const summaryMdPath = path.join(runDir, "run_summary.md");
+    fs.writeFileSync(summaryMdPath, customNarrative, "utf8");
+
+    const summaryJsonPath = path.join(runDir, "summary.json");
+    let summaryData = {};
+    if (fs.existsSync(summaryJsonPath)) {
+        try {
+            summaryData = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
+        } catch (e) {}
+    }
+
+    summaryData.runDir = path.resolve(runDir);
+    summaryData.customNarrative = customNarrative;
+    summaryData.narrativeSummary = customNarrative;
+    summaryData.updatedAt = new Date().toISOString();
+
+    fs.writeFileSync(summaryJsonPath, JSON.stringify(summaryData, null, 2), "utf8");
+    return summaryData;
+}
+
 module.exports = {
     generateRunSummary,
     generateSingleRunSummary,
     generateAggregatedRunSummary,
     discoverRunDirectories,
     listAvailableRuns,
+    buildRunDocumentContext,
+    persistCustomSummary,
     parseYamlSimple,
     parseResultsCsvStream
 };
