@@ -93,11 +93,17 @@ const uploadInferenceFile = require("./inference/uploadInferenceFile");
 const inceptionInference = require("./inference/inceptionInference");
 const addYoloInferenceToDataset = require("./inference/addYoloInferenceToDataset");
 
+const { executePythonSandbox, handleRunSummary } = require("../controllers/sandboxController");
+
 // CHAT HARNESS ROUTES
 api.post("/api/chat", ollamaChat);
 api.get("/api/chat/config", getChatConfig);
 api.post("/api/chat/config", updateChatConfig);
 api.get("/api/chat/models", getOllamaModels);
+
+// SANDBOX & RUN SUMMARY ROUTES
+api.post("/api/sandbox/python", executePythonSandbox);
+api.post("/api/runs/summary", handleRunSummary);
 
 // INFERENCE ROUTES
 api.post("/yolo-inf", yoloInference);
