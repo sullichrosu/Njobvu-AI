@@ -243,9 +243,17 @@
 
             showTypingIndicator();
 
-            // Extract project query parameter if present in current URL (e.g. ?PName=foo or ?IDX=0)
+            // Extract active project name from URL params, hidden inputs, or window state
             const urlParams = new URLSearchParams(window.location.search);
-            const projectName = urlParams.get("PName") || urlParams.get("projectName") || null;
+            const projectName = extraParams.projectName ||
+                                urlParams.get("PName") ||
+                                urlParams.get("projectName") ||
+                                urlParams.get("Pname") ||
+                                (document.querySelector('input[name="PName"]')?.value) ||
+                                (document.getElementById('PName')?.value) ||
+                                (document.getElementById('pname-display')?.innerText?.trim()) ||
+                                window.currentProject ||
+                                null;
 
             try {
                 const response = await fetch("/api/chat", {

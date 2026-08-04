@@ -209,6 +209,28 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
 
+        it('should return 403 Forbidden if user lacks project access for run-aware summary requests', async () => {
+            // Mock checkUserHasProjectAccess to return 0 (no access) when managedDbClient is set
+            global.managedDbClient = { get: jest.fn().mockResolvedValue({ ExistingAccess: 0 }) };
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=UnprivilegedUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'Summarize run exp1' }],
+                    model: 'llama3',
+                    intent: 'generate_summary',
+                    projectName: 'RestrictedProject'
+                })
+                .expect('Content-Type', /json/)
+                .expect(403);
+
+            expect(response.body).toHaveProperty('success', false);
+            expect(response.body.error).toMatch(/Forbidden/i);
+
+            delete global.managedDbClient;
+        });
+
         it('should parse and execute tool intents like generate_summary and run_python', async () => {
             const response = await request(app)
                 .post('/api/chat')
