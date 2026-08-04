@@ -209,6 +209,35 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
 
+        it('should allow access for project creator in Projects table and format list_runs response', async () => {
+            // Mock managedDbClient.get to return project count = 1 for Admin check in Projects table
+            global.managedDbClient = {
+                get: jest.fn().mockImplementation(async (query, params) => {
+                    if (query.includes('FROM Projects WHERE PName = ? AND Admin = ?')) {
+                        return { count: 1 };
+                    }
+                    return { count: 0 };
+                })
+            };
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=test'])
+                .send({
+                    messages: [{ role: 'user', content: 'List available runs' }],
+                    model: 'llama3',
+                    intent: 'list_runs',
+                    projectName: 'classification'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.message.content).toContain('Available Runs');
+
+            delete global.managedDbClient;
+        });
+
         it('should return 403 Forbidden if user lacks project access for run-aware summary requests', async () => {
             // Mock checkUserHasProjectAccess to return 0 (no access) when managedDbClient is set
             global.managedDbClient = { get: jest.fn().mockResolvedValue({ ExistingAccess: 0 }) };

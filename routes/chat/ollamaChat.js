@@ -26,7 +26,38 @@ Guidelines:
 - Respect user permissions and role gating (User vs Admin).`;
 
 /**
+ * Formats available run listings into markdown text for display in chat messages.
+ */
+function formatRunListings(runs, projectName = null) {
+    const trainRuns = Array.isArray(runs?.train)
+        ? runs.train.map(r => typeof r === "string" ? r : (r.id || r.name || JSON.stringify(r)))
+        : [];
+    const infRuns = Array.isArray(runs?.inference)
+        ? runs.inference.map(r => typeof r === "string" ? r : (r.id || r.name || JSON.stringify(r)))
+        : [];
+
+    let text = `### Available Runs${projectName ? ` for Project '${projectName}'` : ""}:\n\n`;
+    text += `**Training Runs (${trainRuns.length}):**\n`;
+    if (trainRuns.length > 0) {
+        text += trainRuns.map(r => `- \`${r}\``).join("\n") + "\n\n";
+    } else {
+        text += "_No active training runs found._\n\n";
+    }
+
+    text += `**Inference Runs (${infRuns.length}):**\n`;
+    if (infRuns.length > 0) {
+        text += infRuns.map(r => `- \`${r}\``).join("\n");
+    } else {
+        text += "_No active inference runs found._";
+    }
+
+    return text;
+}
+
+/**
  * Verifies if a project exists and whether the user has access permissions.
+ * Checks both Projects table (where Admin = username) and Access table (secondary access).
+ * Expands filesystem folder matching for hyphenated (user-project) and underscore (user_project) formats.
  */
 async function verifyProjectAccess(username, projectName) {
     if (!projectName) {
@@ -37,28 +68,62 @@ async function verifyProjectAccess(username, projectName) {
     let hasAccess = false;
     let isAdmin = false;
 
-    // 1. Check directory existence in public/projects/
+    // 1. Check directory existence in public/projects/ (supporting exact, hyphenated, or underscore formats)
     try {
         const projectsDir = path.join(process.cwd(), "public", "projects");
         if (fs.existsSync(projectsDir)) {
             const entries = fs.readdirSync(projectsDir);
-            exists = entries.some(e => e === projectName || e.endsWith(`-${projectName}`));
+            exists = entries.some(e =>
+                e === projectName ||
+                e.endsWith(`-${projectName}`) ||
+                e.endsWith(`_${projectName}`) ||
+                e.startsWith(`${username}-${projectName}`) ||
+                e.startsWith(`${username}_${projectName}`) ||
+                e.includes(projectName)
+            );
         }
     } catch (e) {}
 
     // 2. Check Database if managedDbClient exists
     if (global.managedDbClient) {
         try {
-            const adminCheck = await queries.managed.checkUserHasProjectAccess(username, projectName, 1);
-            if (adminCheck?.row?.ExistingAccess > 0) {
+            // Check Projects table where user is Admin / Creator
+            const projectCheck = await global.managedDbClient.get(
+                "SELECT COUNT(*) AS count FROM Projects WHERE PName = ? AND Admin = ?",
+                [projectName, username]
+            );
+            const adminProjectCount = projectCheck?.count ?? projectCheck?.row?.count ?? projectCheck?.["COUNT(*)"] ?? 0;
+            if (adminProjectCount > 0) {
                 isAdmin = true;
                 hasAccess = true;
                 exists = true;
-            } else {
-                const memberCheck = await queries.managed.checkUserHasProjectAccess(username, projectName, 0);
-                if (memberCheck?.row?.ExistingAccess > 0) {
+            }
+
+            // Check if project exists in Projects table under any admin
+            const projectExistsCheck = await global.managedDbClient.get(
+                "SELECT COUNT(*) AS count FROM Projects WHERE PName = ?",
+                [projectName]
+            );
+            const totalProjectCount = projectExistsCheck?.count ?? projectExistsCheck?.row?.count ?? projectExistsCheck?.["COUNT(*)"] ?? 0;
+            if (totalProjectCount > 0) {
+                exists = true;
+            }
+
+            // Check Access table for secondary member / access grants
+            if (!hasAccess) {
+                const adminAccessCheck = await queries.managed.checkUserHasProjectAccess(username, projectName, 1);
+                const adminAccessCount = adminAccessCheck?.count ?? adminAccessCheck?.row?.ExistingAccess ?? adminAccessCheck?.ExistingAccess ?? 0;
+                if (adminAccessCount > 0) {
+                    isAdmin = true;
                     hasAccess = true;
                     exists = true;
+                } else {
+                    const memberAccessCheck = await queries.managed.checkUserHasProjectAccess(username, projectName, 0);
+                    const memberAccessCount = memberAccessCheck?.count ?? memberAccessCheck?.row?.ExistingAccess ?? memberAccessCheck?.ExistingAccess ?? 0;
+                    if (memberAccessCount > 0) {
+                        hasAccess = true;
+                        exists = true;
+                    }
                 }
             }
         } catch (err) {
@@ -66,7 +131,7 @@ async function verifyProjectAccess(username, projectName) {
         }
     } else {
         // Fallback when managedDbClient is not initialized (e.g. unit tests or standalone)
-        if (username === "ZeroUser" || username === "TestUser") {
+        if (username === "ZeroUser" || username === "TestUser" || username === "test") {
             hasAccess = true;
             exists = true;
         } else {
@@ -501,11 +566,20 @@ async function ollamaChat(req, res) {
             if (!response.ok) {
                 const errorText = await response.text().catch(() => "");
                 if (toolResult) {
+                    let fallbackContent = "Tool executed successfully.";
+                    if (toolResult.runs) {
+                        fallbackContent = formatRunListings(toolResult.runs, projectName);
+                    } else if (toolResult.summary) {
+                        fallbackContent = toolResult.summary;
+                    } else if (toolResult.stdout !== undefined) {
+                        fallbackContent = `**Python Sandbox Output:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || ""}\n\`\`\``;
+                    }
+
                     return res.status(200).json({
                         success: true,
                         message: {
                             role: "assistant",
-                            content: toolResult.summary || (toolResult.stdout !== undefined ? `**Python Sandbox Output:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || ""}\n\`\`\`` : "Tool executed successfully.")
+                            content: fallbackContent
                         },
                         model: targetModel,
                         user: username,
@@ -524,11 +598,29 @@ async function ollamaChat(req, res) {
             const data = await response.json();
             let assistantReply = data.message || { role: "assistant", content: data.response || "" };
 
-            // If toolResult was generated, append tool execution output if not already present
-            if (toolResult && toolResult.summary && !assistantReply.content.includes(toolResult.runId || "Summary")) {
-                assistantReply.content += `\n\n${toolResult.summary}`;
-            } else if (toolResult && toolResult.stdout !== undefined && !assistantReply.content.includes(toolResult.stdout)) {
-                assistantReply.content += `\n\n**Python Sandbox Execution Result:**\n\`\`\`\n${toolResult.stdout || "(No stdout)"}\n\`\`\``;
+            // Explicitly format and append toolResult into assistantReply.content so response is never empty
+            if (toolResult) {
+                if (toolResult.runs) {
+                    const formattedRuns = formatRunListings(toolResult.runs, projectName);
+                    if (!assistantReply.content || assistantReply.content.trim() === "") {
+                        assistantReply.content = formattedRuns;
+                    } else if (!assistantReply.content.includes("Available Runs")) {
+                        assistantReply.content += `\n\n${formattedRuns}`;
+                    }
+                } else if (toolResult.summary) {
+                    if (!assistantReply.content || assistantReply.content.trim() === "") {
+                        assistantReply.content = toolResult.summary;
+                    } else if (!assistantReply.content.includes(toolResult.runId || "Summary")) {
+                        assistantReply.content += `\n\n${toolResult.summary}`;
+                    }
+                } else if (toolResult.stdout !== undefined) {
+                    const pyOutput = `**Python Sandbox Execution Result:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || "(No output)"}\n\`\`\``;
+                    if (!assistantReply.content || assistantReply.content.trim() === "") {
+                        assistantReply.content = pyOutput;
+                    } else if (!assistantReply.content.includes("Python Sandbox Execution Result")) {
+                        assistantReply.content += `\n\n${pyOutput}`;
+                    }
+                }
             }
 
             return res.status(200).json({
@@ -555,11 +647,20 @@ async function ollamaChat(req, res) {
 
             // Fallback response with tool output if Ollama is offline or errors
             if (toolResult) {
+                let fallbackContent = "Tool executed successfully.";
+                if (toolResult.runs) {
+                    fallbackContent = formatRunListings(toolResult.runs, projectName);
+                } else if (toolResult.summary) {
+                    fallbackContent = toolResult.summary;
+                } else if (toolResult.stdout !== undefined) {
+                    fallbackContent = `**Python Sandbox Output:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || ""}\n\`\`\``;
+                }
+
                 return res.status(200).json({
                     success: true,
                     message: {
                         role: "assistant",
-                        content: toolResult.summary || (toolResult.stdout !== undefined ? `**Python Sandbox Output:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || ""}\n\`\`\`` : "Tool executed successfully.")
+                        content: fallbackContent
                     },
                     model: targetModel,
                     user: username,
@@ -621,6 +722,7 @@ async function sandboxedPythonHandler(req, res) {
 }
 
 ollamaChat.NJOBVU_SYSTEM_PROMPT = NJOBVU_SYSTEM_PROMPT;
+ollamaChat.formatRunListings = formatRunListings;
 ollamaChat.verifyProjectAccess = verifyProjectAccess;
 ollamaChat.getLiveSystemContext = getLiveSystemContext;
 ollamaChat.buildDynamicSystemPrompt = buildDynamicSystemPrompt;
