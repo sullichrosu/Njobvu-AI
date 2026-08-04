@@ -238,6 +238,20 @@ describe('Chat Harness API Integration Tests', () => {
             delete global.managedDbClient;
         });
 
+        it('should correctly normalize and format Array of run objects in formatRunListings', () => {
+            const ollamaChat = require('../../routes/chat/ollamaChat');
+            const arrayRuns = [
+                { runName: 'yolo_train_1', runType: 'train' },
+                { runName: 'inf_run_2', runType: 'inference' }
+            ];
+
+            const formatted = ollamaChat.formatRunListings(arrayRuns, 'classification');
+            expect(formatted).toContain('yolo_train_1');
+            expect(formatted).toContain('inf_run_2');
+            expect(formatted).toContain('Training Runs (1)');
+            expect(formatted).toContain('Inference Runs (1)');
+        });
+
         it('should return 403 Forbidden if user lacks project access for run-aware summary requests', async () => {
             // Mock checkUserHasProjectAccess to return 0 (no access) when managedDbClient is set
             global.managedDbClient = { get: jest.fn().mockResolvedValue({ ExistingAccess: 0 }) };
