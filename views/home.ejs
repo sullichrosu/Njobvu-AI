@@ -74,9 +74,10 @@
 				</tr>
 			</thead>
             <tbody>
+                <% var filterParams = "&search=" + encodeURIComponent(typeof search !== 'undefined' ? search : '') + "&sortBy=" + (typeof sortBy !== 'undefined' ? sortBy : 'name') + "&sortOrder=" + (typeof sortOrder !== 'undefined' ? sortOrder : 'asc') + "&needsReview=" + (typeof needsReview !== 'undefined' ? needsReview : 'all'); %>
                 <% for(var i=((page-1)*perPage); i<(Math.min(projects.length,(((page-1)*perPage)+Number(perPage)))); i++) {%>
 					<tr>
-						<td scope="row"><a href="/project?IDX=<%= projects[i][1] %>%>&page=1&perPage=<%= perPage %>"><%= projects[i][0].PName %></a></td>
+						<td scope="row"><a href="/project?IDX=<%= projects[i][1] %>&page=1&perPage=<%= perPage %>"><%= projects[i][0].PName %></a></td>
 						<td class="text-center" scope="row"><%= projects[i][0].Admin %></td>
 						<% if (projects[i][2] != 0) {%>
 							<td class="text-center" style="color: red;">Needs Review</td>
@@ -130,7 +131,7 @@
                 </li>
                 <% } else { %>
                 <li class="page-item">
-                  <a class="page-link" href="/home?page=1&perPage=<%= perPage %>" tabindex="-1">First</a>
+                  <a class="page-link" href="/home?page=1&perPage=<%= perPage %><%= filterParams %>" tabindex="-1">First</a>
                 </li>
                 <% } %>
                 <% var i = (Number(current) > 6 ? Number(current) - 5 : 1) %>
@@ -147,7 +148,7 @@
                         </li>
                     <% } else { %>
                         <li class="page-item">
-                            <a class="page-link" href="/home?page=<%= i %>&perPage=<%= perPage %>"><%= i %></a>
+                            <a class="page-link" href="/home?page=<%= i %>&perPage=<%= perPage %><%= filterParams %>"><%= i %></a>
                         </li>
                     <% } %>
                     <% if (i == j && i < pages) { %>
@@ -162,7 +163,7 @@
                     </li>
                 <% } else { %>
                     <li class="page-item">
-                        <a class="page-link" href="/home?page=<%= pages %>&perPage=<%= perPage %>">Last</a>
+                        <a class="page-link" href="/home?page=<%= pages %>&perPage=<%= perPage %><%= filterParams %>">Last</a>
                     </li>
                 <% } %>
             </ul>
@@ -288,22 +289,28 @@
 
 <script>
 	var pgnum = document.getElementById("page");
-	pgnum.oninput = function(){
-		console.log("pgnum oninput");
-		console.log("pgnum: ", pgnum.value)
-		if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
-		{
-
-			window.location.href = `/home?page=${pgnum.value}&perPage=<%=perPage%>`;
+	if (pgnum) {
+		pgnum.onchange = function(){
+			if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
+			{
+				var search = document.getElementById("project-search") ? document.getElementById("project-search").value : "";
+				var sortBy = document.getElementById("project-sort-by") ? document.getElementById("project-sort-by").value : "name";
+				var sortOrder = document.getElementById("project-sort-order") ? document.getElementById("project-sort-order").value : "asc";
+				var needsReview = document.getElementById("project-review-filter") ? document.getElementById("project-review-filter").value : "all";
+				var perPage = document.getElementById("perpage") ? document.getElementById("perpage").value : 10;
+				window.location.href = `/home?page=${pgnum.value}&perPage=${perPage}&search=${encodeURIComponent(search)}&sortBy=${sortBy}&sortOrder=${sortOrder}&needsReview=${needsReview}`;
+			}
 		}
 	}
 </script>
 <script>
 	var perpage = document.getElementById("perpage");
-	perpage.oninput = function(){
-		if(perpage.value > 0)
-		{
-			window.location.href = `/home?page=<%=page%>&perPage=${perpage.value}`;
+	if (perpage) {
+		perpage.onchange = function(){
+			if(perpage.value > 0)
+			{
+				applyFilters();
+			}
 		}
 	}
 </script>

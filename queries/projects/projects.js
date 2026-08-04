@@ -1,4 +1,5 @@
 const client = require("../client");
+const getDbClient = require("../getDbClient");
 
 module.exports = {
     managed: {
@@ -69,6 +70,7 @@ module.exports = {
                 const query = search.trim().toLowerCase();
                 filtered = filtered.filter(item => {
                     const proj = Array.isArray(item) ? item[0] : item;
+                    if (!proj) return false;
                     const pName = (proj.PName || "").toLowerCase();
                     const pAdmin = (proj.Admin || "").toLowerCase();
                     return pName.includes(query) || pAdmin.includes(query);
@@ -79,18 +81,19 @@ module.exports = {
                 const adminQuery = admin.trim().toLowerCase();
                 filtered = filtered.filter(item => {
                     const proj = Array.isArray(item) ? item[0] : item;
+                    if (!proj) return false;
                     return (proj.Admin || "").toLowerCase().includes(adminQuery);
                 });
             }
 
-            if (needsReview === "true" || needsReview === "1" || needsReview === 1) {
+            if (needsReview === "true" || needsReview === "1" || needsReview === 1 || needsReview === "needsReview" || needsReview === "Needs Review Only") {
                 filtered = filtered.filter(item => {
-                    const hasReview = Array.isArray(item) ? item[2] : item.needsReview;
+                    const hasReview = Array.isArray(item) ? item[2] : (item.needsReview !== undefined ? item.needsReview : item.review);
                     return Number(hasReview) > 0;
                 });
-            } else if (needsReview === "false" || needsReview === "0" || needsReview === 0) {
+            } else if (needsReview === "false" || needsReview === "0" || needsReview === 0 || needsReview === "noReview" || needsReview === "No Review Needed") {
                 filtered = filtered.filter(item => {
-                    const hasReview = Array.isArray(item) ? item[2] : item.needsReview;
+                    const hasReview = Array.isArray(item) ? item[2] : (item.needsReview !== undefined ? item.needsReview : item.review);
                     return Number(hasReview) === 0;
                 });
             }
@@ -101,8 +104,8 @@ module.exports = {
                 if (Array.isArray(a)) {
                     switch (sortBy) {
                         case "admin":
-                            valA = (a[0].Admin || "").toLowerCase();
-                            valB = (b[0].Admin || "").toLowerCase();
+                            valA = (a[0] && a[0].Admin ? a[0].Admin : "").toLowerCase();
+                            valB = (b[0] && b[0].Admin ? b[0].Admin : "").toLowerCase();
                             break;
                         case "numImages":
                             valA = Number(a[3]) || 0;
@@ -119,15 +122,15 @@ module.exports = {
                             break;
                         case "name":
                         default:
-                            valA = (a[0].PName || "").toLowerCase();
-                            valB = (b[0].PName || "").toLowerCase();
+                            valA = (a[0] && a[0].PName ? a[0].PName : "").toLowerCase();
+                            valB = (b[0] && b[0].PName ? b[0].PName : "").toLowerCase();
                             break;
                     }
                 } else {
                     switch (sortBy) {
                         case "admin":
-                            valA = (a.Admin || "").toLowerCase();
-                            valB = (b.Admin || "").toLowerCase();
+                            valA = (a && a.Admin ? a.Admin : "").toLowerCase();
+                            valB = (b && b.Admin ? b.Admin : "").toLowerCase();
                             break;
                         case "numImages":
                             valA = Number(a.numImages) || 0;
@@ -144,8 +147,8 @@ module.exports = {
                             break;
                         case "name":
                         default:
-                            valA = (a.PName || "").toLowerCase();
-                            valB = (b.PName || "").toLowerCase();
+                            valA = (a && a.PName ? a.PName : "").toLowerCase();
+                            valB = (b && b.PName ? b.PName : "").toLowerCase();
                             break;
                     }
                 }
@@ -161,13 +164,13 @@ module.exports = {
     },
     project: {
         checkTableExists: async function(projectPath, tableName) {
-            const db = global.projectDbClients[projectPath];
+            const db = getDbClient(projectPath);
             const query = "SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name=?";
             const result = await db.get(query, [tableName]);
             return { rows: [result] };
         },
         migrateProjectDb: async function(projectPath) {
-            const db = global.projectDbClients[projectPath];
+            const db = getDbClient(projectPath);
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Classes (CName VARCHAR NOT NULL PRIMARY KEY)",
             );
@@ -187,7 +190,7 @@ module.exports = {
             reviewImage,
             validateImage,
         ) {
-            const db = global.projectDbClients[projectPath];
+            const db = getDbClient(projectPath);
             const query =
                 "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, ?, ?)";
             const results = await db.run(query, [

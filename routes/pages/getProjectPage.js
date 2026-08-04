@@ -25,7 +25,8 @@ async function getProjectPage(req, res) {
 
     var projects = [];
     if (global.managedDbClient && global.managedDbClient.all) {
-        projects = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+        projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
     } else if (global.db && global.db.allAsync) {
         projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
     }
@@ -97,7 +98,8 @@ async function getProjectPage(req, res) {
 
     var acc = [];
     if (global.managedDbClient && global.managedDbClient.all) {
-        acc = await global.managedDbClient.all("SELECT * FROM Access WHERE PName = ? AND Admin = ?", [PName, admin]);
+        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE PName = ? AND Admin = ?", [PName, admin]);
+        acc = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
     } else if (global.db && global.db.allAsync) {
         acc = await global.db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
     }

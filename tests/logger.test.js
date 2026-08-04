@@ -27,7 +27,7 @@ describe('Logger Utility Unit Tests', () => {
         expect(output.message).toBe('Test info message');
         expect(output.meta).toEqual({ userId: 123 });
         expect(output).toHaveProperty('source');
-        expect(output.source.file).toBe('tests/logger.test.js');
+        expect(output.source.file.replace(/\\/g, '/')).toBe('tests/logger.test.js');
         expect(typeof output.source.line).toBe('number');
     });
 

@@ -382,12 +382,25 @@ async function yoloRun(req, res) {
         requestedDevice = req.body.device, // Original requested device
         options = req.body.options,
         weightName = req.body.weights;
+
+    if (weightName && (weightName.includes("-cls") || weightName.toLowerCase().includes("classify"))) {
+        yoloTask = "classify";
+    } else if (weightName && weightName.includes("-pose")) {
+        yoloTask = "pose";
+    } else if (weightName && weightName.includes("-seg")) {
+        yoloTask = "segment";
+    } else if (weightName && weightName.includes("-obb")) {
+        yoloTask = "obb";
+    } else if (!yoloTask) {
+        yoloTask = "detect";
+    }
+
     device = req.body.device;
     var errFile = `${date}-error.log`;
 
     var publicPath = global.currentPath || (typeof currentPath !== "undefined" ? currentPath : (process.cwd() + "/")),
         mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
-        projectPath = mainPath + Admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
+        projectPath = path.normalize(mainPath + Admin + "-" + PName), // $LABELING_TOOL_PATH/public/projects/project_name
         imagesPath = projectPath + "/images", // $LABELING_TOOL_PATH/public/projects/project_name/images
         downloadsPath = mainPath + user + "_Downloads",
         trainingPath = projectPath + "/training",
@@ -424,12 +437,10 @@ async function yoloRun(req, res) {
     });
 
     darknetCfgScript = runPath + "/datatovalues.py";
-    if (!fs.existsSync(darknetCfgScript)) {
-        fs.copyFile(yoloScript, darknetCfgScript, (err) => {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
+    try {
+        fs.copyFileSync(yoloScript, darknetCfgScript);
+    } catch (err) {
+        global.logger.error(err);
     }
 
     // Get images and classes for both detect and classify tasks

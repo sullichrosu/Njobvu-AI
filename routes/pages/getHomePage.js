@@ -26,7 +26,8 @@ async function getHomePage(req, res) {
     var qnum = 0;
     var projects = [];
     if (global.managedDbClient && global.managedDbClient.all) {
-        projects = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+        projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
     } else if (global.db && global.db.allAsync) {
         projects = await global.db.allAsync("SELECT * FROM `Access` WHERE Username = '" + user + "'");
     }
@@ -38,17 +39,18 @@ async function getHomePage(req, res) {
         for (var i = 0; i < projects.length; i++) {
             var Proj = null;
             if (global.managedDbClient && global.managedDbClient.get) {
-                Proj = await global.managedDbClient.get(
-                    "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND Validate = ?",
-                    [projects[i].PName, projects[i].Admin, 0]
+                const dbRes = await global.managedDbClient.get(
+                    "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND (Validate = ? OR Validate = ? OR Validate IS NULL)",
+                    [projects[i].PName, projects[i].Admin, 0, '0']
                 );
+                Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
             } else if (global.db && global.db.getAsync) {
                 Proj = await global.db.getAsync(
                     "SELECT * FROM `Projects` WHERE PName = '" +
                         projects[i].PName +
                         "' AND Admin = '" +
                         projects[i].Admin +
-                        "' AND Validate = '0'",
+                        "' AND (Validate = '0' OR Validate = 0 OR Validate IS NULL)",
                 );
             }
 

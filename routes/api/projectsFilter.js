@@ -24,7 +24,8 @@ async function getFilteredProjectsApi(req, res) {
 
         let accessRows = [];
         if (global.managedDbClient && global.managedDbClient.all) {
-            accessRows = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+            const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+            accessRows = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
         } else if (global.db && global.db.allAsync) {
             accessRows = await global.db.allAsync("SELECT * FROM `Access` WHERE Username = '" + user + "'");
         }
@@ -38,15 +39,17 @@ async function getFilteredProjectsApi(req, res) {
             let Proj = null;
             if (global.managedDbClient && global.managedDbClient.get) {
                 if (validateMode !== null && !isNaN(validateMode)) {
-                    Proj = await global.managedDbClient.get(
+                    const dbRes = await global.managedDbClient.get(
                         "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND Validate = ?",
                         [accessRows[i].PName, accessRows[i].Admin, validateMode]
                     );
+                    Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
                 } else {
-                    Proj = await global.managedDbClient.get(
+                    const dbRes = await global.managedDbClient.get(
                         "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
                         [accessRows[i].PName, accessRows[i].Admin]
                     );
+                    Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
                 }
             } else if (global.db && global.db.getAsync) {
                 let query = "SELECT * FROM `Projects` WHERE PName = '" + accessRows[i].PName + "' AND Admin = '" + accessRows[i].Admin + "'";
@@ -154,7 +157,8 @@ async function getFilteredImagesApi(req, res) {
 
         let accessRows = [];
         if (global.managedDbClient && global.managedDbClient.all) {
-            accessRows = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+            const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+            accessRows = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
         } else if (global.db && global.db.allAsync) {
             accessRows = await global.db.allAsync("SELECT * FROM `Access` WHERE Username = '" + user + "'");
         }

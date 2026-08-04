@@ -31,17 +31,17 @@ describe("Project & Image Sorting / Filtering API & Page Integration Tests", () 
         global.managedDbClient = {
             all: jest.fn().mockImplementation((sql, params) => {
                 if (sql && sql.includes("Access")) {
-                    return Promise.resolve([{ Username: testUsername, PName: testProjectName, Admin: testAdmin }]);
+                    return Promise.resolve({ success: true, rows: [{ Username: testUsername, PName: testProjectName, Admin: testAdmin }] });
                 }
-                return Promise.resolve([]);
+                return Promise.resolve({ success: true, rows: [] });
             }),
             get: jest.fn().mockImplementation((sql, params) => {
                 if (sql && sql.includes("Projects")) {
-                    return Promise.resolve({ PName: testProjectName, Admin: testAdmin, AutoSave: 0, Validate: 0 });
+                    return Promise.resolve({ success: true, row: { PName: testProjectName, Admin: testAdmin, AutoSave: 0, Validate: 0 } });
                 }
-                return Promise.resolve(null);
+                return Promise.resolve({ success: true, row: null });
             }),
-            run: jest.fn().mockResolvedValue({ changes: 1 }),
+            run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
         };
         global.db = {
             allAsync: jest.fn().mockImplementation((sql) => {
