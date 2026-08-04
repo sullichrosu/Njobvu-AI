@@ -361,6 +361,130 @@ describe('Chat Harness API Integration Tests', () => {
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
         });
 
+        it('should ALWAYS prepend the actual run summary report even when the LLM preamble mentions "summary"', async () => {
+            const fs = require('fs');
+            const path = require('path');
+            const testRunDir = path.join(process.cwd(), 'runs', 'train', 'preamble_run');
+            if (!fs.existsSync(testRunDir)) {
+                fs.mkdirSync(testRunDir, { recursive: true });
+            }
+            fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
+
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'Okay, I understand. I will provide a concise summary of your current training run. I am ready to assist you.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'Summarize run preamble_run' }],
+                    model: 'llama3',
+                    intent: 'generate_summary',
+                    runId: 'preamble_run',
+                    runType: 'train'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.summary).toBeTruthy();
+
+            // The actual tool report must be the PRIMARY (prepended) content, not suppressed by the LLM preamble.
+            const content = response.body.message.content;
+            expect(content.startsWith('## Run Summary Report: preamble_run')).toBe(true);
+            expect(content).toContain('I will provide a concise summary');
+
+            global.fetch = originalFetch;
+            try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
+        });
+
+        it('should ALWAYS prepend formatted run listings even when the LLM returns conversational text', async () => {
+            global.managedDbClient = {
+                get: jest.fn().mockImplementation(async (query, params) => {
+                    if (query.includes('FROM Projects WHERE PName = ? AND Admin = ?')) {
+                        return { count: 1 };
+                    }
+                    return { count: 0 };
+                })
+            };
+
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'Here are the runs I found. I will list them for you.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=test'])
+                .send({
+                    messages: [{ role: 'user', content: 'List available runs' }],
+                    model: 'llama3',
+                    intent: 'list_runs',
+                    projectName: 'classification'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.message.content.startsWith('### Available Runs')).toBe(true);
+
+            global.fetch = originalFetch;
+            delete global.managedDbClient;
+        });
+
+        it('should ALWAYS prepend python sandbox output even when the LLM returns conversational text', async () => {
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'I executed the python code. Everything looks good.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'Run python sandbox status check' }],
+                    model: 'llama3',
+                    intent: 'run_python'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.message.content.startsWith('**Python Sandbox Execution Result:**')).toBe(true);
+
+            global.fetch = originalFetch;
+        });
+
         it('should return 200 OK with assistant reply when Ollama returns a valid response', async () => {
             const originalFetch = global.fetch;
             global.fetch = jest.fn().mockResolvedValueOnce({

@@ -106,6 +106,21 @@ function formatRunListings(runs, projectName = null) {
 }
 
 /**
+ * Guarantees the actual tool output/report is ALWAYS the primary content of the assistant reply.
+ * When the LLM produced conversational text, the tool output is prepended so it is never lost,
+ * even when the LLM preamble happens to contain words from the report (e.g. "summary").
+ */
+function setToolOutputAsPrimary(currentContent, toolOutput) {
+    if (!toolOutput || toolOutput.trim() === "") {
+        return currentContent;
+    }
+    if (!currentContent || currentContent.trim() === "") {
+        return toolOutput;
+    }
+    return `${toolOutput}\n\n${currentContent}`;
+}
+
+/**
  * Safely extracts Python code from incoming payload parameters or markdown code fences.
  * Prevents plain English prompt strings from being executed as Python scripts.
  * Returns a diagnostic status script if status/check chip is clicked without explicit code.
@@ -714,26 +729,19 @@ async function ollamaChat(req, res) {
             const data = await response.json();
             let assistantReply = data.message || { role: "assistant", content: data.response || "" };
 
-            // Explicitly format and append toolResult into assistantReply.content so response is never empty
+            // Guarantee the actual tool output/report is ALWAYS the primary content of assistantReply.content.
+            // Fragile substring checks (e.g. content.includes("Summary")) are avoided so a conversational LLM
+            // preamble containing report keywords never suppresses the real tool result.
             if (toolResult) {
                 if (toolResult.runs) {
                     const formattedRuns = formatRunListings(toolResult.runs, projectName);
-                    if (!assistantReply.content || assistantReply.content.trim() === "") {
-                        assistantReply.content = formattedRuns;
-                    } else if (!assistantReply.content.includes("Available Runs")) {
-                        assistantReply.content += `\n\n${formattedRuns}`;
-                    }
+                    assistantReply.content = setToolOutputAsPrimary(assistantReply.content, formattedRuns);
                 } else if (toolResult.summary || toolResult.documentContext) {
-                    if (!assistantReply.content || assistantReply.content.trim() === "") {
-                        assistantReply.content = toolResult.summary || toolResult.documentContext;
-                    }
+                    const report = toolResult.summary || toolResult.documentContext;
+                    assistantReply.content = setToolOutputAsPrimary(assistantReply.content, report);
                 } else if (toolResult.stdout !== undefined) {
                     const pyOutput = `**Python Sandbox Execution Result:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || "(No output)"}\n\`\`\``;
-                    if (!assistantReply.content || assistantReply.content.trim() === "") {
-                        assistantReply.content = pyOutput;
-                    } else if (!assistantReply.content.includes("Python Sandbox Execution Result")) {
-                        assistantReply.content += `\n\n${pyOutput}`;
-                    }
+                    assistantReply.content = setToolOutputAsPrimary(assistantReply.content, pyOutput);
                 }
 
                 // Persist the LLM-generated custom Markdown analysis narrative into run_summary.md
