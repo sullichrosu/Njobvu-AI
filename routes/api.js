@@ -64,6 +64,7 @@ const removeAccess = require("./projects/removeAccess");
 const transferAdmin = require("./projects/transferAdmin");
 const script = require("./projects/script");
 const deleteImagesWithoutLabel = require("./projects/deleteImagesWithoutLabel");
+const { getFilteredProjectsApi, getFilteredImagesApi } = require("./api/projectsFilter");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -145,6 +146,10 @@ api.post("/removeAccess", removeAccess);
 api.post("/transferAdmin", transferAdmin);
 api.post("/script", script);
 api.post("/deleteImagesWithoutLabel", deleteImagesWithoutLabel);
+api.get("/api/v2/projects", getFilteredProjectsApi);
+api.get("/api/v2/projects/:IDX/images", getFilteredImagesApi);
+api.get("/api/projects/filter", getFilteredProjectsApi);
+api.get("/api/projects/filter-images", getFilteredImagesApi);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);

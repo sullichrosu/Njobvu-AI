@@ -1,13 +1,19 @@
 const sqlite3 = require("sqlite3").verbose();
 const path = require('path');
 const fs = require('fs');
+const queries = require("../../queries/queries");
 
 async function getHomePage(req, res) {
     var page = req.query.page,
         perPage = req.query.perPage,
         user = req.cookies.Username;
 
-    var public_path = currentPath;
+    var search = req.query.search || "";
+    var sortBy = req.query.sortBy || "name";
+    var sortOrder = req.query.sortOrder || "asc";
+    var needsReview = req.query.needsReview || "all";
+
+    var public_path = typeof currentPath !== "undefined" ? currentPath : process.cwd();
     var project_path = path.join(public_path, "public", "projects");
 
     if (page == undefined) {
@@ -18,44 +24,42 @@ async function getHomePage(req, res) {
     }
 
     var qnum = 0;
-    var test = await db.allAsync(
-        "SELECT * FROM `Access` WHERE Username = '" +
-            user +
-            "' LIMIT " +
-            perPage +
-            " OFFSET " +
-            (page - 1) * perPage,
-    );
-    var projects = await db.allAsync(
-        "SELECT * FROM `Access` WHERE Username = '" + user + "'",
-    );
-    var results1 = [];
+    var projects = [];
+    if (global.managedDbClient && global.managedDbClient.all) {
+        projects = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+    } else if (global.db && global.db.allAsync) {
+        projects = await global.db.allAsync("SELECT * FROM `Access` WHERE Username = '" + user + "'");
+    }
 
-    var test2 = [];
+    var results1 = [];
     var PNames = [];
 
-    if (projects.length > 0) {
+    if (projects && projects.length > 0) {
         for (var i = 0; i < projects.length; i++) {
-            var Proj = await db.getAsync(
-                "SELECT * FROM `Projects` WHERE PName = '" +
-                    projects[i].PName +
-                    "' AND Admin = '" +
-                    projects[i].Admin +
-                    "' AND Validate = '" +
-                    Number(0) +
-                    "'",
-            );
+            var Proj = null;
+            if (global.managedDbClient && global.managedDbClient.get) {
+                Proj = await global.managedDbClient.get(
+                    "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND Validate = ?",
+                    [projects[i].PName, projects[i].Admin, 0]
+                );
+            } else if (global.db && global.db.getAsync) {
+                Proj = await global.db.getAsync(
+                    "SELECT * FROM `Projects` WHERE PName = '" +
+                        projects[i].PName +
+                        "' AND Admin = '" +
+                        projects[i].Admin +
+                        "' AND Validate = '0'",
+                );
+            }
 
-            //[Project, IDX, Review, NumberOfImages, %labeled]
+            //[Project, IDX, Review, NumberOfImages, %labeled, list_counter]
             if (Proj != null) {
-                results1.push([Proj, i, 0, 0, 0]);
-                PNames.push(Proj.PName);
+                results1.push([Proj, i, 0, 0, 0, 0]);
             }
         }
-        if (PNames.length != 0) {
+        if (results1.length != 0) {
             var list_counter = [];
             var review_counter = [];
-            var counter = 0;
 
             for (var i = 0; i < results1.length; i++) {
                 var dbpath = path.join(
@@ -66,19 +70,15 @@ async function getHomePage(req, res) {
 
                 global.logger.debug("Attempting to connect to database:", dbpath);
                 
-                // Check if database file exists
-                const fs = require('fs');
                 if (!fs.existsSync(dbpath)) {
                     global.logger.debug("Database file does not exist:", dbpath);
-                    // Add default values for this project
-                    review_counter.push(0);
+                    results1[i][2] = 0;
                     results1[i][3] = 0;
                     results1[i][4] = 0;
-                    list_counter.push(0);
+                    results1[i][5] = 0;
                     continue;
                 }
 
-                // Connect to project databases
                 var hdb = new sqlite3.Database(dbpath, (err) => {
                     if (err) {
                         return console.error(
@@ -89,16 +89,6 @@ async function getHomePage(req, res) {
                     global.logger.info("Connected to hdb.")
                 });
 
-                // Test database connection by checking if tables exist
-                hdb.get("SELECT name FROM sqlite_master WHERE type='table' AND name='Images'", (err, row) => {
-                    if (err) {
-                        global.logger.error("Error checking Images table:", err);
-                    } else if (row) {
-                    } else {
-                    }
-                });
-
-                // create async database object functions
                 hdb.getAsync = function (sql) {
                     var that = this;
                     return new Promise(function (resolve, reject) {
@@ -128,7 +118,6 @@ async function getHomePage(req, res) {
                     });
                 };
 
-                // Wait a moment for the connection to be fully established
                 await new Promise(resolve => setTimeout(resolve, 100));
 
                 var numimg = await hdb.getAsync("SELECT COUNT(*) FROM Images");
@@ -147,25 +136,33 @@ async function getHomePage(req, res) {
                 var counter = await hdb.getAsync("SELECT COUNT(*) FROM Labels");
 
                 if (!found_review || Number(found_review["COUNT(*)"]) == 0) {
-                    review_counter.push(0);
+                    results1[i][2] = 0;
                 } else {
-                    review_counter.push(1);
                     results1[i][2] = 1;
                 }
                 results1[i][3] = numimg ? Number(numimg["COUNT(*)"]) : 0;
                 results1[i][4] = complete;
-
-                list_counter.push(counter ? counter["COUNT(*)"] : 0);
+                results1[i][5] = counter ? Number(counter["COUNT(*)"]) : 0;
 
                 hdb.close(function (err) {
                     if (err) {
                         global.logger.error(err);
-                    } else {
                     }
                 });
             }
         }
     }
+
+    results1 = queries.managed.filterProjects(results1, {
+        search: search,
+        needsReview: needsReview,
+        sortBy: sortBy,
+        sortOrder: sortOrder
+    });
+
+    PNames = results1.map(item => item[0].PName);
+    var list_counter = results1.map(item => item[5] || 0);
+    var review_counter = results1.map(item => item[2] || 0);
 
     res.render("home", {
         title: "home",
@@ -179,6 +176,10 @@ async function getHomePage(req, res) {
         perPage: perPage,
         logged: req.query.logged,
         needs_review: review_counter,
+        search: search,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        needsReview: needsReview,
         activePage: null,
         IDX: null,
     });

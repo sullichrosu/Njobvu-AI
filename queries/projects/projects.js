@@ -54,6 +54,110 @@ module.exports = {
 
             return result;
         },
+        filterProjects: function(projectList, options = {}) {
+            const {
+                search = "",
+                admin = "",
+                needsReview = "all",
+                sortBy = "name",
+                sortOrder = "asc"
+            } = options;
+
+            let filtered = [...projectList];
+
+            if (search && search.trim() !== "") {
+                const query = search.trim().toLowerCase();
+                filtered = filtered.filter(item => {
+                    const proj = Array.isArray(item) ? item[0] : item;
+                    const pName = (proj.PName || "").toLowerCase();
+                    const pAdmin = (proj.Admin || "").toLowerCase();
+                    return pName.includes(query) || pAdmin.includes(query);
+                });
+            }
+
+            if (admin && admin.trim() !== "") {
+                const adminQuery = admin.trim().toLowerCase();
+                filtered = filtered.filter(item => {
+                    const proj = Array.isArray(item) ? item[0] : item;
+                    return (proj.Admin || "").toLowerCase().includes(adminQuery);
+                });
+            }
+
+            if (needsReview === "true" || needsReview === "1" || needsReview === 1) {
+                filtered = filtered.filter(item => {
+                    const hasReview = Array.isArray(item) ? item[2] : item.needsReview;
+                    return Number(hasReview) > 0;
+                });
+            } else if (needsReview === "false" || needsReview === "0" || needsReview === 0) {
+                filtered = filtered.filter(item => {
+                    const hasReview = Array.isArray(item) ? item[2] : item.needsReview;
+                    return Number(hasReview) === 0;
+                });
+            }
+
+            const isDesc = String(sortOrder).toLowerCase() === "desc" ? -1 : 1;
+            filtered.sort((a, b) => {
+                let valA, valB;
+                if (Array.isArray(a)) {
+                    switch (sortBy) {
+                        case "admin":
+                            valA = (a[0].Admin || "").toLowerCase();
+                            valB = (b[0].Admin || "").toLowerCase();
+                            break;
+                        case "numImages":
+                            valA = Number(a[3]) || 0;
+                            valB = Number(b[3]) || 0;
+                            break;
+                        case "numLabels":
+                            valA = Number(a[5]) || 0;
+                            valB = Number(b[5]) || 0;
+                            break;
+                        case "percentLabeled":
+                        case "percent":
+                            valA = Number(a[4]) || 0;
+                            valB = Number(b[4]) || 0;
+                            break;
+                        case "name":
+                        default:
+                            valA = (a[0].PName || "").toLowerCase();
+                            valB = (b[0].PName || "").toLowerCase();
+                            break;
+                    }
+                } else {
+                    switch (sortBy) {
+                        case "admin":
+                            valA = (a.Admin || "").toLowerCase();
+                            valB = (b.Admin || "").toLowerCase();
+                            break;
+                        case "numImages":
+                            valA = Number(a.numImages) || 0;
+                            valB = Number(b.numImages) || 0;
+                            break;
+                        case "numLabels":
+                            valA = Number(a.numLabels) || 0;
+                            valB = Number(b.numLabels) || 0;
+                            break;
+                        case "percentLabeled":
+                        case "percent":
+                            valA = Number(a.percentLabeled) || 0;
+                            valB = Number(b.percentLabeled) || 0;
+                            break;
+                        case "name":
+                        default:
+                            valA = (a.PName || "").toLowerCase();
+                            valB = (b.PName || "").toLowerCase();
+                            break;
+                    }
+                }
+
+                if (typeof valA === "string") {
+                    return valA.localeCompare(valB) * isDesc;
+                }
+                return (valA - valB) * isDesc;
+            });
+
+            return filtered;
+        },
     },
     project: {
         checkTableExists: async function(projectPath, tableName) {

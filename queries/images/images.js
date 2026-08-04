@@ -50,5 +50,77 @@ module.exports = {
 
             return result;
         },
+        filterImages: function (imageList, options = {}) {
+            const {
+                search = "",
+                review = "all",
+                validate = "all",
+                labeled = "all",
+                sortBy = "name",
+                sortOrder = "asc",
+            } = options;
+
+            let filtered = [...imageList];
+
+            if (search && search.trim() !== "") {
+                const query = search.trim().toLowerCase();
+                filtered = filtered.filter((img) =>
+                    (img.IName || "").toLowerCase().includes(query),
+                );
+            }
+
+            if (review === "true" || review === "1" || review === 1) {
+                filtered = filtered.filter((img) => Number(img.reviewImage) === 1);
+            } else if (review === "false" || review === "0" || review === 0) {
+                filtered = filtered.filter((img) => Number(img.reviewImage) === 0);
+            }
+
+            if (validate === "true" || validate === "1" || validate === 1) {
+                filtered = filtered.filter((img) => Number(img.validateImage) === 1);
+            } else if (validate === "false" || validate === "0" || validate === 0) {
+                filtered = filtered.filter((img) => Number(img.validateImage) === 0);
+            }
+
+            if (labeled === "labeled" || labeled === "true") {
+                filtered = filtered.filter(
+                    (img) => (Number(img.numLabels) || 0) > 0,
+                );
+            } else if (labeled === "unlabeled" || labeled === "false") {
+                filtered = filtered.filter(
+                    (img) => (Number(img.numLabels) || 0) === 0,
+                );
+            }
+
+            const isDesc = String(sortOrder).toLowerCase() === "desc" ? -1 : 1;
+            filtered.sort((a, b) => {
+                let valA, valB;
+                switch (sortBy) {
+                    case "review":
+                        valA = Number(a.reviewImage) || 0;
+                        valB = Number(b.reviewImage) || 0;
+                        break;
+                    case "validate":
+                        valA = Number(a.validateImage) || 0;
+                        valB = Number(b.validateImage) || 0;
+                        break;
+                    case "numLabels":
+                        valA = Number(a.numLabels) || 0;
+                        valB = Number(b.numLabels) || 0;
+                        break;
+                    case "name":
+                    default:
+                        valA = (a.IName || "").toLowerCase();
+                        valB = (b.IName || "").toLowerCase();
+                        break;
+                }
+
+                if (typeof valA === "string") {
+                    return valA.localeCompare(valB) * isDesc;
+                }
+                return (valA - valB) * isDesc;
+            });
+
+            return filtered;
+        },
     },
 };
