@@ -164,11 +164,16 @@
 
         // Quick Action Chips Event Delegation
         messagesContainer.addEventListener("click", function (e) {
-            if (e.target.classList.contains("njobvu-quick-chip")) {
-                const promptText = e.target.getAttribute("data-prompt");
+            const chip = e.target.closest(".njobvu-quick-chip");
+            if (chip) {
+                const promptText = chip.getAttribute("data-prompt");
+                const intent = chip.getAttribute("data-intent");
+                const runId = chip.getAttribute("data-run-id");
+                const runType = chip.getAttribute("data-run-type");
+
                 if (promptText) {
                     textarea.value = promptText;
-                    sendMessage();
+                    sendMessage({ intent, runId, runType });
                 }
             }
         });
@@ -224,7 +229,7 @@
         }
 
         // Main Send Message handler
-        async function sendMessage() {
+        async function sendMessage(extraParams = {}) {
             const userText = textarea.value.trim();
             if (!userText || isWaitingForResponse) return;
 
@@ -251,7 +256,8 @@
                     body: JSON.stringify({
                         messages: conversationHistory,
                         model: activeModel,
-                        projectName: projectName
+                        projectName: projectName,
+                        ...extraParams
                     })
                 });
 

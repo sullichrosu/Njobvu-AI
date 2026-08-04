@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const app = require("../app");
 const { runSandboxedPython, sanitizeCode } = require("../utils/sandboxedPythonRunner");
-const { generateRunSummary } = require("../utils/runSummaryGenerator");
+const { generateRunSummary, listAvailableRuns } = require("../utils/runSummaryGenerator");
 
 describe("Sandboxed Python Execution Runner", () => {
     test("sanitizes forbidden python code patterns", () => {
@@ -41,7 +41,7 @@ describe("Sandboxed Python Execution Runner", () => {
     }, 10000);
 });
 
-describe("Run Summary Generator", () => {
+describe("Run Summary Generator & Discovery", () => {
     const testRunDir = path.join(__dirname, "tmp_test_run");
 
     beforeAll(() => {
@@ -75,6 +75,14 @@ describe("Run Summary Generator", () => {
 
         const mdContent = fs.readFileSync(summaryMdPath, "utf8");
         expect(mdContent).toContain("# Run Summary: test_training_run");
+    });
+
+    test("listAvailableRuns discovers run directories and metadata", () => {
+        const runs = listAvailableRuns(path.__dirname || __dirname);
+        expect(Array.isArray(runs)).toBe(true);
+        const testRun = runs.find(r => r.runName === "tmp_test_run");
+        expect(testRun).toBeDefined();
+        expect(testRun.runType).toBe("training");
     });
 });
 
@@ -123,5 +131,14 @@ describe("Sandbox API Routes", () => {
         expect(res.body.summary.runName).toBe("api_run_test");
 
         fs.rmSync(runDir, { recursive: true, force: true });
+    });
+
+    test("GET /api/runs/list - returns list of available runs", async () => {
+        const res = await request(app)
+            .get("/api/runs/list");
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(Array.isArray(res.body.runs)).toBe(true);
     });
 });

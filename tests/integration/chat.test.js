@@ -172,7 +172,7 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
 
-        it('should inject the Njobvu AI master system prompt into messages sent to Ollama', async () => {
+        it('should inject dynamic live system context into system prompt sent to Ollama', async () => {
             const originalFetch = global.fetch;
             let capturedRequestBody = null;
 
@@ -183,7 +183,7 @@ describe('Chat Harness API Integration Tests', () => {
                     status: 200,
                     json: async () => ({
                         model: 'llama3',
-                        message: { role: 'assistant', content: 'System prompt received.' },
+                        message: { role: 'assistant', content: 'System prompt received with live context.' },
                         done: true
                     })
                 });
@@ -194,7 +194,8 @@ describe('Chat Harness API Integration Tests', () => {
                 .set('Cookie', ['Username=TestUser'])
                 .send({
                     messages: [{ role: 'user', content: 'How do I run sandbox python?' }],
-                    model: 'llama3'
+                    model: 'llama3',
+                    projectName: 'TestCVProject'
                 })
                 .expect('Content-Type', /json/)
                 .expect(200);
@@ -202,11 +203,28 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body).toHaveProperty('success', true);
             expect(capturedRequestBody).not.toBeNull();
             expect(capturedRequestBody.messages[0].role).toBe('system');
-            expect(capturedRequestBody.messages[0].content).toContain('You are Njobvu AI');
-            expect(capturedRequestBody.messages[0].content).toContain('/api/sandbox/python');
-            expect(capturedRequestBody.messages[0].content).toContain('/api/runs/summary');
+            expect(capturedRequestBody.messages[0].content).toContain('DYNAMIC LIVE SYSTEM CONTEXT');
+            expect(capturedRequestBody.messages[0].content).toContain('TestCVProject');
 
             global.fetch = originalFetch;
+        });
+
+        it('should parse and execute tool intents like generate_summary and run_python', async () => {
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'Execute python print("hello sandbox")' }],
+                    model: 'llama3',
+                    intent: 'run_python',
+                    code: 'print("hello sandbox")'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.stdout).toContain('hello sandbox');
         });
 
         it('should return 200 OK with assistant reply when Ollama returns a valid response', async () => {
@@ -239,5 +257,38 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
     });
+
+    describe('POST /api/sandbox/python', () => {
+        it('should execute python code in sandbox and return output', async () => {
+            const response = await request(app)
+                .post('/api/sandbox/python')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    code: 'print("API sandbox test")'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.stdout).toContain('API sandbox test');
+        });
+    });
+
+    describe('POST /api/runs/summary', () => {
+        it('should generate run summary or return error if run not found', async () => {
+            const response = await request(app)
+                .post('/api/runs/summary')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    runId: 'non_existent_run_9999',
+                    runType: 'train'
+                })
+                .expect('Content-Type', /json/)
+                .expect(404);
+
+            expect(response.body).toHaveProperty('success', false);
+        });
+    });
 });
+
 

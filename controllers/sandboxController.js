@@ -1,5 +1,5 @@
 const { runSandboxedPython } = require("../utils/sandboxedPythonRunner");
-const { generateRunSummary } = require("../utils/runSummaryGenerator");
+const { generateRunSummary, listAvailableRuns } = require("../utils/runSummaryGenerator");
 
 async function executePythonSandbox(req, res) {
     try {
@@ -45,7 +45,24 @@ async function handleRunSummary(req, res) {
     }
 }
 
+async function handleListRuns(req, res) {
+    try {
+        const baseRunsDir = (req.query && req.query.baseRunsDir) || (req.body && req.body.baseRunsDir);
+        const runs = listAvailableRuns(baseRunsDir);
+        return res.status(200).json({
+            success: true,
+            runs
+        });
+    } catch (err) {
+        return res.status(400).json({
+            success: false,
+            error: err.message
+        });
+    }
+}
+
 module.exports = {
     executePythonSandbox,
-    handleRunSummary
+    handleRunSummary,
+    handleListRuns
 };
