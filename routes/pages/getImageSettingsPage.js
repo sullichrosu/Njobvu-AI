@@ -34,7 +34,7 @@ async function getImageSettingsPage(req, res) {
             activePage: "imageSettings",
         });
     } catch (error) {
-        console.error("Error rendering imageSettings:", error);
+        global.logger.error("Error rendering imageSettings:", error);
         res.status(500).send("Error loading page");
     }
 }

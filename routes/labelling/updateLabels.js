@@ -26,6 +26,7 @@ async function updateLabels(req, res) {
     var projectPath = mainPath + admin + "-" + PName;
 
     try {
+        global.logger.info("[updateLabels] Request body: " + JSON.stringify(req.body));
         await queries.project.updateReviewImage(
             projectPath,
             reviewImage,
@@ -47,22 +48,21 @@ async function updateLabels(req, res) {
             }
         }
 
+        const cnames = Array.isArray(req.body.CName) ? req.body.CName : (req.body.CName ? [req.body.CName] : []);
+        const xs = Array.isArray(req.body.X) ? req.body.X : (req.body.X ? [req.body.X] : []);
+        const ys = Array.isArray(req.body.Y) ? req.body.Y : (req.body.Y ? [req.body.Y] : []);
+        const ws = Array.isArray(req.body.W) ? req.body.W : (req.body.W ? [req.body.W] : []);
+        const hs = Array.isArray(req.body.H) ? req.body.H : (req.body.H ? [req.body.H] : []);
+        const lids = Array.isArray(req.body.LabelingID) ? req.body.LabelingID : (req.body.LabelingID ? [req.body.LabelingID] : []);
+
+        global.logger.info("[updateLabels] Normalized arrays: " + JSON.stringify({ cnames, xs, ys, ws, hs, lids }));
+
         var currentConfidence = [];
 
-        for (var j = 0; j < labelsCounter; j++) {
-            var tempLID = "";
-            var width = 0;
-            var height = 0;
-
-            if (labelsCounter == 1) {
-                tempLID = req.body.LabelingID;
-                width = req.body.W;
-                height = req.body.H;
-            } else {
-                tempLID = req.body.LabelingID[j];
-                width = req.body.W[j];
-                height = req.body.H[j];
-            }
+        for (var j = 0; j < lids.length; j++) {
+            var tempLID = lids[j];
+            var width = Number(ws[j]);
+            var height = Number(hs[j]);
 
             if (!(width >= 0) || !(height >= 0)) {
                 currentConfidence.push([]);
@@ -87,61 +87,47 @@ async function updateLabels(req, res) {
             newMax = oldMax.rows[0].LID + 1;
         }
 
-        if (labelsCounter > 1) {
-            for (var i = 0; i < labelsCounter; i++) {
-                if (!(req.body.W[i] >= 0) || !(req.body.H[i] >= 0)) continue; 
-
-                await queries.project.createLabel(
-                    projectPath,
-                    Number(newMax),
-                    CName[i],
-                    req.body.X[i],
-                    req.body.Y[i],
-                    Number(req.body.W[i]),
-                    Number(req.body.H[i]),
-                    IName,
-                );
-
-                if (currentConfidence[i][0] && currentConfidence.length > 0) {
-                    await queries.project.createValidation(
-                        projectPath,
-                        Number(currentConfidence[i][0].Confidence),
-                        Number(newMax),
-                        currentConfidence[i][0].CName,
-                        currentConfidence[i][0].IName,
-                    );
-                }
-
-                newMax = newMax + 1;
+        const count = lids.length;
+        for (var i = 0; i < count; i++) {
+            const wVal = Number(ws[i]);
+            const hVal = Number(hs[i]);
+            if (isNaN(wVal) || isNaN(hVal) || wVal < 0 || hVal < 0) {
+                global.logger.info(`[updateLabels] Skipping invalid width/height at i=${i}: W=${ws[i]}, H=${hs[i]}`);
+                continue;
             }
-        } else if (labelsCounter == 1) {
+
+            const xVal = xs[i] && xs[i].includes(',') ? xs[i] : Number(xs[i]);
+            const yVal = ys[i] && ys[i].includes(',') ? ys[i] : Number(ys[i]);
+
+            global.logger.info(`[updateLabels] Inserting label i=${i}: LID=${newMax}, CName=${cnames[i]}, X=${xVal}, Y=${yVal}, W=${wVal}, H=${hVal} (type of X: ${typeof xVal})`);
+
             await queries.project.createLabel(
                 projectPath,
                 Number(newMax),
-                CName,
-                req.body.X,
-                req.body.Y,
-                Number(req.body.W),
-                Number(req.body.H),
+                cnames[i],
+                xVal,
+                yVal,
+                wVal,
+                hVal,
                 IName,
             );
 
-            if (currentConfidence[0][0] && currentConfidence.length > 0) {
-                var cc = currentConfidence[0][0];
-
+            if (currentConfidence[i] && currentConfidence[i][0]) {
                 await queries.project.createValidation(
                     projectPath,
-                    Number(cc.Confidence),
+                    Number(currentConfidence[i][0].Confidence),
                     Number(newMax),
-                    cc.CName,
-                    cc.IName,
+                    currentConfidence[i][0].CName,
+                    currentConfidence[i][0].IName,
                 );
             }
+
+            newMax = newMax + 1;
         }
 
         if (formAction == "save") {
             return res.redirect(
-                "/labeling?IDX=" +
+                "/annotate?IDX=" +
                     IDX +
                     "&IName=" +
                     IName +
@@ -150,7 +136,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "auto-prev") {
             return res.redirect(
-                "/labeling?IDX=" +
+                "/annotate?IDX=" +
                     IDX +
                     "&IName=" +
                     prev_IName +
@@ -159,7 +145,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "auto-next") {
             return res.redirect(
-                "/labeling?IDX=" +
+                "/annotate?IDX=" +
                     IDX +
                     "&IName=" +
                     next_IName +
@@ -212,8 +198,18 @@ async function updateLabels(req, res) {
                     classFilter,
             );
         }
+
+        // Fallback redirect to prevent request hanging if formAction is invalid/unmatched
+        return res.redirect(
+            "/annotate?IDX=" +
+                IDX +
+                "&IName=" +
+                IName +
+                "&curr_class=" +
+                currClass,
+        );
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error updating labels");
     }
 }

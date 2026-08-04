@@ -48,9 +48,8 @@ async function deleteProject(req, res) {
 
     rimraf(projectPath, function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         }
-        console.log("rimraf done");
     });
 
     try {
@@ -58,7 +57,7 @@ async function deleteProject(req, res) {
         await queries.managed.deleteAccessFromProject(admin, PName);
         await queries.managed.deleteProject(PName, admin);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error deleting project");
     }
 

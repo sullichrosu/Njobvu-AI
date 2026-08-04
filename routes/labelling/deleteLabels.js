@@ -7,15 +7,14 @@ async function deleteLabels(req, res) {
         const PName = req.params.PName;
         const Lid = req.params.Lid.split(",");
 
-        console.log("admin: ", admin);
-        console.log("PName", PName);
-        console.log("Lid", Lid);
+        global.logger.debug("admin: ", admin);
+        global.logger.debug("Lid", Lid);
 
         var publicPath = currentPath,
             mainPath = publicPath + "public/projects/",
             projectPath = mainPath + admin + "-" + PName;
 
-        console.log("ProjectPath", projectPath);
+        global.logger.debug("ProjectPath", projectPath);
 
         const placeholders = Lid.map(() => "?").join(",");
         const sql = `DELETE FROM Labels WHERE LID IN (${placeholders})`;
@@ -38,7 +37,7 @@ async function deleteLabels(req, res) {
             body: req.body,
         });
     } catch (error) {
-        console.error(error);
+        global.logger.error(error);
         if (!res.headersSent) {
             res.status(500).json({ message: error.message });
         }

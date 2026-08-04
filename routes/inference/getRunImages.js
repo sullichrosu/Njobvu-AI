@@ -100,7 +100,7 @@ async function getRunImages(req, res) {
 
         return res.status(200).send({ images });
     } catch (error) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching run images");
     }
 }

@@ -20,7 +20,7 @@ async function deleteImage(req, res) {
             await queries.project.deleteLabel(projectPath, images[i]);
             await queries.project.deleteValidation(projectPath, images[i]);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             await res
                 .status(500)
                 .send("There was an error deleting the image.");

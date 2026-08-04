@@ -22,7 +22,7 @@ async function batchChangeClass(req, res) {
             [class2, class1],
         );
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error batching classes");
     }
 

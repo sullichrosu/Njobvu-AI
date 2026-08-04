@@ -56,7 +56,7 @@ async function getAccessSettingsPage(req, res) {
             activePage: "accessSettings",
         });
     } catch (error) {
-        console.error("Error rendering accessSettings:", error);
+        global.logger.error("Error rendering accessSettings:", error);
         res.status(500).send("Error loading page");
     }
 }

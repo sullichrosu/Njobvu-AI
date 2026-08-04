@@ -1,6 +1,4 @@
 async function yolovx(req, res) {
-    console.log("new yolovx path");
-
     var PName = req.body.PName,
         Admin = req.body.Admin,
         user = req.cookies.Username,
@@ -21,7 +19,7 @@ async function yolovx(req, res) {
             { flag: "a" },
             function (err) {
                 if (err) {
-                    console.log(err);
+                    global.logger.error(err);
                 }
             },
         );

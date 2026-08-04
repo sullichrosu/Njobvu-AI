@@ -7,11 +7,14 @@ const rimraf = require("../../public/libraries/rimraf");
 const { Client } = require("../../queries/client");
 
 async function createProject(req, res) {
+    const files = req.files || {};
+
+    const uploadImages = files["upload_images"] || null;
+    const uploadVideo = files["upload_video"] || null;
+    const uploadBootstrap = files["upload_bootstrap"] ?? null;
+
     var publicPath = currentPath;
     var projectName = req.body["project_name"],
-        uploadImages = req.files["upload_images"],
-        uploadVideo = req.files["upload_video"],
-        uploadBootstrap = req.files["upload_bootstrap"],
         frameRate = req.body["frame_rate"],
         inputClasses = req.body["input_classes"],
         autoSave = 1,
@@ -43,14 +46,14 @@ async function createProject(req, res) {
         fs.mkdirSync(logsPath);
         fs.mkdirSync(pythonPath);
 
-        fs.writeFile(pythonPathFile, "", function (err) {
+        fs.writeFile(pythonPathFile, "", function(err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
-        fs.writeFile(darknetPathFile, "", function (err) {
+        fs.writeFile(darknetPathFile, "", function(err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     }
@@ -70,15 +73,15 @@ async function createProject(req, res) {
         await queries.project.migrateProjectDb(projectPath);
         await queries.managed.grantUserAccess(username, projectName, username);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error creating project");
     }
 
     try {
-        console.log(projectPath);
+        global.logger.debug(projectPath);
         const classes = await queries.project.getAllClasses(projectPath);
 
-        console.log(classes);
+        global.logger.debug(classes);
 
         const currentClasses = [];
         for (var i = 0; i < classes.rows.length; i++) {
@@ -91,7 +94,7 @@ async function createProject(req, res) {
             }
         }
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.send("Error creating project");
     }
 
@@ -99,7 +102,7 @@ async function createProject(req, res) {
         var zipPath = imagesPath + "/" + uploadImages.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
 
         await uploadImages.mv(zipPath);
-        console.log("File Uploaded", uploadImages.name);
+        global.logger.debug("File Uploaded", uploadImages.name);
 
         var zip = new StreamZip.async({ file: zipPath });
 
@@ -109,12 +112,12 @@ async function createProject(req, res) {
 
             rimraf(zipPath, (err) => {
                 if (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     res.status(500).send("Error removing zip file");
                 }
             });
 
-            files = fs.readdirSync(imagesPath);
+            const files = fs.readdirSync(imagesPath);
 
             for (var i = 0; i < files.length; i++) {
                 if (files[i] == "__MACOSX") {
@@ -122,7 +125,7 @@ async function createProject(req, res) {
                 }
 
                 if (files[i].endsWith(".zip")) {
-                    fs.unlink(imagesPath + "/" + files[i], () => {});
+                    fs.unlink(imagesPath + "/" + files[i], () => { });
                     continue;
                 }
 
@@ -136,7 +139,7 @@ async function createProject(req, res) {
                 files[i] = files[i].split(" ").join("_");
                 files[i] = files[i].split("+").join("_");
 
-                fs.rename(temp, imagesPath + "/" + files[i], () => {});
+                fs.rename(temp, imagesPath + "/" + files[i], () => { });
 
                 try {
                     await queries.project.addImages(
@@ -146,14 +149,14 @@ async function createProject(req, res) {
                         0,
                     );
                 } catch (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     return await res.status(500).send("Error uploading images");
                 }
             }
 
             if (!uploadBootstrap) res.send("Project creation successful");
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error extracting zip");
         }
     }
@@ -173,7 +176,7 @@ async function createProject(req, res) {
 
             cleanFiles();
         } catch (e) {
-            console.log("ERROR " + e);
+            global.logger.debug("ERROR " + e);
         }
 
         async function cleanFiles() {
@@ -192,7 +195,7 @@ async function createProject(req, res) {
                     files[i].endsWith(".avi") ||
                     files[i].endsWith(".mov")
                 ) {
-                    fs.unlink(imagesPath + "/" + files[i], () => {});
+                    fs.unlink(imagesPath + "/" + files[i], () => { });
                 }
 
                 if (files[i] === "blob") {
@@ -205,7 +208,7 @@ async function createProject(req, res) {
                 files[i] = files[i].split(" ").join("_");
                 files[i] = files[i].split("+").join("_");
 
-                fs.rename(temp, imagesPath + "/" + files[i], () => {});
+                fs.rename(temp, imagesPath + "/" + files[i], () => { });
 
                 await queries.project.addImages(projectPath, files[i], 0, 0);
             }
@@ -215,107 +218,154 @@ async function createProject(req, res) {
     }
 
     if (!uploadVideo && !uploadImages) {
-        return res.send("ERROR! NO PHOTO ZIP OR VIDEO FILE PROVIDED");
+        return res.send("Project creation successful");
     }
 
-    if (uploadBootstrap !== undefined) {
-        var bzipPath = bootstrapPath + "/" + uploadBootstrap.name;
-        var outBootstrapJson = "";
+    if (uploadBootstrap !== undefined && uploadBootstrap !== null) {
+        const bootstrapFiles = Array.isArray(uploadBootstrap) ? uploadBootstrap : [uploadBootstrap];
+        const outJsonFiles = [];
+        const modelFormat = req.body["model_format"] || "darknet";
 
-        await uploadBootstrap.mv(bzipPath);
+        for (let idx = 0; idx < bootstrapFiles.length; idx++) {
+            const file = bootstrapFiles[idx];
+            const modelDir = bootstrapPath + "/model_" + idx;
 
-        var bzip = new StreamZip.async({ file: bzipPath });
+            if (!fs.existsSync(modelDir)) {
+                fs.mkdirSync(modelDir);
+            }
 
-        try {
-            let weightBootstrapPath = "",
-                cfgBootstrapPath = "",
-                dataBootstrapPath = "";
+            const tempZipPath = modelDir + "/" + file.name;
+            await file.mv(tempZipPath);
 
-            await bzip.extract(null, bootstrapPath);
-            await bzip.close();
-            rimraf(bzipPath, (err) => {
-                if (err) {
-                    console.log(err);
-                }
-            });
+            const bzip = new StreamZip.async({ file: tempZipPath });
 
-            let bfiles = fs.readdirSync(bootstrapPath);
+            try {
+                let weightBootstrapPath = "",
+                    cfgBootstrapPath = "",
+                    dataBootstrapPath = "";
 
-            for (var i = 0; i < bfiles.length; i++) {
-                if (!bfiles[i].endsWith(".zip")) {
-                    let temp = bootstrapPath + "/" + bfiles[i];
+                await bzip.extract(null, modelDir);
+                await bzip.close();
+
+                rimraf(tempZipPath, (err) => {
+                    if (err) {
+                        global.logger.error(err);
+                    }
+                });
+
+                let bfiles = fs.readdirSync(modelDir);
+
+                for (var i = 0; i < bfiles.length; i++) {
+                    if (bfiles[i] === "__MACOSX") {
+                        continue;
+                    }
+                    if (bfiles[i].endsWith(".zip")) {
+                        continue;
+                    }
+
+                    let temp = modelDir + "/" + bfiles[i];
 
                     bfiles[i] = bfiles[i].trim();
                     bfiles[i] = bfiles[i].split(" ").join("_");
                     bfiles[i] = bfiles[i].split("+").join("_");
 
-                    fs.rename(temp, bootstrapPath + "/" + bfiles[i], () => {});
+                    const fullPath = modelDir + "/" + bfiles[i];
 
-                    if (bfiles[i].endsWith(".weights"))
-                        weightBootstrapPath = bootstrapPath + "/" + bfiles[i];
+                    if (modelFormat === "darknet") {
+                        switch (bfiles[i].split(".").at(-1)) {
+                            case "weights":
+                                weightBootstrapPath = fullPath;
+                                fs.rename(temp, fullPath, () => { });
 
-                    if (bfiles[i].endsWith(".cfg"))
-                        cfgBootstrapPath = bootstrapPath + "/" + bfiles[i];
+                                break;
+                            case "cfg":
 
-                    if (bfiles[i].endsWith(".data"))
-                        dataBootstrapPath = bootstrapPath + "/" + bfiles[i];
+                                cfgBootstrapPath = fullPath;
+                                fs.rename(temp, fullPath, () => { });
+                                break;
+                            case ".data":
+                                dataBootstrapPath = fullPath;
+                                fs.rename(temp, fullPath, () => { });
+
+                                break;
+                            default:
+                                fs.unlink(fullPath, () => { });
+
+                                break;
+                        }
+                    } else if (modelFormat === "ultralytics") {
+                        if (bfiles[i].endsWith(".pt")) {
+                            weightBootstrapPath = fullPath;
+                            fs.rename(temp, fullPath, () => { });
+                        } else {
+                            fs.unlink(fullPath, () => { });
+                        }
+                    }
                 }
 
-                if (
-                    !bfiles[i].endsWith(".weights") &&
-                    !bfiles[i].endsWith(".cfg") &&
-                    !bfiles[i].endsWith(".data")
-                ) {
-                    fs.unlink(bootstrapPath + "/" + bfiles[i], () => {});
+                const imagesToWrite = await readdirAsync(imagesPath);
+
+                let runData = imagesToWrite
+                    .map((img) => imagesPath + "/" + img)
+                    .join("\n");
+
+                let runTxtPath = modelDir + "/run.txt";
+
+                fs.writeFileSync(runTxtPath, runData);
+
+                var yoloScript = publicPath + "controllers/training/bootstrap.py";
+                const outBootstrapJson = modelDir + "/out.json";
+                outJsonFiles.push(outBootstrapJson);
+
+                let pythonBin = "python3";
+
+                if (global.configFile && global.configFile["default_python_venv_path"] && fs.existsSync(global.configFile["default_python_venv_path"])) {
+                    pythonBin = global.configFile["default_python_venv_path"];
                 }
+
+                var cmd;
+                if (modelFormat === "darknet") {
+                    let darknetPath = "/export/darknet";
+                    cmd = `python3 ${yoloScript} -d ${dataBootstrapPath} -c ${cfgBootstrapPath} -t ${runTxtPath} -y ${darknetPath} -w ${weightBootstrapPath} -o ${outBootstrapJson} -f ${modelFormat}`;
+                    process.chdir(darknetPath);
+                } else {
+                    cmd = `${pythonBin} ${yoloScript} -t ${runTxtPath} -w ${weightBootstrapPath} -o ${outBootstrapJson} -f ${modelFormat}`;
+                }
+
+                await new Promise((resolve) => {
+                    var child = exec(cmd, (err, stdout, stderr) => {
+                        if (err) {
+                            global.logger.debug(`This is the error: ${err.message}`);
+                        } else if (stderr) {
+                            global.logger.debug(`This is the stderr: ${stderr}`);
+                        }
+                    });
+
+                    child.on("error", (err) => {
+                        global.logger.error(`Error occurred: ${err.message}`);
+                        resolve();
+                    });
+
+                    child.on("exit", (code) => {
+                        global.logger.debug(`Child process exited with code ${code}`);
+                        resolve();
+                    });
+                });
+            } catch (err) {
+                global.logger.error(err);
+                return res.status(500).send("Error bootstrapping model " + file.name);
             }
+        }
 
-            imagesToWrite = await readdirAsync(imagesPath);
-
-            let runData = imagesToWrite
-                .map((i) => imagesPath + "/" + i)
-                .join("\n");
-
-            let runTxtPath = bootstrapPath + "/" + "run.txt";
-
-            fs.writeFileSync(runTxtPath, runData, (err) => {
-                if (err) throw err;
-            });
-
-            var yoloScript = publicPath + "controllers/training/bootstrap.py";
-
-            outBootstrapJson = bootstrapPath + "/out.json";
-
-            var darknetPath = "/export/darknet";
-            var cmd = `python3 ${yoloScript} -d ${dataBootstrapPath} -c ${cfgBootstrapPath} -t ${runTxtPath} -y ${darknetPath} -w ${weightBootstrapPath} -o ${outBootstrapJson}`;
-
-            process.chdir(darknetPath);
-
-            var child = exec(cmd, (err, stdout, stderr) => {
-                if (err) {
-                    console.log(`This is the error: ${err.message}`);
-                } else if (stderr) {
-                    console.log(`This is the stderr: ${stderr}`);
-                }
-            });
-
-            child.on("error", (err) => {
-                console.error(`Error occurred: ${err.message}`);
-            });
-
-            child.on("exit", (code) => {
-                console.log(`Child process exited with code ${code}`);
-                applyBootstrapLabels();
-            });
+        try {
+            await applyBootstrapLabels(outJsonFiles);
+            res.send("Project creation successful");
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error bootstrapping");
         }
 
-        async function applyBootstrapLabels() {
-            let rawLabelBootstrapData = fs.readFileSync(outBootstrapJson);
-            let labelBootstrapData = JSON.parse(rawLabelBootstrapData);
-
+        async function applyBootstrapLabels(outJsonFiles) {
             let imageResults;
             let classList;
 
@@ -323,8 +373,8 @@ async function createProject(req, res) {
                 imageResults = await queries.project.getAllImages(projectPath);
                 classList = await queries.project.getAllClasses(projectPath);
             } catch (err) {
-                console.error(err);
-                return res.status(500).send("Failure bootstrapping labels");
+                global.logger.error(err);
+                throw err;
             }
 
             imageResults = imageResults.rows;
@@ -339,67 +389,78 @@ async function createProject(req, res) {
             var labelID = 0;
 
             for (let i = 0; i < imageResults.length; i++) {
+                var imageName = imageResults[i].IName;
                 var img = fs.readFileSync(
-                        `${imagesPath}/${imageResults[i].IName}`,
-                    ),
-                    imgData = probe.sync(img),
+                    `${imagesPath}/${imageName}`,
+                ),
+                    imgData = global.probe.sync(img),
                     imgW = imgData.width,
                     imgH = imgData.height;
 
-                for (let j = 0; j < labelBootstrapData[i].objects.length; j++) {
-                    var boostrapObj = labelBootstrapData[i].objects[j];
-                    var relativeCoords = boostrapObj.relative_coordinates;
+                for (const outJsonFile of outJsonFiles) {
+                    if (!fs.existsSync(outJsonFile)) continue;
+                    let rawLabelBootstrapData = fs.readFileSync(outJsonFile);
+                    let labelBootstrapData = JSON.parse(rawLabelBootstrapData);
 
-                    var labelWidth = imgW * relativeCoords.width;
-                    var labelHeight = imgH * relativeCoords.height;
-                    var leftX = relativeCoords.center_x * imgW - labelWidth / 2;
-                    var bottomY =
-                        relativeCoords.center_y * imgH - labelHeight / 2;
-                    var className = boostrapObj.name;
-                    var confidence = Math.round(
-                        Number(boostrapObj.confidence) * 100,
-                    );
-                    labelID += 1;
+                    if (labelBootstrapData && labelBootstrapData[i] && labelBootstrapData[i].objects) {
+                        for (let j = 0; j < labelBootstrapData[i].objects.length; j++) {
+                            var boostrapObj = labelBootstrapData[i].objects[j];
+                            var relativeCoords = boostrapObj.relative_coordinates;
 
-                    if (!classSet.has(className)) {
-                        try {
-                            await queries.project.createClass(
-                                projectPath,
-                                className,
+                            var labelWidth = imgW * relativeCoords.width;
+                            var labelHeight = imgH * relativeCoords.height;
+                            var leftX = relativeCoords.center_x * imgW - labelWidth / 2;
+                            var bottomY =
+                                relativeCoords.center_y * imgH - labelHeight / 2;
+                            var className = boostrapObj.name;
+                            var confidence = Math.round(
+                                Number(boostrapObj.confidence) * 100,
                             );
-                        } catch (err) {
-                            console.error(err);
-                            return res
-                                .status(500)
-                                .send("Error adding class name to project");
+                            labelID += 1;
+
+                            if (!classSet.has(className)) {
+                                try {
+                                    await queries.project.createClass(
+                                        projectPath,
+                                        className,
+                                    );
+                                    classSet.add(className);
+                                } catch (err) {
+                                    global.logger.error(err);
+                                    throw err;
+                                }
+                            }
+
+                            try {
+                                await queries.project.createLabel(
+                                    projectPath,
+                                    Number(labelID),
+                                    className,
+                                    Number(leftX),
+                                    Number(bottomY),
+                                    Number(labelWidth),
+                                    Number(labelHeight),
+                                    labelHeight,
+                                );
+                            } catch (err) {
+                                global.logger.error(err);
+                                throw err;
+                            }
+
+                            try {
+                                await queries.project.createValidation(
+                                    projectPath,
+                                    confidence,
+                                    labelID,
+                                    className,
+                                    imageName,
+                                );
+                            } catch (err) {
+                                global.logger.error(err);
+                                throw err;
+                            }
                         }
                     }
-
-                    try {
-                        await queries.project.createLabel(
-                            projectPath,
-                            Number(labelID),
-                            className,
-                            Number(leftX),
-                            Number(bottomY),
-                            Number(labelWidth),
-                            Number(labelHeight),
-                            labelHeight,
-                        );
-                    } catch (err) {
-                        console.error(err);
-                        res.status(500).send("Error creating labels");
-                    }
-
-                    await queries.project.createValidation(
-                        projectPath,
-                        confidence,
-                        labelID,
-                        className,
-                        imageName,
-                    );
-
-                    classSet.add(className);
                 }
             }
         }

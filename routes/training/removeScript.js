@@ -18,7 +18,7 @@ async function removeScript(req, res) {
     for (var i = 0; i < scripts.length; i++) {
         script = `${scriptPath}/${scripts[i]}`;
         fs.unlink(script, (error) => {
-            console.log(error);
+            global.logger.error(error);
         });
     }
 

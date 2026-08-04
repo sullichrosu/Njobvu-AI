@@ -68,11 +68,11 @@
                                         <tr>
                                             <td>
                                                 <input type="checkbox" 
-                                                    aria-label="<%= label.IName%> label <%= label.LID %>" 
-                                                    "class="badCheckbox" name="bad_<%= label.LID %>"
+                                                    aria-label="<%= label.IName%> label <%= label.LID %>"
+                                                    class="badCheckbox" name="bad_<%= label.LID %>"
                                                     value="<%= label.LID %>">
                                             </td>
-                                            <td><a href="/labeling?IDX=<%=IDX%>&IName=<%= label.IName %>" />
+                                            <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= label.IName %>" />
                                                 <%= label.IName %>
                                             </td>
                                             <td>
@@ -189,6 +189,7 @@
                 document.querySelectorAll(".badCheckbox").forEach(checkbox => {
                     checkbox.checked = true;
                 });
+
                 document.getElementById("checkAllButton").style.display = 'none';
                 document.getElementById("uncheckAllButton").style.display = 'inline-block';
             });
@@ -197,6 +198,7 @@
                 document.querySelectorAll(".badCheckbox").forEach(checkbox => {
                     checkbox.checked = false;
                 });
+
                 document.getElementById("uncheckAllButton").style.display = 'none';
                 document.getElementById("checkAllButton").style.display = 'inline-block';
             });
@@ -215,6 +217,7 @@
             document.querySelectorAll(".badCheckbox:checked").forEach((checkbox) => {
                 selectedLabels.push(checkbox.value);
             });
+
             let selectedClass = document.querySelector('#switchLabels').value;
 
             if (selectedLabels.length === 0) {
@@ -272,13 +275,11 @@
             });
 
             if (selectedLabels.length === 0) {
-                alert("Please select at least one label to switch");
+                alert("Please select at least one label to delete");
                 return;
             }
 
             console.log('Selected Labels:', selectedLabels);
-
-
 
             try {
                 const response = await fetch(`/deleteBadLabels/${Admin}/${PName}/${selectedLabels}`, {

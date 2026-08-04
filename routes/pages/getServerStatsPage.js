@@ -3,8 +3,6 @@ const { promisify } = require("util");
 const execAsync = promisify(exec);
 
 async function getServerStatsPage(req, res) {
-    console.log("getServerStatsPage");
-
     // get URL variables
     var IDX = parseInt(req.query.IDX),
         IName = String(req.query.IName),
@@ -61,9 +59,9 @@ async function getServerStatsPage(req, res) {
         // const { stdout, stderr } = await exec( "uptime");
         const { stdout, stderr } = await execAsync("top -bn1|head -20");
         top_stdout = stdout;
-        console.log("this is top_stdout: ", top_stdout);
+        global.logger.debug("this is top_stdout: ", top_stdout);
     } catch (error) {
-        console.log(error);
+        global.logger.error(error);
         top_stdout = ""; // Set default value on error
     }
 
@@ -100,7 +98,7 @@ async function getServerStatsPage(req, res) {
             };
         });
     } catch (error) {
-        console.log("Error fetching GPU stats:", error);
+        global.logger.debug("Error fetching GPU stats:", error);
         gpu_info = []; // Set default value on error
     }
 
@@ -111,14 +109,14 @@ async function getServerStatsPage(req, res) {
     // 	// console.log("this is g_stdout: ", g_stdout);
     // }
     // catch( error) {
-    // 	console.log( error);
+    // 	global.logger.error(error);
     // }
 
     // var gpu_data = "";
 
     // parseString( g_stdout,  function( error, gpu_result) {
     // 	if (error) {
-    // 		console.log( error);
+    // 		global.logger.error(error);
     // 	} else {
     // 		// console.log( result);
     // 		gpu_data = JSON.stringify( gpu_result);

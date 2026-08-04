@@ -1,6 +1,4 @@
 async function getTrainingPage(req, res) {
-    console.log("getTrainingPage");
-
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
 
@@ -50,7 +48,7 @@ async function getTrainingPage(req, res) {
 
         fs.writeFile(python_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     } else if (!fs.existsSync(weights_path)) {
@@ -60,9 +58,9 @@ async function getTrainingPage(req, res) {
     // connect to project database
     var tdb = new sqlite3.Database(path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to tdb.");
+        global.logger.info("Connected to tdb.")
     });
 
     // create async database object functions
@@ -71,12 +69,12 @@ async function getTrainingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     tdb.allAsync = function (sql) {
@@ -84,12 +82,12 @@ async function getTrainingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -206,9 +204,8 @@ async function getTrainingPage(req, res) {
     // close the database
     tdb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("tdb closed successfully");
         }
     });
 

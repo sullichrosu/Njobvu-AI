@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+.venv
+.git
+.gitignore
+.github
+*.exe
+server.log
+tmp
+runs
+build
+public/projects/*
+!public/projects/.gitkeep
+.DS_Store

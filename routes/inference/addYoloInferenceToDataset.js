@@ -40,7 +40,7 @@ async function addYoloInferenceToDataset(req, res) {
         try {
             existingClasses = await queries.project.getAllClasses(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error fetching classes");
         }
 
@@ -63,10 +63,10 @@ async function addYoloInferenceToDataset(req, res) {
                 .pipe(csv())
                 .on("data", (row) => {
                     totalRows++;
-                    console.log("RAW ROW:", JSON.stringify(row));
+                    global.logger.debug("RAW ROW:", JSON.stringify(row));
 
                     const conf = parseFloat(row["Confidence"]);
-                    console.log(`  conf parsed: ${conf}, minConfidence: ${minConfidence}, passes: ${conf >= minConfidence}`);
+                    global.logger.debug(`  conf parsed: ${conf}, minConfidence: ${minConfidence}, passes: ${conf >= minConfidence}`);
                     if (isNaN(conf) || conf < minConfidence) return;
                     passedConfidence++;
 
@@ -81,7 +81,7 @@ async function addYoloInferenceToDataset(req, res) {
                         }
                     }
 
-                    console.log(`  class: ${className}, classId: ${classId}, map:`, JSON.stringify(classIndexMap));
+                    global.logger.debug(`  class: ${className}, classId: ${classId}, map:`, JSON.stringify(classIndexMap));
 
                     // skip detections for classes not in this project
                     if (classId === undefined) return;
@@ -104,10 +104,8 @@ async function addYoloInferenceToDataset(req, res) {
                 .on("end", resolve)
                 .on("error", reject);
         });
-
-        console.log(`CSV parse complete: totalRows=${totalRows}, passedConfidence=${passedConfidence}, passedClassCheck=${passedClassCheck}`);
-        console.log(`detectionsByImage keys:`, Object.keys(detectionsByImage));
-        console.log(`classIndexMap:`, JSON.stringify(classIndexMap));
+        global.logger.debug(`detectionsByImage keys:`, Object.keys(detectionsByImage));
+        global.logger.debug(`classIndexMap:`, JSON.stringify(classIndexMap));
 
         let imagesCopied = 0;
         let labelFilesWritten = 0;
@@ -147,9 +145,9 @@ async function addYoloInferenceToDataset(req, res) {
             if (!fs.existsSync(destImagePath)) {
                 fs.copyFileSync(srcImagePath, destImagePath);
                 imagesCopied++;
-                console.log(`Copied ${imgName} to ${destImagePath}`);
+                global.logger.info(`Copied ${imgName} to ${destImagePath}`)
             } else {
-                console.log(`Image already exists at destination, skipping copy: ${destImagePath}`);
+                global.logger.debug(`Image already exists at destination, skipping copy: ${destImagePath}`)
             }
 
             let imgWidth = 1;
@@ -163,15 +161,15 @@ async function addYoloInferenceToDataset(req, res) {
                 imgWidth = dimensions.width;
                 imgHeight = dimensions.height;
 
-                console.log(`Dimensions for ${imgName}: ${imgWidth}x${imgHeight}`);
+                global.logger.debug(`Dimensions for ${imgName}: ${imgWidth}x${imgHeight}`);
             } catch (e) {
-                console.error(`Could not get dimensions for ${imgName}:`, e);
+                global.logger.error(`Could not get dimensions for ${imgName}:`, e);
             }
 
             try {
                 await queries.project.addImages(projectPath, imgName, 0, 0);
             } catch (dbErr) {
-                console.error(`Warning: could not register ${imgName} in DB:`, dbErr);
+                global.logger.error(`Warning: could not register ${imgName} in DB:`, dbErr);
             }
 
             // write YOLO label file, one line per detection
@@ -209,7 +207,7 @@ async function addYoloInferenceToDataset(req, res) {
                         imgName
                     );
                 } catch (labelErr) {
-                    console.error(`Warning: could not insert label for ${imgName}:`, labelErr);
+                    global.logger.error("Warning: could not insert label in DB", labelErr)
                 }
             }
         }
@@ -223,7 +221,7 @@ async function addYoloInferenceToDataset(req, res) {
         });
 
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error adding inference results to dataset");
     }
 }

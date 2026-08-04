@@ -24,7 +24,7 @@ async function boostrap(req, res) {
     if (fs.existsSync(mergePath)) {
         rimraf(mergePath, (err) => {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             } else {
             }
         });
@@ -34,7 +34,7 @@ async function boostrap(req, res) {
         fs.mkdirSync(mergePath);
         fs.mkdirSync(mergeImages);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error making merge directories");
     }
 
@@ -42,9 +42,9 @@ async function boostrap(req, res) {
         projectPath + "/" + projectName + ".db",
         (err) => {
             if (err) {
-                return console.error(err.message);
+                return global.logger.error(err.message);
             }
-            console.log("Connected to aidb.");
+            global.logger.info("Connected to aidb.")
         },
     );
 
@@ -61,7 +61,7 @@ async function boostrap(req, res) {
 
     rimraf(zipPath, (err) => {
         if (err) {
-            console.log(err);
+            global.logger.error(err);
             return res.send("ERROR! " + err);
         }
     });
@@ -89,7 +89,7 @@ async function boostrap(req, res) {
                 newImages.push(newFiles[i]);
                 bootstrapString += newFiles[i] + "\n";
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res.stauts(500).send("Error inserting images");
             }
         }
@@ -102,7 +102,7 @@ async function boostrap(req, res) {
 
     rimraf(mergePath, (err) => {
         if (err) {
-            console.log(err);
+            global.logger.error(err);
         }
     });
 

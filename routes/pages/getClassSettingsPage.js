@@ -29,9 +29,9 @@ async function getClassSettingsPage(req, res) {
 
     var cfdb = new sqlite3.Database(path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to cfdb.");
+        global.logger.info("Connected to cfdb.")
     });
 
     cfdb.allAsync = function (sql) {
@@ -39,12 +39,12 @@ async function getClassSettingsPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -52,9 +52,8 @@ async function getClassSettingsPage(req, res) {
 
     cfdb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("cfdb closed successfully");
         }
     });
 
@@ -81,7 +80,7 @@ async function getClassSettingsPage(req, res) {
             activePage: "classSettings",
         });
     } catch (error) {
-        console.error("Error rendering classSettings:", error);
+        global.logger.error("Error rendering classSettings:", error);
         res.status(500).send("Error loading page");
     }
 }

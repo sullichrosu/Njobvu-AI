@@ -1,6 +1,4 @@
 async function getUserPage(req, res) {
-    console.log("getUserPage");
-
     var user = req.cookies.Username;
     if (user == undefined) {
         return res.redirect("/");

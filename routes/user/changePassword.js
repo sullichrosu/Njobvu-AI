@@ -9,18 +9,18 @@ async function changePassword(req, res) {
     try {
         user = await queries.managed.getUser(username);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.send({ Success: "Could not get current user" });
     }
 
-    console.log(user);
+    global.logger.debug(user);
 
     if (!bcrypt.compareSync(oldPassword, user.row.Password)) {
         return res.send({ Success: "Wrong Password!" });
     } else {
         bcrypt.hash(newPassword, 10, async function (err, hash) {
             if (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res.send({
                     Success:
                         "Password hashing error. Password has not been changed",
@@ -36,7 +36,7 @@ async function changePassword(req, res) {
                         null,
                     );
                 } catch (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     return res.send({ Success: "Error updating password" });
                 }
 

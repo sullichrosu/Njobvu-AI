@@ -14,7 +14,7 @@ async function addUser(req, res) {
     try {
         existingUsers = await queries.managed.checkUserExists(NewUser);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         res.status(404).send("That user does not exist");
         return;
     }
@@ -28,7 +28,7 @@ async function addUser(req, res) {
                 Admin,
             );
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             res.status(500).send("Could not check if user has access");
         }
 
@@ -36,7 +36,7 @@ async function addUser(req, res) {
             try {
                 await queries.managed.grantUserAccess(NewUser, PName, Admin);
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 res.status(500).send("Error granting user access");
             }
         }

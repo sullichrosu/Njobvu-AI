@@ -10,17 +10,17 @@ async function updateProject(req, res) {
         projectPath = mainPath + admin + "-" + PName;
 
     var db = new sqlite3.Database(projectPath + "/" + PName + ".db", (err) => {
-        console.log(db);
+        global.logger.debug(db);
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to db.");
+        global.logger.info("Connected to db.")
     });
 
     try {
         await queries.managed.updateProjectName(project_name, PName, admin);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error transferring admin");
     }
 }

@@ -28,7 +28,7 @@ async function deleteClass(req, res) {
             await queries.project.sql(projectPath, deleteClasses, [classes[i]]);
             await queries.project.sql(projectPath, deleteValid, [classes[i]]);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             continue;
         }
     }

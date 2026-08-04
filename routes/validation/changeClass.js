@@ -22,7 +22,7 @@ async function soloChangeClass(req, res) {
             [selectedClass, LID],
         );
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error switching class");
     }
 

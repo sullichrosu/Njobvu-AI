@@ -3,8 +3,6 @@ const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 
 async function getProjectPage(req, res) {
-    console.log("getProjectPage");
-
     var public_path = currentPath;
 
     // get URL variables
@@ -35,7 +33,7 @@ async function getProjectPage(req, res) {
     var admin = projects[num].Admin;
 
     var project_path = path.join(currentPath, "public", "projects");
-    console.log("this is the project path", project_path);
+    global.logger.debug("this is the project path", project_path);
     var db_path = path.join(
         project_path,
         admin + "-" + PName,
@@ -50,16 +48,16 @@ async function getProjectPage(req, res) {
     }
 
     if (!fs.existsSync(db_path)) {
-        console.error("Database file does not exist:", db_path);
+        global.logger.error("Database file does not exist:", db_path);
         // Redirect or render an error page, as the project is not correctly set up.
         return res.redirect("/home?error=project_not_found");
     }
 
     var pdb = new sqlite3.Database(db_path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to pdb.");
+        global.logger.info("Connected to pdb.")
     });
 
     // create async database object functions
@@ -68,12 +66,12 @@ async function getProjectPage(req, res) {
         return new Promise(function(resolve, reject) {
             that.get(sql, function(err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
             return null;
         });
     };
@@ -82,12 +80,12 @@ async function getProjectPage(req, res) {
         return new Promise(function(resolve, reject) {
             that.all(sql, function(err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
             return [];
         });
     };
@@ -126,9 +124,8 @@ async function getProjectPage(req, res) {
     }
     pdb.close(function(err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("pdb closed successfully");
         }
     });
     res.render("project", {

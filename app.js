@@ -2,13 +2,10 @@ const express = require('express');
 const path = require("path");
 const cookieParser = require("cookie-parser")
 const fileUpload = require("express-fileupload")
+global.logger = require("./utils/logger");
 const app = express();
 
-// init API routes
-
 const api = require("./routes/api");
-
-// page's variable's to render on routes
 
 const {
     getClassificationPage,
@@ -51,17 +48,16 @@ const {
 
 // middleware
 
-app.set("views", __dirname + "/views"); // set express to look in this folder to render our view
-app.set("view engine", "ejs"); // configure template engine
+app.set("views", __dirname + "/views");
+app.set("view engine", "ejs");
+app.use(global.logger.requestMiddleware);
 app.use(express.urlencoded({ extended: false }));
 app.use(fileUpload());
-app.use(express.json()); // parse form data client
-app.use(express.static(path.join(__dirname, "public"))); // configure express to use public folder
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 app.use(cookieParser());
-//app.use(session({secret:"Secret Code Don't Tell Anyone", cookie: { maxAge: 30 * 1000 }})); // configure fileupload
 app.use("/", api);
 
-//routes to get all the page's 
 
 app.get("/", getLoginPage);
 app.get("/signup", getSignupPage);
@@ -81,7 +77,6 @@ app.get("/labeling", getLabelingPage);
 app.get("/stats", getStatsPage);
 app.get("/customTraining", getCustomTrainingPage);
 app.get("/training", getTrainingPage);
-// app.get("/processing", getProcessingPage);
 app.get("/inference", getInferencePage);
 app.get("/yolo", getYoloPage);
 app.get("/yolo/yolov3Settings", getYolo3SettingsPage);
@@ -98,7 +93,7 @@ app.get("/configV", getValidationConfigPage);
 app.get("/statsV", getValidationStatsPage);
 app.get("/createClassification", getClassificationPage);
 app.get("/api/gpuinfo");
-// everything else -> 404
+
 app.get("*", get404Page);
 
 module.exports = app;

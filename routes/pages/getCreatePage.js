@@ -1,6 +1,5 @@
 async function getCreatePage(req, res) {
     username = req.cookies.Username;
-    console.log("getCreatePage");
     var projects = await db.allAsync(
         "SELECT * FROM Access WHERE Admin = '" + username + "'",
     );

@@ -15,7 +15,7 @@ const importDataset = async (req, res) => {
 
         const importType = req.body['import-type'];
         const projectName = req.body.projectName;
-        const dbName = req.body.dbName;
+        const dbName = req.body.dbName || projectName;
         const classificationDir = req.body.classificationDir;
         const username = req.cookies.Username;
 
@@ -38,9 +38,7 @@ const importDataset = async (req, res) => {
         const mainPath = path.join(__dirname, '..', '..', 'public', 'projects');
         const projectPath = path.join(mainPath, `${username}-${projectName}`);
 
-        // If a project with the same name exists, delete it to ensure a fresh import.
         if (fs.existsSync(projectPath)) {
-            console.log(`Project directory ${projectPath} already exists. Removing for a fresh import.`);
             fs.rmSync(projectPath, { recursive: true, force: true });
         }
 
@@ -53,7 +51,7 @@ const importDataset = async (req, res) => {
         const pythonPathFile = path.join(trainingPath, 'Paths.txt');
         const darknetPathFile = path.join(trainingPath, 'darknetPaths.txt');
 
-        // Create the project directory structure
+        // project directory structure
         fs.mkdirSync(projectPath, { recursive: true });
         fs.mkdirSync(imagesPath);
         fs.mkdirSync(bootstrapPath);
@@ -71,11 +69,22 @@ const importDataset = async (req, res) => {
             if (!dbName) {
                 return res.status(400).json({ success: false, message: 'Database name is required for classification import.' });
             }
+
             args.push('-d', projectName, '-r', 'class');
+        } else if (importType === 'yolo' || importType === 'kwcoco') {
+            if (req.files && req.files.weights) {
+                const weightsFile = req.files.weights;
+                const weightsPath = path.join(uploadPath, Date.now() + '-' + weightsFile.name);
+                await weightsFile.mv(weightsPath);
+                args.push('-w', weightsPath);
+            }
+
+            args.push('-d', projectName, '-r', importType === 'yolo' ? 'yolo' : 'coco');
         } else if (importType === 'inference' || importType === 'inference-classification') {
             if (!req.files.weights) {
                 return res.status(400).json({ success: false, message: 'Weights file is required for inference.' });
             }
+
             const weightsFile = req.files.weights;
             const weightsPath = path.join(uploadPath, Date.now() + '-' + weightsFile.name);
             await weightsFile.mv(weightsPath);
@@ -99,20 +108,20 @@ const importDataset = async (req, res) => {
 
         pythonProcess.stdout.on('data', (data) => {
             const log_data = data.toString();
-            console.log('Python Script:', log_data);
+            global.logger.debug('Python Script:', log_data);
             stdout += log_data;
         });
 
         pythonProcess.stderr.on('data', (data) => {
             const log_data = data.toString();
-            console.error('Python Script Error:', log_data);
+            global.logger.error('Python Script Error:', log_data);
             stderr += log_data;
         });
 
         pythonProcess.on('close', async (code) => {
             if (code !== 0) {
-                console.error(`python script exited with code ${code}:`);
-                console.error(stderr);
+                global.logger.error(`python script exited with code ${code}:`);
+                global.logger.error(stderr);
                 return res.status(500).json({ success: false, message: stderr });
             }
 
@@ -129,11 +138,15 @@ const importDataset = async (req, res) => {
 
                 await queries.managed.grantUserAccess(username, projectName, username);
 
-                // Add the new project's database client to the global pool of active clients
+                // add the new project's database client to the global pool of active clients
+                if (!global.projectDbClients) {
+                    global.projectDbClients = {};
+                }
                 const newDbPath = path.join(projectPath, `${projectName}.db`);
                 global.projectDbClients[projectPath] = new Client(newDbPath);
 
-                // You might need to explicitly open the new connection if the Client class doesn't do it automatically.
+                // you might need to explicitly open the new connection if the Client class doesn't do it automatically.
+                // regardless, the open function is idempotent and therefore safe to call even if it occurs in the constructor
                 const newClient = global.projectDbClients[projectPath];
                 if (newClient && typeof newClient.open === 'function') {
                     newClient.open();
@@ -141,12 +154,13 @@ const importDataset = async (req, res) => {
 
                 res.json({ success: true, message: 'Import process completed.', output: stdout });
             } catch (dbError) {
-                console.error('Database update failed after import:', dbError);
+                global.logger.error('Database update failed after import:', dbError);
+
                 return res.status(500).json({ success: false, message: 'Project imported but failed to update main database.' });
             }
         });
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         res.status(500).json({ success: false, message: 'File upload failed' });
     }
 };

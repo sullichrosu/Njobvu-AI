@@ -1,6 +1,4 @@
 async function python(req, res) {
-    console.log("new python path");
-
     var PName = req.body.PName,
         Admin = req.body.Admin,
         user = req.cookies.Username,
@@ -21,7 +19,7 @@ async function python(req, res) {
             { flag: "a" },
             function (err) {
                 if (err) {
-                    console.log(err);
+                    global.logger.error(err);
                 }
             },
         );

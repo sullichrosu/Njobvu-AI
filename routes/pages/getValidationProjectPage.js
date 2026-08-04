@@ -1,6 +1,4 @@
 async function getValidationProjectPage(req, res) {
-    console.log("getValidationProjectPage");
-
     var public_path = currentPath;
 
     // get URL variables
@@ -52,9 +50,9 @@ async function getValidationProjectPage(req, res) {
 
     var pdb = new sqlite3.Database(db_path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to pdb.");
+        global.logger.info("Connected to pdb.")
     });
 
     // create async database object functions
@@ -63,12 +61,12 @@ async function getValidationProjectPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     pdb.allAsync = function (sql) {
@@ -76,12 +74,12 @@ async function getValidationProjectPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     var projectClasses = await pdb.allAsync("SELECT * FROM `Classes`");
@@ -323,9 +321,8 @@ async function getValidationProjectPage(req, res) {
     }
     pdb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("pdb closed successfully");
         }
     });
 

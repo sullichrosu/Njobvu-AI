@@ -23,7 +23,7 @@ async function removeWeights(req, res) {
 
         fs.unlink(weight, (error) => {
             if (error) {
-                console.log(error);
+                global.logger.error(error);
             }
         });
     }

@@ -40,7 +40,6 @@ async function deleteUser(req, res) {
                         err,
                     );
                 } else {
-                    console.log("User directory contents successfuly deleted");
                 }
             });
         }
@@ -74,7 +73,7 @@ async function deleteUser(req, res) {
         await queries.managed.deleteAllProjectsForAdmin(user);
         await queries.managed.deleteUser(user);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error deleting user");
     }
 

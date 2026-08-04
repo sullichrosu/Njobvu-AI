@@ -1,6 +1,4 @@
 async function getValidationLabelingPage(req, res) {
-    console.log("getValidationLabelingPage");
-
     var IDX = parseInt(req.query.IDX),
         IName = String(req.query.IName),
         curr_class = req.query.curr_class,
@@ -42,9 +40,9 @@ async function getValidationLabelingPage(req, res) {
         project_path + "/" + PName + ".db",
         (err) => {
             if (err) {
-                return console.error(err.message);
+                return global.logger.error(err.message);
             }
-            console.log("Connected to ldb.");
+            global.logger.info("Connected to ldb.")
         },
     );
 
@@ -54,12 +52,12 @@ async function getValidationLabelingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     ldb.allAsync = function (sql) {
@@ -67,12 +65,12 @@ async function getValidationLabelingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     ldb.eachAsync = function (sql) {
@@ -80,12 +78,12 @@ async function getValidationLabelingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.each(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -291,7 +289,7 @@ async function getValidationLabelingPage(req, res) {
     var access = [];
 
     if (curr_class == null) {
-        curr_class = results1[0].CName;
+        curr_class = (results1 && results1.length > 0) ? results1[0].CName : '';
     }
 
     for (var i = 0; i < acc.length; i++) {
@@ -342,9 +340,8 @@ async function getValidationLabelingPage(req, res) {
         // close the database
         ldb.close(function (err) {
             if (err) {
-                console.error(err);
+                global.logger.error(err);
             } else {
-                console.log("ldb closed successfully");
             }
         });
 

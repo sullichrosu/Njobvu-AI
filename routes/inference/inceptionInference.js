@@ -54,7 +54,7 @@ async function inceptionInference(req, res) {
         try {
             existingClasses = await queries.project.getAllClasses(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error fetching classes");
         }
 
@@ -71,8 +71,8 @@ async function inceptionInference(req, res) {
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {
-                console.error(err);
-                console.log(`Error: ${err.message}`);
+                global.logger.error(err);
+                global.logger.debug(`Error: ${err.message}`);
 
                 if (err.message != "stdout maxBuffer length exceeded") {
                     success = err.message;
@@ -83,7 +83,7 @@ async function inceptionInference(req, res) {
                     );
                 }
             } else if (stderr) {
-                console.log(`stderr: ${stderr}`);
+                global.logger.debug(`stderr: ${stderr}`);
 
                 if (stderr != "stdout maxBuffer length exceeded") {
                     fs.writeFileSync(
@@ -107,7 +107,7 @@ async function inceptionInference(req, res) {
 
         res.send({ Success: `Inception Inference Started` });
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error running inference");
     }
 }

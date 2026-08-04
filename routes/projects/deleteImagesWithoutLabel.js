@@ -2,7 +2,7 @@ const queries = require("../../queries/queries");
 
 async function deleteImagesWithoutLabel(req, res) {
     try {
-        console.log(req.body);
+        global.logger.debug(req.body);
         let projectName = req.body.PName,
             admin = req.body.Admin,
             user = req.cookies.Username,
@@ -19,7 +19,7 @@ async function deleteImagesWithoutLabel(req, res) {
 
         return res.redirect(`/project?IDX=${projectIndex}`);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error deleting images");
     }
 }

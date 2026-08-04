@@ -1,6 +1,4 @@
 async function getProcessingPage(req, res) {
-    console.log("getProcessingPage");
-
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
 
@@ -57,12 +55,12 @@ async function getProcessingPage(req, res) {
         fs.mkdirSync(weights_path);
         fs.writeFile(python_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
         fs.writeFile(darknet_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     }
@@ -81,7 +79,7 @@ async function getProcessingPage(req, res) {
     if (!fs.existsSync(darknet_path_file)) {
         fs.writeFile(darknet_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     }
@@ -89,9 +87,9 @@ async function getProcessingPage(req, res) {
     // connect to project database
     var tdb = new sqlite3.Database(path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to tdb.");
+        global.logger.info("Connected to tdb.")
     });
 
     // create async database object functions
@@ -100,12 +98,12 @@ async function getProcessingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     tdb.allAsync = function (sql) {
@@ -113,12 +111,12 @@ async function getProcessingPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -245,9 +243,9 @@ async function getProcessingPage(req, res) {
 
             err_file.push("NULL");
             err.push("NULL");
-            console.log("");
-            console.log("train logs:" + logs);
-            console.log("");
+            global.logger.debug("");
+            global.logger.debug("train logs:" + logs);
+            global.logger.debug("");
             // Add weights to array
             for (var j = 0; j < logs.length; j++) {
                 if (j == done_idx) {
@@ -291,12 +289,12 @@ async function getProcessingPage(req, res) {
                 weights_names.push(logs[j]);
             }
         }
-        console.log("");
-        console.log("weight:" + weight);
-        console.log("weight.length:" + weight.length);
-        console.log("weights_names:" + weights_names);
-        console.log("weights_names.length:" + weights_names.length);
-        console.log("");
+        global.logger.debug("");
+        global.logger.debug("weight:" + weight);
+        global.logger.debug("weight.length:" + weight.length);
+        global.logger.debug("weights_names:" + weights_names);
+        global.logger.debug("weights_names.length:" + weights_names.length);
+        global.logger.debug("");
         weights.push(weight);
         weights_files.push(weights_names);
     }
@@ -364,8 +362,7 @@ async function getProcessingPage(req, res) {
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
                 weight_inf.push(`${logs_inf[j]}`);
                 weights_names_inf.push(logs_inf[j]);
-                console.log("Got Here");
-                console.log("logs_inf[j]:" + logs_inf[j]);
+                global.logger.debug("logs_inf[j]:" + logs_inf[j]);
             }
         } else {
             run_status_inf.push("RUNNING");
@@ -392,12 +389,12 @@ async function getProcessingPage(req, res) {
         // if(`${logs_inf[j]}` == "datatovalues.py" || `${logs_inf[j]}`  == "output") {
         // 		continue;
         // }
-        console.log("");
-        console.log("weight_inf:" + weight_inf);
-        console.log("weight_inf.length:" + weight_inf.length);
-        console.log("weights_names_inf:" + weights_names_inf);
-        console.log("weights_names_inf.length:" + weights_names_inf.length);
-        console.log("");
+        global.logger.debug("");
+        global.logger.debug("weight_inf:" + weight_inf);
+        global.logger.debug("weight_inf.length:" + weight_inf.length);
+        global.logger.debug("weights_names_inf:" + weights_names_inf);
+        global.logger.debug("weights_names_inf.length:" + weights_names_inf.length);
+        global.logger.debug("");
         weights_inf.push(weight_inf);
         weights_files_inf.push(weights_names_inf);
     }
@@ -405,9 +402,8 @@ async function getProcessingPage(req, res) {
     // close the database
     tdb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("tdb closed successfully");
         }
     });
 

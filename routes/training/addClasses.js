@@ -25,7 +25,7 @@ async function addClasses(req, res) {
     try {
         existingClasses = await queries.project.getAllClasses(projectPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching existing classes");
     }
 

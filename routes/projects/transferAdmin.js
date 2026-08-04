@@ -33,7 +33,7 @@ async function transferAdmin(req, res) {
         );
         await queries.managed.sql("PRAGMA foreign_keys=on");
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Erorr transferring admin role");
     }
 

@@ -17,9 +17,9 @@ async function deleteRun(req, res) {
 
     rimraf(runPath, function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         }
-        console.log(`${runPath} deleted`);
+        global.logger.debug(`${runPath} deleted`);
     });
     return res.redirect("/training?IDX=" + IDX);
 }

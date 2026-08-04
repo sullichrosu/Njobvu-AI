@@ -33,7 +33,7 @@ async function downloadDataset(req, res) {
         existingClasses = await queries.project.getAllClasses(projectPath);
         existingImages = await queries.project.getAllImages(projectPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching existing resources");
     }
 
@@ -61,9 +61,9 @@ async function downloadDataset(req, res) {
                     .extract(cropOptions) // Crop with x, y, w, h
                     .toFile(targetPath); // Save to the target path
 
-                console.log(`Image cropped successfully: ${targetPath}`);
+                global.logger.debug(`Image cropped successfully: ${targetPath}`);
             } catch (err) {
-                console.error(`error cropping image: ${err.message}`);
+                global.logger.error(`error cropping image: ${err.message}`);
             }
         };
 
@@ -84,7 +84,7 @@ async function downloadDataset(req, res) {
                 fs.mkdirSync(folderVal);
             }
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
         }
 
         let imageClassMapping;
@@ -93,7 +93,7 @@ async function downloadDataset(req, res) {
             imageClassMapping =
                 await queries.project.getImageClassMapping(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error getting image class mapping");
         }
 
@@ -109,14 +109,14 @@ async function downloadDataset(req, res) {
                     fs.mkdirSync(classFolderTrain);
                 }
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
             }
             try {
                 if (!fs.existsSync(classFolderVal)) {
                     fs.mkdirSync(classFolderVal);
                 }
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
             }
 
             const isValidation = Math.random() < 0.2;
@@ -164,36 +164,31 @@ async function downloadDataset(req, res) {
         });
 
         output.on("close", () => {
-            console.log(`${archive.pointer()} total bytes`);
+            global.logger.debug(`${archive.pointer()} total bytes`);
             console.log(
                 "archiver has been finalized and the output file descriptor has closed.",
             );
             dddb.close((err) => {
                 if (err) {
-                    console.error(err);
+                    global.logger.error(err);
                 } else {
-                    console.log("dddb closed successfully");
                 }
             });
             res.download(folderZip, (err) => {
                 if (err) {
-                    console.error("Error downloading the file:", err);
+                    global.logger.error("Error downloading the file:", err);
                 } else {
-                    console.log("File downloaded successfully");
-
                     fs.unlink(folderZip, (err) => {
                         if (err) {
-                            console.error("Error deleting the zip file:", err);
+                            global.logger.error("Error deleting the zip file:", err);
                         } else {
-                            console.log("Zip file deleted successfully");
                         }
                     });
 
                     fs.rm(folderName, { recursive: true }, (err) => {
                         if (err) {
-                            console.error("Error deleting the folder:", err);
+                            global.logger.error("Error deleting the folder:", err);
                         } else {
-                            console.log("Folder deleted successfully");
                         }
                     });
                 }
@@ -315,7 +310,7 @@ async function downloadDataset(req, res) {
         try {
             labels = await queries.project.getAllLabels(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Could not fetch labels");
         }
 
@@ -386,7 +381,7 @@ async function downloadDataset(req, res) {
         try {
             labels = await queries.project.getAllLabels(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Could not fetch labels");
         }
 
@@ -501,7 +496,7 @@ async function downloadDataset(req, res) {
         try {
             images = await queries.project.getAllImages(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error fetching images.");
         }
 
@@ -714,7 +709,7 @@ async function downloadDataset(req, res) {
                     imgName,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res.status(500).send("Error fetching images");
             }
 
@@ -746,7 +741,6 @@ async function downloadDataset(req, res) {
             var xmlname = imgName.split(".")[0] + ".xml";
             fs.writeFile(downloadsPath + "/" + xmlname, data, (err) => {
                 if (err) throw err;
-                console.log("done writing xml");
             });
             archive.file(downloadsPath + "/" + xmlname, { name: xmlname });
         }
@@ -755,7 +749,7 @@ async function downloadDataset(req, res) {
         try {
             images = await queries.project.getAllImages(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error fetching images");
         }
 
@@ -802,7 +796,7 @@ async function downloadDataset(req, res) {
                     existingImages.rows[i].IName,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res
                     .status(500)
                     .send("Error fetching class name for image");
@@ -821,7 +815,7 @@ async function downloadDataset(req, res) {
                             className[j].CName,
                         );
                 } catch (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     return res
                         .status(500)
                         .send(
@@ -846,7 +840,7 @@ async function downloadDataset(req, res) {
                     existingImages.rows[i].IName,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res.status(500).send("Error fetching image");
             }
 
@@ -882,8 +876,6 @@ async function downloadDataset(req, res) {
             });
 
             archive.pipe(output);
-            console.log("Organize Data");
-
             var rawLabelBootstrapData = fs.readFileSync(
                 bootstrapPath + "/out.json",
             );

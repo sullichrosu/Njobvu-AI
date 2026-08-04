@@ -31,9 +31,7 @@ async function getProjectSettingsPage(req, res) {
             "'",
     );
 
-    console.log("username: ", user);
-    console.log("getProjectSettingsPage");
-
+    global.logger.debug("username: ", user);
     try {
         res.render("settings/projSettings", {
             title: "projSettings",
@@ -46,7 +44,7 @@ async function getProjectSettingsPage(req, res) {
             activePage: "projSettings",
         });
     } catch (error) {
-        console.error("Error rendering projSettings:", error);
+        global.logger.error("Error rendering projSettings:", error);
         res.status(500).send("Error loading page");
     }
 }

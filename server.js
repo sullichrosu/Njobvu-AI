@@ -1,6 +1,4 @@
-////////////////////////////////////////////////////////
-// Set up:
-////////////////////////////////////////////////////////
+global.logger = require('./utils/logger');
 const app = require('./app');
 const { Client } = require("./queries/client");
 
@@ -13,7 +11,6 @@ const hostname = configFile.hostname;
 global.fs = require("fs");
 global.unzip = require("unzip-stream");
 global.StreamZip = require("node-stream-zip");
-//global.DecompressZip = require('decompress-zip');
 global.glob = require("glob");
 global.probe = require("probe-image-size");
 global.csv = require("csvtojson");
@@ -23,7 +20,6 @@ global.archiver = require("archiver");
 (global.sqlite3 = require("sqlite3").verbose()),
     (global.readline = require("readline")),
     (global.path = require("path"));
-// global.bcrypt = require("bcryptjs");
 global.readdirAsync = util.promisify(fs.readdir);
 global.removeDir = util.promisify(fs.rmdir);
 
@@ -36,13 +32,13 @@ const allProjectsPath = path.join(__dirname, "public", "projects");
 
 try {
     if (!fs.existsSync(allProjectsPath)) {
-        fs.mkdirSync(allProjectsPath, { recursive: true }); // recursive: true creates parent directories if they don't exist
-        console.log(`Directory '${allProjectsPath}' created.`);
+        fs.mkdirSync(allProjectsPath, { recursive: true });
+        global.logger.info(`Directory '${allProjectsPath}' created.`);
     } else {
-        console.log(`Directory '${allProjectsPath}' already exists.`);
+        global.logger.debug(`Directory '${allProjectsPath}' already exists.`);
     }
 } catch (err) {
-    console.error(`Error creating directory: ${err.message}`);
+    global.logger.error(`Error creating directory: ${err.message}`);
 }
 
 for (const project of fs.readdirSync(allProjectsPath)) {
@@ -57,10 +53,10 @@ for (const project of fs.readdirSync(allProjectsPath)) {
     }
 }
 
-var ssl_key_path = configFile.ssl_key_path;
-var ssl_cert_path = configFile.ssl_cert_path;
+let ssl_key_path = configFile.ssl_key_path;
+let ssl_cert_path = configFile.ssl_cert_path;
+let secure = false;
 
-var secure = false;
 if (ssl_key_path && ssl_cert_path) {
     secure = true;
     var https = require("https");
@@ -70,7 +66,6 @@ if (ssl_key_path && ssl_cert_path) {
     };
 }
 
-// const express = require("express"),
 sys = require("util"),
     // cookieParser = require("cookie-parser"),
     // upload = require("express-fileupload"),
@@ -85,9 +80,10 @@ global.colorsJSON = JSON.parse(
 
 global.db = new sqlite3.Database("./db/manage.db", (err) => {
     if (err) {
-        return console.error(err.message);
+        return global.logger.error(err.message);
     }
-    console.log("Connected to the main database.");
+
+    global.logger.info("Connected to the main database.");
 });
 
 global.db.getAsync = function(sql) {
@@ -95,12 +91,11 @@ global.db.getAsync = function(sql) {
     return new Promise((resolve, reject) => {
         that.get(sql, function(err, row) {
             if (err) {
-                console.log("getAsync ERROR! ", err);
                 reject(err);
             } else resolve(row);
         });
     }).catch((err) => {
-        console.error(err);
+        global.logger.error("getAsync ERROR!", { sql, error: err.message, stack: err.stack });
     });
 };
 
@@ -109,12 +104,11 @@ global.db.allAsync = function(sql) {
     return new Promise(function(resolve, reject) {
         that.all(sql, function(err, row) {
             if (err) {
-                console.log("allAsync ERROR! ", err);
                 reject(err);
             } else resolve(row);
         });
     }).catch((err) => {
-        console.error(err);
+        global.logger.error("allAsync ERROR!", { sql, error: err.message, stack: err.stack });
     });
 };
 
@@ -123,12 +117,11 @@ global.db.runAsync = function(sql) {
     return new Promise(function(resolve, reject) {
         that.run(sql, function(err, row) {
             if (err) {
-                console.log("runAsync ERROR! ", err);
                 reject(err);
             } else resolve(row);
         });
     }).catch((err) => {
-        console.error("runAsync error: ", err);
+        global.logger.error("runAsync ERROR!", { sql, error: err.message, stack: err.stack });
     });
 };
 
@@ -137,130 +130,25 @@ global.db.execAsync = function(sql) {
     return new Promise(function(resolve, reject) {
         that.exec(sql, function(err, row) {
             if (err) {
-                console.log("execAsync ERROR! ", err);
                 reject(err);
             } else {
                 resolve(row);
             }
         });
     }).catch((err) => {
-        console.error(err);
+        global.logger.error("execAsync ERROR!", { sql, error: err.message, stack: err.stack });
     });
 };
-const fileUpload = require("express-fileupload");
 
-const api = require("./routes/api");
 
-// const {
-//     getClassificationPage,
-//     getLoginPage,
-//     getSignupPage,
-//     getHomePage,
-//     getCreatePage,
-//     getProjectPage,
-//     getAnnotatePage,
-//     getReviewPage,
-//     getConfigPage,
-//     getDownloadPage,
-//     getLabelingPage,
-//     getStatsPage,
-//     getTrainingPage,
-//     getProcessingPage,
-//     getYolo3SettingsPage,
-//     getYoloXSettingsPage,
-//     getServerInfoPage,
-//     getYoloPage,
-//     getUserPage,
-//     getProjectSettingsPage,
-//     getClassSettingsPage,
-//     getAccessSettingsPage,
-//     getImageSettingsPage,
-//     getMergeSettingsPage,
-//     getServerStatsPage,
-//     get404Page,
-//     getValidationHomePage,
-//     getValidationProjectPage,
-//     getValidationLabelingPage,
-//     getValidationConfigPage,
-//     getValidationStatsPage,
-//     getInferencePage,
-//     getCustomTrainingPage,
-//     getYoloXInferenceSettingsPage,
-//     getYoloXTrainingSettingsPage,
-// } = require("./routes/pages");
+app.set("port", process.env.port || port);
+app.set("views", __dirname + "/views");
+app.set("view engine", "ejs"); // template engine
 
-// configure middlewares
-// set
-app.set("port", process.env.port || port); // set express to use this port
-app.set("views", __dirname + "/views"); // set express to look in this folder to render our view
-app.set("view engine", "ejs"); // configure template engine
-
-// // use
-// app.use(express.urlencoded({ extended: false }));
-// app.use(fileUpload());
-// app.use(express.json()); // parse form data client
-// app.use(express.static(path.join(__dirname, "public"))); // configure express to use public folder
-// app.use(cookieParser());
-// //app.use(session({secret:"Secret Code Don't Tell Anyone", cookie: { maxAge: 30 * 1000 }})); // configure fileupload
-// app.use("/", api);
-
-////////////////////////////////////////////////////////
-// Routes for the App:
-////////////////////////////////////////////////////////
-
-// // get
-
-// app.get("/", getLoginPage);
-// app.get("/signup", getSignupPage);
-// app.get("/home", getHomePage);
-// app.get("/create", getCreatePage);
-// app.get("/annotate", getAnnotatePage);
-// app.get("/review", getReviewPage);
-// app.get("/project", getProjectPage);
-// app.get("/config", getConfigPage);
-// app.get("/config/projSettings", getProjectSettingsPage);
-// app.get("/config/classSettings", getClassSettingsPage);
-// app.get("/config/accessSettings", getAccessSettingsPage);
-// app.get("/config/imageSettings", getImageSettingsPage);
-// app.get("/config/mergeSettings", getMergeSettingsPage);
-// app.get("/download", getDownloadPage);
-// app.get("/labeling", getLabelingPage);
-// app.get("/stats", getStatsPage);
-// app.get("/customTraining", getCustomTrainingPage);
-// app.get("/training", getTrainingPage);
-// // app.get("/processing", getProcessingPage);
-// app.get("/inference", getInferencePage);
-// app.get("/yolo", getYoloPage);
-// app.get("/yolo/yolov3Settings", getYolo3SettingsPage);
-// app.get("/yolo/yolovXSettings", getYoloXSettingsPage);
-// app.get("/yolo/yolovXInferenceSettings", getYoloXInferenceSettingsPage);
-// app.get("/yolo/yolovXTrainingSettings", getYoloXTrainingSettingsPage);
-// app.get("/user", getUserPage);
-// app.get("/servstats", getServerStatsPage);
-// app.get("/homeV", getValidationHomePage);
-// app.get("/projectV", getValidationProjectPage);
-// app.get("/labelingV", getValidationLabelingPage);
-// app.get("/configV", getValidationConfigPage);
-// app.get("/statsV", getValidationStatsPage);
-// app.get("/createClassification", getClassificationPage);
-// app.get("/api/gpuinfo");
-// // everything else -> 404
-// app.get("*", get404Page);
-
-////////////////////////////////////////////////////////
-// Start Server:
-////////////////////////////////////////////////////////
 if (secure) {
     https.createServer(options, app).listen(port);
 } else {
-    var server = app.listen(port, () => {
-        console.log(hostname + ":" + port);
+    app.listen(port, () => {
+        global.logger.info(`Server started on ${hostname}:${port}`);
     });
 }
-////////////////////////////////////////////////////////
-// Web-socket:
-////////////////////////////////////////////////////////
-//var io = require('socket.io').listen(server);
-
-// web-socket
-//require("./controllers/training/main")(io);

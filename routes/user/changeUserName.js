@@ -16,7 +16,7 @@ async function changeUserName(req, res) {
         await queries.managed.changeAllAccessAdminForUsername(user, UName);
         await queries.managed.updateAllProjectsForAdmin(user, UName);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error updating user");
     }
 

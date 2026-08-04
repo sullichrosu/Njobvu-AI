@@ -16,7 +16,7 @@ async function login(req, res) {
     if (!fs.existsSync(downloadsPath)) {
         fs.mkdir(downloadsPath, (err) => {
             if (err) {
-                console.log(err);
+                global.logger.error("Failed to create user downloads directory", err);
             }
         });
     }
@@ -26,7 +26,7 @@ async function login(req, res) {
     try {
         user = await queries.managed.getUser(username);
     } catch (err) {
-        console.error(err);
+        global.logger.error("User login lookup failed", err);
         res.send({ Success: "No" });
         return;
     }

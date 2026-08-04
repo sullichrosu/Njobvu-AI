@@ -1,5 +1,4 @@
 async function getYoloXSettingsPage(req, res) {
-    console.log("get yolo X Setting Page");
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
 
@@ -30,10 +29,6 @@ async function getYoloXSettingsPage(req, res) {
 
     var PName = projects[num].PName;
     var Admin = projects[num].Admin;
-
-    console.log("PName", PName);
-    console.log("Admin", Admin);
-
     // set paths
     var public_path = currentPath,
         main_path = public_path + "public/projects/",
@@ -55,12 +50,12 @@ async function getYoloXSettingsPage(req, res) {
         fs.mkdirSync(weights_path);
         fs.writeFile(python_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
         fs.writeFile(yolovx_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     } else if (!fs.existsSync(weights_path)) {
@@ -68,7 +63,7 @@ async function getYoloXSettingsPage(req, res) {
     } else if (!fs.existsSync(yolovx_path_file)) {
         fs.writeFile(yolovx_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     }
@@ -76,9 +71,9 @@ async function getYoloXSettingsPage(req, res) {
     // connect to project database
     var tdb = new sqlite3.Database(path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to tdb.");
+        global.logger.info("Connected to tdb.")
     });
 
     // create async database object functions
@@ -87,12 +82,12 @@ async function getYoloXSettingsPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     tdb.allAsync = function (sql) {
@@ -100,12 +95,12 @@ async function getYoloXSettingsPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -224,9 +219,8 @@ async function getYoloXSettingsPage(req, res) {
     // close the database
     tdb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("tdb closed successfully");
         }
     });
 

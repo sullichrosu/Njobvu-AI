@@ -1,6 +1,4 @@
 async function uploadWeights(req, res) {
-    console.log("upload_weights");
-
     var PName = req.body.PName,
         Admin = req.body.Admin,
         user = req.cookies.Username,
@@ -32,7 +30,7 @@ async function uploadWeights(req, res) {
         if (!fs.existsSync(trainingPath)) {
             fs.mkdir(trainingPath, (error) => {
                 if (error) {
-                    console.log(errror);
+                    global.logger.debug(errror);
                 }
             });
         }

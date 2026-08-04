@@ -22,7 +22,7 @@ async function downloadProject(req, res) {
     if (!fs.existsSync(downloadPath)) {
         fs.mkdir(downloadPath, (err) => {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     }
@@ -31,7 +31,7 @@ async function downloadProject(req, res) {
     try {
         tableExists = await queries.project.checkTableExists(projectPath, 'Labels');
     } catch (err) {
-        console.log("Error checking table existence:", err);
+        global.logger.debug("Error checking table existence:", err);
         return res.json({ success: false, message: "Database error occurred" });
     }
     if (tableExists.rows[0].count == 0) {
@@ -44,14 +44,14 @@ async function downloadProject(req, res) {
         output.on("close", function () {
             return res.download(downloadPath + "/" + PName + ".zip", (err) => {
                 if (err) {
-                    console.log("Download error:", err);
+                    global.logger.debug("Download error:", err);
                     return res.json({ success: false, message: "Download failed" });
                 }
             });
         });
 
         archive.on("error", function (err) {
-            console.log(err);
+            global.logger.error(err);
             return res.json({ success: false, message: "Archive creation failed" });
         });
 

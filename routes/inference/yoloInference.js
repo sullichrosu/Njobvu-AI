@@ -62,7 +62,7 @@ async function yoloInference(req, res) {
             existingClasses = await queries.project.getAllClasses(projectPath);
             existingImages = await queries.project.getAllImages(projectPath);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.status(500).send("Error fetching images or classes");
         }
 
@@ -91,7 +91,7 @@ async function yoloInference(req, res) {
                     existingImages.rows[i].IName,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 continue;
             }
 
@@ -163,8 +163,8 @@ async function yoloInference(req, res) {
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {
-                console.error(err);
-                console.log(`This is the error: ${err.message}`);
+                global.logger.error(err);
+                global.logger.debug(`This is the error: ${err.message}`);
 
                 if (err.message != "stdout maxBuffer length exceeded") {
                     success = err.message;
@@ -178,7 +178,7 @@ async function yoloInference(req, res) {
                     );
                 }
             } else if (stderr) {
-                console.log(`This is the stderr: ${stderr}`);
+                global.logger.debug(`This is the stderr: ${stderr}`);
 
                 if (stderr != "stdout maxBuffer length exceeded") {
                     fs.writeFile(
@@ -208,7 +208,7 @@ async function yoloInference(req, res) {
 
         res.send({ Success: `YOLO Inference Started` });
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error running inference");
     }
 }

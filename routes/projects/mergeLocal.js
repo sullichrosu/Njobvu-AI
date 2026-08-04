@@ -114,7 +114,7 @@ async function mergeLocal(req, res) {
             try {
                 await fsPromises.rename(mergeScriptPath, newScriptPath);
             } catch (err) {
-                console.error("Rename error:", err);
+                global.logger.error("Rename error:", err);
             }
         }
     }
@@ -215,7 +215,7 @@ async function mergeLocal(req, res) {
     const newDbPath = path.normalize(mergePath);
 
     if (!Object.keys(global.projectDbClients).includes(newDbPath)) {
-        console.log(incomingDB);
+        global.logger.debug(incomingDB);
         global.projectDbClients[newDbPath] = new Client(
             mergePath + `/${incomingDB}`,
         );
@@ -228,7 +228,7 @@ async function mergeLocal(req, res) {
         currentDbClasses = await queries.project.getAllClasses(projectPath);
         toMergeClasses = await queries.project.getAllClasses(newDbPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching classes");
     }
 
@@ -260,7 +260,7 @@ async function mergeLocal(req, res) {
                     toMergeClasses.rows[i].CName,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
             }
         }
     }
@@ -284,7 +284,7 @@ async function mergeLocal(req, res) {
     try {
         incomingDbImages = await queries.project.getAllImages(newDbPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching images");
     }
 
@@ -322,14 +322,14 @@ async function mergeLocal(req, res) {
                     image,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 continue;
             }
         } else if (allowedFileTypes.includes(ext)) {
             try {
                 await queries.project.addImages(newDbPath, image, 1, 0);
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 continue;
             }
         }
@@ -340,11 +340,11 @@ async function mergeLocal(req, res) {
         normalizedIncomingImages =
             await queries.project.getAllImages(newDbPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching images");
     }
 
-    console.log(normalizedIncomingImages.rows);
+    global.logger.debug(normalizedIncomingImages.rows);
 
     for (var i = 0; i < normalizedIncomingImages.rows.length; i++) {
         if (
@@ -365,7 +365,7 @@ async function mergeLocal(req, res) {
                     normalizedIncomingImages.rows[i].validateImage,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 continue;
             }
 
@@ -378,7 +378,7 @@ async function mergeLocal(req, res) {
                     normalizedIncomingImages.rows[i].IName,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 continue;
             }
         }
@@ -388,7 +388,7 @@ async function mergeLocal(req, res) {
     try {
         existingLabels = await queries.project.getAllLabels(projectPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching labels");
     }
 
@@ -421,7 +421,7 @@ async function mergeLocal(req, res) {
         incomingValidations =
             await queries.project.getAllValidations(newDbPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching incoming labels");
     }
 
@@ -437,7 +437,7 @@ async function mergeLocal(req, res) {
 
     var newLabels = [];
 
-    console.log(incomingLabels.rows, currentLabels);
+    global.logger.debug(incomingLabels.rows, currentLabels);
 
     for (var i = 0; i < incomingLabels.rows.length; i++) {
         let candidate = {

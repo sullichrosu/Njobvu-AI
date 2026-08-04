@@ -38,7 +38,7 @@ async function updateClass(req, res) {
 
         return res.status(200).send("Success");
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error updating labels");
     }
 }

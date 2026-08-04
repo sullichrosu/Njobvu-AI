@@ -31,7 +31,7 @@ async function importProject(req, res) {
     try {
         projects = await queries.managed.getUserProjects(username);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching projects");
     }
 
@@ -73,7 +73,7 @@ async function importProject(req, res) {
                     `${projectPath}/${projectName}.db`,
                     (error) => {
                         if (error) {
-                            console.log(error);
+                            global.logger.error(error);
                         }
                     },
                 );
@@ -97,14 +97,14 @@ async function importProject(req, res) {
                     username,
                 );
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 await res.status(500).send("Error creating project");
             }
 
             try {
                 fs.unlinkSync(zipPath);
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res.status(500).send("Error removing .zip file");
             }
 
@@ -114,11 +114,11 @@ async function importProject(req, res) {
             try {
                 oldImages = await queries.project.getAllImages(projectPath);
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 await res.status(500).send("Could not fetch old images");
             }
 
-            console.log(oldImages);
+            global.logger.debug(oldImages);
 
             var oldDbImages = [];
             var fileTypes = [
@@ -169,7 +169,7 @@ async function importProject(req, res) {
                             image,
                         );
                     } catch (err) {
-                        console.error(err);
+                        global.logger.error(err);
                         await res.status(500).send("Error renaming old image");
                     }
                 } else if (
@@ -184,7 +184,7 @@ async function importProject(req, res) {
                             0,
                         );
                     } catch (err) {
-                        console.error(err);
+                        global.logger.error(err);
                         return res.status(500).send("Error adding image");
                     }
                 }
@@ -194,7 +194,7 @@ async function importProject(req, res) {
             try {
                 classes = await queries.project.getAllClasses(projectPath);
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 return res
                     .status(500)
                     .send("Error retrieveing existing classes");
@@ -223,7 +223,7 @@ async function importProject(req, res) {
                         CName,
                     );
                 } catch (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     return res
                         .status(500)
                         .send("Error normalizing class names");
@@ -238,7 +238,7 @@ async function importProject(req, res) {
                 confidence =
                     await queries.project.getAllValidations(projectPath);
             } catch (err) {
-                console.error(err);
+                global.logger.error(err);
                 await res.status(500).send("Error getting validation & labels");
             }
 
@@ -304,7 +304,7 @@ async function importProject(req, res) {
                         );
                     }
                 } catch (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     return res
                         .status(500)
                         .send("Error creating label or validation");
@@ -353,7 +353,7 @@ async function importProject(req, res) {
     if (found == 0) {
         rimraf(projectPath, function (err) {
             if (err) {
-                console.error(err);
+                global.logger.error(err);
             }
         });
 

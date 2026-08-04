@@ -44,7 +44,7 @@ async function signup(req, res) {
         return res.redirect("/");
 
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         res.status(500).send("Error signing up");
         return;
     }

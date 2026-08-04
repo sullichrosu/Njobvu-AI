@@ -1,3 +1,34 @@
+jest.mock('sqlite3', () => {
+  const mockDb = {
+    run: jest.fn((...cbArgs) => {
+      const cb = cbArgs[cbArgs.length - 1];
+      if (typeof cb === 'function') cb(null);
+      return { lastID: 1, changes: 1 };
+    }),
+    get: jest.fn((...cbArgs) => {
+      const cb = cbArgs[cbArgs.length - 1];
+      if (typeof cb === 'function') cb(null, {});
+    }),
+    all: jest.fn((...cbArgs) => {
+      const cb = cbArgs[cbArgs.length - 1];
+      if (typeof cb === 'function') cb(null, []);
+    }),
+    close: jest.fn((cb) => cb && cb()),
+  };
+  const mockModule = {
+    OPEN_CREATE: 1,
+    OPEN_READWRITE: 2,
+    OPEN_READONLY: 1,
+    Database: jest.fn((...args) => {
+      const cb = args[args.length - 1];
+      if (typeof cb === 'function') cb(null);
+      return mockDb;
+    }),
+    verbose: jest.fn().mockImplementation(() => mockModule),
+  };
+  return mockModule;
+});
+
 const request = require('supertest');
 const app = require('../../app');
 

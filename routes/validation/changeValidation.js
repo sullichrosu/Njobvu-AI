@@ -13,9 +13,6 @@ async function changeValidation(req, res) {
         res.send({ Success: "No" });
         return;
     }
-
-    console.log(status);
-
     if (status === 0) {
         await queries.managed.sql(
             "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",

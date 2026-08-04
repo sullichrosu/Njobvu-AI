@@ -18,13 +18,13 @@ async function addImages(req, res) {
     if (fs.existsSync(mergePath)) {
         rimraf(mergePath, (err) => {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             } else {
                 try {
                     fs.mkdirSync(mergePath);
                     fs.mkdirSync(mergeImages);
                 } catch (err) {
-                    console.error(err);
+                    global.logger.error(err);
                     return res.send("Could not add images");
                 }
             }
@@ -34,7 +34,7 @@ async function addImages(req, res) {
             fs.mkdirSync(mergePath);
             fs.mkdirSync(mergeImages);
         } catch (err) {
-            console.error(err);
+            global.logger.error(err);
             return res.send("Could not add images");
         }
     }
@@ -47,7 +47,7 @@ async function addImages(req, res) {
     var zip = new StreamZip({ file: zipPath });
 
     zip.on("error", (err) => {
-        console.log(err);
+        global.logger.error(err);
         return res.send("ERROR! " + err);
     });
 
@@ -59,7 +59,7 @@ async function addImages(req, res) {
             zip.close();
             rimraf(zipPath, (err) => {
                 if (err) {
-                    console.log(err);
+                    global.logger.error(err);
                     return res.send("ERROR! " + err);
                 }
             });
@@ -83,7 +83,7 @@ async function addImages(req, res) {
                         imagesPath + "/" + newFiles[i],
                         function (err) {
                             if (err) {
-                                console.error(err);
+                                global.logger.error(err);
                                 return res.send("ERROR! " + err);
                             }
                         },
@@ -97,7 +97,7 @@ async function addImages(req, res) {
                             0,
                         );
                     } catch (err) {
-                        console.error(err);
+                        global.logger.error(err);
                         return res.send("Error adding images");
                     }
 
@@ -107,7 +107,7 @@ async function addImages(req, res) {
 
             rimraf(mergePath, (err) => {
                 if (err) {
-                    console.log(err);
+                    global.logger.error(err);
                 }
             });
 

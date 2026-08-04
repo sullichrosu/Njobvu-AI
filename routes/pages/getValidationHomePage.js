@@ -1,6 +1,4 @@
 async function getValidationHomePage(req, res) {
-    console.log("getValidationHomePage");
-
     var page = req.query.page,
         perPage = req.query.perPage,
         user = req.cookies.Username;
@@ -75,7 +73,7 @@ async function getValidationHomePage(req, res) {
                             err.message,
                         );
                     }
-                    console.log("Connected to hdb.");
+                    global.logger.info("Connected to hdb.")
                 });
 
                 // create async database object functions
@@ -84,12 +82,12 @@ async function getValidationHomePage(req, res) {
                     return new Promise(function (resolve, reject) {
                         that.get(sql, function (err, row) {
                             if (err) {
-                                console.log("runAsync ERROR! ", err);
+                                global.logger.error("runAsync ERROR!", err)
                                 reject(err);
                             } else resolve(row);
                         });
                     }).catch((err) => {
-                        console.log(err);
+                        global.logger.error(err);
                     });
                 };
                 hdb.allAsync = function (sql) {
@@ -97,12 +95,12 @@ async function getValidationHomePage(req, res) {
                     return new Promise(function (resolve, reject) {
                         that.all(sql, function (err, row) {
                             if (err) {
-                                console.log("runAsync ERROR! ", err);
+                                global.logger.error("runAsync ERROR!", err)
                                 reject(err);
                             } else resolve(row);
                         });
                     }).catch((err) => {
-                        console.log(err);
+                        global.logger.error(err);
                     });
                 };
 
@@ -131,9 +129,8 @@ async function getValidationHomePage(req, res) {
 
                 hdb.close(function (err) {
                     if (err) {
-                        console.error(err);
+                        global.logger.error(err);
                     } else {
-                        console.log("hdb closed successfully");
                     }
                 });
             }

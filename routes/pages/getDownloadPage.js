@@ -1,6 +1,4 @@
 async function getDownloadPage(req, res) {
-    console.log("getDownloadPage");
-
     // get URL variables
     var IDX = parseInt(req.query.IDX),
         user = req.cookies.Username;
@@ -41,7 +39,7 @@ async function getDownloadPage(req, res) {
         fs.mkdirSync(weights_path);
         fs.writeFile(python_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     } else if (!fs.existsSync(weights_path)) {
@@ -50,9 +48,9 @@ async function getDownloadPage(req, res) {
 
     var ddb = new sqlite3.Database(path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to ddb.");
+        global.logger.info("Connected to ddb.")
     });
 
     // create async database object functions
@@ -61,12 +59,12 @@ async function getDownloadPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     ddb.allAsync = function (sql) {
@@ -74,12 +72,12 @@ async function getDownloadPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -119,9 +117,8 @@ async function getDownloadPage(req, res) {
     // close the database
     ddb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("ddb closed successfully");
         }
     });
 

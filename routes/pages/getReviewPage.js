@@ -1,6 +1,4 @@
 async function getReviewPage(req, res) {
-    console.log("getReviewPage");
-
     var username = req.cookies.Username;
     var CName = req.query.class;
     var IDX = req.query.IDX;
@@ -15,7 +13,7 @@ async function getReviewPage(req, res) {
     var project = projects[IDX];
 
     if (!project) {
-        console.error("No project found for IDX:", IDX);
+        global.logger.error("No project found for IDX:", IDX);
         return res.redirect("/home");
     }
 
@@ -35,9 +33,9 @@ async function getReviewPage(req, res) {
 
     var pdb = new sqlite3.Database(db_path, (err) => {
         if (err) {
-            return console.error("Database connection error:", err.message);
+            return global.logger.error("Database connection error:", err.message);
         }
-        console.log("Connected to pdb.");
+        global.logger.info("Connected to pdb.")
     });
 
     pdb.allAsync = function (sql, params) {
@@ -45,14 +43,14 @@ async function getReviewPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, params, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else {
                     resolve(row);
                 }
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -100,9 +98,9 @@ async function getReviewPage(req, res) {
 
     pdb.close((err) => {
         if (err) {
-            console.error("Error closing database connection:", err.message);
+            global.logger.error("Error closing database connection:", err.message);
         }
-        console.log("Closed pdb connection.");
+        global.logger.debug("Closed pdb connection.");
     });
 
     let totalImagesCount = Math.ceil(totalImages[0].count / pageSize);
@@ -119,7 +117,7 @@ async function getReviewPage(req, res) {
         selectedClass: req.query.class,
         IDX: IDX,
         admin: admin,
-        activePage: "Annotate",
+        activePage: "Label",
     });
 }
 

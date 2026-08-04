@@ -2,7 +2,7 @@ const client = require("../client");
 
 module.exports = {
     managed: {
-        updateProjectName: async function (newName, projectName, admin) {
+        updateProjectName: async function(newName, projectName, admin) {
             const query =
                 "UPDATE Projects SET PName = ? WHERE PName = ? AND Admin = ?";
             const result = await global.managedDbClient.run(query, [
@@ -13,7 +13,7 @@ module.exports = {
 
             return result;
         },
-        deleteProject: async function (projectName, username) {
+        deleteProject: async function(projectName, username) {
             const query = "DELETE FROM Projects WHERE PName = ? AND Admin = ?";
             const result = await global.managedDbClient.run(query, [
                 projectName,
@@ -22,7 +22,7 @@ module.exports = {
 
             return result;
         },
-        createProject: async function (
+        createProject: async function(
             projectName,
             projectDescription,
             autoSave,
@@ -39,7 +39,7 @@ module.exports = {
 
             return result;
         },
-        updateAllProjectsForAdmin: async function (oldUsername, newUsername) {
+        updateAllProjectsForAdmin: async function(oldUsername, newUsername) {
             const query = "UPDATE Projects SET Admin = ? WHERE Admin = ?";
             const result = await global.managedDbClient.run(query, [
                 oldUsername,
@@ -48,7 +48,7 @@ module.exports = {
 
             return result;
         },
-        deleteAllProjectsForAdmin: async function (username) {
+        deleteAllProjectsForAdmin: async function(username) {
             const query = "DELETE FROM Projects WHERE Admin = ?";
             const result = await global.managedDbClient.run(query, [username]);
 
@@ -56,13 +56,13 @@ module.exports = {
         },
     },
     project: {
-        checkTableExists: async function (projectPath, tableName) {
+        checkTableExists: async function(projectPath, tableName) {
             const db = global.projectDbClients[projectPath];
             const query = "SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name=?";
             const result = await db.get(query, [tableName]);
             return { rows: [result] };
         },
-        migrateProjectDb: async function (projectPath) {
+        migrateProjectDb: async function(projectPath) {
             const db = global.projectDbClients[projectPath];
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Classes (CName VARCHAR NOT NULL PRIMARY KEY)",
@@ -77,7 +77,7 @@ module.exports = {
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
         },
-        addImages: async function (
+        addImages: async function(
             projectPath,
             imageName,
             reviewImage,

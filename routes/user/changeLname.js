@@ -7,7 +7,7 @@ async function changeLname(req, res) {
     try {
         await queries.managed.updateUser(user, null, null, null, LName, null);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.send({ Success: "No" });
     }
 

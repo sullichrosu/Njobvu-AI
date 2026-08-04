@@ -4,8 +4,8 @@ async function uploadPreWeights(req, res) {
         user = req.body.user,
         weightsFile = req.files.upload_weights;
 
-    console.log("Admin: ", Admin);
-    console.log("User: ", user);
+    global.logger.debug("Admin: ", Admin);
+    global.logger.debug("User: ", user);
 
     var publicPath = currentPath,
         mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
@@ -17,7 +17,7 @@ async function uploadPreWeights(req, res) {
         weightsPath = trainingPath + "/weights/",
         weightsFilePath = weightsPath + weightsFile.name;
 
-    console.log("weightsFilePath: ", weightsFilePath);
+    global.logger.debug("weightsFilePath: ", weightsFilePath);
 
     const validExtensions = ["137", "weights", "pt", "h5"]
 
@@ -36,7 +36,7 @@ async function uploadPreWeights(req, res) {
         if (!fs.existsSync(trainingPath)) {
             fs.mkdir(trainingPath, (error) => {
                 if (error) {
-                    console.log(errror);
+                    global.logger.debug(errror);
                 }
             });
         }

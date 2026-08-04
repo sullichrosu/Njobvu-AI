@@ -33,7 +33,7 @@ async function createClassification(req, res) {
             fs.mkdirSync(projectPath);
         }
     } catch (err) {
-        console.error("Error creating directories:", err);
+        global.logger.error("Error creating directories:", err);
         return res.status(500).send("Error creating directories.");
     }
 
@@ -44,21 +44,21 @@ async function createClassification(req, res) {
         await new Promise((resolve, reject) => {
             uploadedFile.mv(targetPath, (err) => {
                 if (err) {
-                    console.error("Error moving file:", err);
+                    global.logger.error("Error moving file:", err);
                     reject(new Error("Failed to move file."));
                 } else {
-                    console.log("File moved to path:", targetPath);
+                    global.logger.debug("File moved to path:", targetPath);
                     resolve();
                 }
             });
         });
 
         if (!fs.existsSync(targetPath)) {
-            console.error(`File not found at path: ${targetPath}`);
+            global.logger.error(`File not found at path: ${targetPath}`);
             return res.status(400).send("Uploaded file not found.");
         }
     } catch (error) {
-        console.error("Error during file move:", error);
+        global.logger.error("Error during file move:", error);
         await deleteDir(projectPath);
         return res.status(500).send(error.message);
     }
@@ -66,7 +66,7 @@ async function createClassification(req, res) {
     try {
         await unzipFile(targetPath, projectPath);
     } catch (error) {
-        console.error("Error during unzip process:", error);
+        global.logger.error("Error during unzip process:", error);
         await deleteDir(projectPath);
         return res.status(500).send("Error unzipping file: " + error.message);
     }
@@ -74,9 +74,9 @@ async function createClassification(req, res) {
     let extractedFiles;
     try {
         extractedFiles = fs.readdirSync(projectPath);
-        console.log("Extracted files:", extractedFiles);
+        global.logger.debug("Extracted files:", extractedFiles);
     } catch (error) {
-        console.error("Error reading project path:", error);
+        global.logger.error("Error reading project path:", error);
         await deleteDir(projectPath);
         return res
             .status(500)
@@ -85,21 +85,20 @@ async function createClassification(req, res) {
 
     const inputDir = projectPath + "/" + extractedFiles[0];
     const runType = "class";
-    console.log("Using input directory:", inputDir);
+    global.logger.debug("Using input directory:", inputDir);
 
     try {
         await pythonScript(inputDir, projectPath, runType, dbName);
     } catch (error) {
-        console.error("Error running python script:", error);
+        global.logger.error("Error running python script:", error);
         await deleteDir(projectPath);
         return res.status(500).send("Error processing file with python script");
     }
 
     try {
         await fs.promises.rm(inputDir, { recursive: true });
-        console.log("Folder deleted successfully");
     } catch (err) {
-        console.error("Error deleting the folder:", err);
+        global.logger.error("Error deleting the folder:", err);
         await deleteDir(projectPath);
         return res
             .status(500)
@@ -128,7 +127,7 @@ async function createClassification(req, res) {
             message: "Access permission granted successfully",
         });
     } catch (error) {
-        console.error("Database error while granting access:", error);
+        global.logger.error("Database error while granting access:", error);
         await deleteDir(projectPath);
         if (
             error.message &&

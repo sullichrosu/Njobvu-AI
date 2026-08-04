@@ -1,5 +1,5 @@
 async function getYoloXInferencePage(req, res) {
-    console.log("get yolo (ultralytics) X training Setting Page");
+    global.logger.debug("get yolo (ultralytics) X training Setting Page");
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
 
@@ -54,8 +54,8 @@ async function getYoloXInferencePage(req, res) {
     var PName = projects[num].PName;
     var admin = projects[num].Admin;
 
-    console.log("this is PName :", PName);
-    console.log("this is PName :", admin);
+    global.logger.debug("this is PName :", PName);
+    global.logger.debug("this is PName :", admin);
 
     // set paths
     var public_path = currentPath,
@@ -78,12 +78,12 @@ async function getYoloXInferencePage(req, res) {
         fs.mkdirSync(weights_path);
         fs.writeFile(python_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
         fs.writeFile(yolovx_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     } else if (!fs.existsSync(weights_path)) {
@@ -91,7 +91,7 @@ async function getYoloXInferencePage(req, res) {
     } else if (!fs.existsSync(yolovx_path_file)) {
         fs.writeFile(yolovx_path_file, "", function (err) {
             if (err) {
-                console.log(err);
+                global.logger.error(err);
             }
         });
     }
@@ -99,9 +99,9 @@ async function getYoloXInferencePage(req, res) {
     // connect to project database
     var tdb = new sqlite3.Database(path, (err) => {
         if (err) {
-            return console.error(err.message);
+            return global.logger.error(err.message);
         }
-        console.log("Connected to tdb.");
+        global.logger.info("Connected to tdb.")
     });
 
     // create async database object functions
@@ -110,12 +110,12 @@ async function getYoloXInferencePage(req, res) {
         return new Promise(function (resolve, reject) {
             that.get(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
     tdb.allAsync = function (sql) {
@@ -123,12 +123,12 @@ async function getYoloXInferencePage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, function (err, row) {
                 if (err) {
-                    console.log("runAsync ERROR! ", err);
+                    global.logger.error("runAsync ERROR!", err)
                     reject(err);
                 } else resolve(row);
             });
         }).catch((err) => {
-            console.log(err);
+            global.logger.error(err);
         });
     };
 
@@ -211,7 +211,7 @@ async function getYoloXInferencePage(req, res) {
                     });
                 }
             } catch (err) {
-                console.log("Error reading file stats:", err);
+                global.logger.debug("Error reading file stats:", err);
             }
         }
         
@@ -253,17 +253,17 @@ async function getYoloXInferencePage(req, res) {
                                             });
                                         }
                                     } catch (subSubErr) {
-                                        console.log("Error reading nested subdirectory file stats:", subSubErr);
+                                        global.logger.debug("Error reading nested subdirectory file stats:", subSubErr);
                                     }
                                 }
                             }
                         } catch (subErr) {
-                            console.log("Error reading subdirectory file stats:", subErr);
+                            global.logger.debug("Error reading subdirectory file stats:", subErr);
                         }
                     }
                 }
             } catch (err) {
-                console.log("Error checking directory:", err);
+                global.logger.debug("Error checking directory:", err);
             }
         }
         
@@ -336,9 +336,8 @@ async function getYoloXInferencePage(req, res) {
     // close the database
     tdb.close(function (err) {
         if (err) {
-            console.error(err);
+            global.logger.error(err);
         } else {
-            console.log("tdb closed successfully");
         }
     });
 
@@ -360,11 +359,11 @@ async function getYoloXInferencePage(req, res) {
     }
 
     // Debug logging to check all_run_files data
-    console.log("Debug: all_run_files length:", all_run_files.length);
+    global.logger.debug("Debug: all_run_files length:", all_run_files.length);
     for (var i = 0; i < all_run_files.length && i < 2; i++) {
-        console.log(`Debug: all_run_files[${i}] has ${all_run_files[i].length} files`);
+        global.logger.debug(`Debug: all_run_files[${i}] has ${all_run_files[i].length} files`);
         if (all_run_files[i].length > 0) {
-            console.log(`Debug: First file example:`, all_run_files[i][0]);
+            global.logger.debug(`Debug: First file example:`, all_run_files[i][0]);
         }
     }
 

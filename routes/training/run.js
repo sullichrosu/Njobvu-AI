@@ -1,11 +1,9 @@
 const queries = require("../../queries/queries");
 
 async function run(req, res) {
-    console.log("run script");
-
     const { exec } = require("child_process");
 
-    console.log("date: ", Date.now());
+    global.logger.debug("date: ", Date.now());
     var date = Date.now();
 
     var PName = req.body.PName,
@@ -27,7 +25,7 @@ async function run(req, res) {
     } else {
         options = "EMPTY";
     }
-    console.log("options: ", options);
+    global.logger.debug("options: ", options);
     var publicPath = currentPath,
         mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
         projectPath = mainPath + Admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
@@ -55,7 +53,7 @@ async function run(req, res) {
     try {
         existingLabels = await queries.project.getAllLabels(projectPath);
     } catch (err) {
-        console.error(err);
+        global.logger.error(err);
         return res.status(500).send("Error fetching labels");
     }
     const labels = existingLabels.rows;
@@ -94,7 +92,6 @@ async function run(req, res) {
     var trainingCsv = runPath + "/" + PName + "_train.csv";
     fs.writeFile(trainingCsv, data, (err) => {
         if (err) throw err;
-        console.log("done writing csv");
     });
 
     ///////////////Create Tensorflow Validate csv /////////////////////////////////
@@ -127,7 +124,6 @@ async function run(req, res) {
     var validationCsv = runPath + "/" + PName + "_validate.csv";
     fs.writeFile(validationCsv, data, (err) => {
         if (err) throw err;
-        console.log("done writing csv");
     });
 
     //Create error file name
@@ -147,22 +143,21 @@ async function run(req, res) {
 
     var child = exec(cmd, (err, stdout, stderr) => {
         if (err) {
-            console.log(`This is the error: ${err.message}`);
+            global.logger.debug(`This is the error: ${err.message}`);
             success = err.message;
             fs.writeFile(`${runPath}/${errFile}`, success, (err) => {
                 if (err) throw err;
             });
         } else if (stderr) {
-            console.log(`This is the stderr: ${stderr}`);
+            global.logger.debug(`This is the stderr: ${stderr}`);
             fs.writeFile(`${runPath}/${errFile}`, stderr, (err) => {
                 if (err) throw err;
             });
             //return;
         }
-        console.log("stdout: ", stdout);
-        console.log("stderr: ", stderr);
-        console.log("err: ", err);
-        console.log("The script has finished running");
+        global.logger.debug("stdout: ", stdout);
+        global.logger.debug("stderr: ", stderr);
+        global.logger.debug("err: ", err);
         fs.writeFile(`${runPath}/done.log`, success, (err) => {
             if (err) throw err;
         });
