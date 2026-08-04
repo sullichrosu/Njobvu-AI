@@ -309,6 +309,58 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult.stdout).toContain('Python Sandbox Status');
         });
 
+        it('should ingest document context and persist LLM narrative into run_summary.md for summary requests', async () => {
+            const fs = require('fs');
+            const path = require('path');
+            const testRunDir = path.join(process.cwd(), 'runs', 'train', 'test_doc_run');
+            if (!fs.existsSync(testRunDir)) {
+                fs.mkdirSync(testRunDir, { recursive: true });
+            }
+            fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
+
+            const originalFetch = global.fetch;
+            let capturedPromptMessages = null;
+            global.fetch = jest.fn().mockImplementation((url, options) => {
+                capturedPromptMessages = JSON.parse(options.body).messages;
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        model: 'llama3',
+                        message: { role: 'assistant', content: '# Custom LLM Analysis Report\n\nModel yolo11n trained cleanly.' },
+                        done: true
+                    })
+                });
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'Summarize run test_doc_run' }],
+                    model: 'llama3',
+                    intent: 'generate_summary',
+                    runId: 'test_doc_run',
+                    runType: 'train'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(capturedPromptMessages).not.toBeNull();
+            const systemMsg = capturedPromptMessages.find(m => m.content.includes('INGESTED RUN DOCUMENT ARTIFACTS CONTEXT'));
+            expect(systemMsg).toBeDefined();
+            expect(systemMsg.content).toContain('args.yaml');
+
+            const summaryFilePath = path.join(testRunDir, 'run_summary.md');
+            expect(fs.existsSync(summaryFilePath)).toBe(true);
+            const savedContent = fs.readFileSync(summaryFilePath, 'utf8');
+            expect(savedContent).toContain('Custom LLM Analysis Report');
+
+            global.fetch = originalFetch;
+            try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
+        });
+
         it('should return 200 OK with assistant reply when Ollama returns a valid response', async () => {
             const originalFetch = global.fetch;
             global.fetch = jest.fn().mockResolvedValueOnce({
