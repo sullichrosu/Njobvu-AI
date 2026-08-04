@@ -380,7 +380,8 @@ async function runSandboxedPython(code) {
 
 /**
  * Helper to generate or aggregate run summaries from run output folders.
- * Validates project access if a projectName is provided.
+ * Ingests all run document artifacts (args.yaml, config.json, results.csv, summary.json, metrics)
+ * to construct document context for LLM narrative generation.
  */
 async function generateRunSummary(runId = null, runType = "train", projectName = null, username = null) {
     if (projectName && username) {
@@ -400,11 +401,14 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
         } catch (e) {}
 
         if (runSummaryGen && typeof runSummaryGen.generateRunSummary === "function") {
-            return await runSummaryGen.generateRunSummary(runId, runType, projectName);
+            const res = await runSummaryGen.generateRunSummary(runId, runType, projectName);
+            if (res && res.success) {
+                return res;
+            }
         }
     } catch (e) {}
 
-    // Fallback run summary generator implementation
+    // Fallback run summary generator & document artifact context packager
     const type = (runType && runType.toLowerCase().includes("inf")) ? "inference" : "train";
     const baseDir = path.join(process.cwd(), "runs", type);
     let targetRunDir = null;
@@ -439,23 +443,33 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
     const files = fs.readdirSync(targetRunDir);
     const artifacts = {};
     for (const f of files) {
-        if (["args.yaml", "config.json", "results.csv", "train.log", "inference.log"].includes(f)) {
+        if (["args.yaml", "config.json", "results.csv", "summary.json", "metrics.json", "train.log", "inference.log"].includes(f)) {
             try {
-                artifacts[f] = fs.readFileSync(path.join(targetRunDir, f), "utf8").slice(0, 1500);
+                artifacts[f] = fs.readFileSync(path.join(targetRunDir, f), "utf8").slice(0, 3000);
             } catch (e) {}
         }
     }
+
+    const documentContext = `### INGESTED RUN DOCUMENT ARTIFACTS FOR RUN ${selectedRunId}:
+- Run Output Directory: \`${targetRunDir}\`
+- Run Mode: ${type}
+- Ingested Artifact Files: ${Object.keys(artifacts).join(", ") || "None"}
+
+${Object.entries(artifacts).map(([filename, content]) => `#### File Artifact: ${filename}\n\`\`\`\n${content}\n\`\`\``).join("\n\n")}`;
 
     const summaryContent = `## Run Summary Report: ${selectedRunId} (${type})
 - Path: \`${targetRunDir}\`
 - Artifacts Inspected: ${Object.keys(artifacts).join(", ") || "None"}
 
-${Object.entries(artifacts).map(([filename, content]) => `### Artifact: ${filename}\n\`\`\`\n${content}\n\`\`\``).join("\n\n")}`;
+${documentContext}`;
 
     return {
         success: true,
         runId: selectedRunId,
         runType: type,
+        targetRunDir: targetRunDir,
+        runDir: targetRunDir,
+        documentContext: documentContext,
         summary: summaryContent,
         artifacts
     };
@@ -587,13 +601,16 @@ async function ollamaChat(req, res) {
             }
         }
 
-        // If tool execution took place directly from quick chip or explicit intent, append tool output
+        // If tool execution took place directly, supply ingested document context to Ollama prompt
         let augmentedMessages = [...messages];
         if (toolResult && toolResult.success) {
-            if (toolResult.summary) {
+            if (toolResult.documentContext || toolResult.summary) {
+                const ingestedContext = toolResult.documentContext || toolResult.summary;
                 augmentedMessages.push({
                     role: "system",
-                    content: `[TOOL OUTPUT - Run Summary Executed Successfully]:\n${toolResult.summary}`
+                    content: `[INGESTED RUN DOCUMENT ARTIFACTS CONTEXT]:\n${ingestedContext}\n\n` +
+                             `INSTRUCTION FOR LLM ASSISTANT:\n` +
+                             `Analyze the ingested run document artifacts above. Generate a detailed, professional custom Markdown narrative report interpreting loss trajectories, mAP performance metrics, hyperparameter choices, and concrete technical recommendations for model optimization.`
                 });
             } else if (toolResult.stdout !== undefined) {
                 augmentedMessages.push({
@@ -660,10 +677,18 @@ async function ollamaChat(req, res) {
                     let fallbackContent = "Tool executed successfully.";
                     if (toolResult.runs) {
                         fallbackContent = formatRunListings(toolResult.runs, projectName);
-                    } else if (toolResult.summary) {
-                        fallbackContent = toolResult.summary;
+                    } else if (toolResult.summary || toolResult.documentContext) {
+                        fallbackContent = toolResult.summary || toolResult.documentContext;
                     } else if (toolResult.stdout !== undefined) {
                         fallbackContent = `**Python Sandbox Output:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || ""}\n\`\`\``;
+                    }
+
+                    // Persist fallback narrative to run_summary.md if target run directory exists
+                    const targetDir = toolResult.targetRunDir || toolResult.runDir;
+                    if (targetDir && fs.existsSync(targetDir)) {
+                        try {
+                            fs.writeFileSync(path.join(targetDir, "run_summary.md"), fallbackContent, "utf8");
+                        } catch (wErr) {}
                     }
 
                     return res.status(200).json({
@@ -698,11 +723,9 @@ async function ollamaChat(req, res) {
                     } else if (!assistantReply.content.includes("Available Runs")) {
                         assistantReply.content += `\n\n${formattedRuns}`;
                     }
-                } else if (toolResult.summary) {
+                } else if (toolResult.summary || toolResult.documentContext) {
                     if (!assistantReply.content || assistantReply.content.trim() === "") {
-                        assistantReply.content = toolResult.summary;
-                    } else if (!assistantReply.content.includes(toolResult.runId || "Summary")) {
-                        assistantReply.content += `\n\n${toolResult.summary}`;
+                        assistantReply.content = toolResult.summary || toolResult.documentContext;
                     }
                 } else if (toolResult.stdout !== undefined) {
                     const pyOutput = `**Python Sandbox Execution Result:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || "(No output)"}\n\`\`\``;
@@ -710,6 +733,17 @@ async function ollamaChat(req, res) {
                         assistantReply.content = pyOutput;
                     } else if (!assistantReply.content.includes("Python Sandbox Execution Result")) {
                         assistantReply.content += `\n\n${pyOutput}`;
+                    }
+                }
+
+                // Persist the LLM-generated custom Markdown analysis narrative into run_summary.md
+                const targetDir = toolResult.targetRunDir || toolResult.runDir;
+                if (targetDir && fs.existsSync(targetDir) && assistantReply.content) {
+                    try {
+                        const summaryFilePath = path.join(targetDir, "run_summary.md");
+                        fs.writeFileSync(summaryFilePath, assistantReply.content, "utf8");
+                    } catch (writeErr) {
+                        global.logger?.error("Error persisting LLM narrative to run_summary.md:", writeErr);
                     }
                 }
             }
@@ -741,10 +775,18 @@ async function ollamaChat(req, res) {
                 let fallbackContent = "Tool executed successfully.";
                 if (toolResult.runs) {
                     fallbackContent = formatRunListings(toolResult.runs, projectName);
-                } else if (toolResult.summary) {
-                    fallbackContent = toolResult.summary;
+                } else if (toolResult.summary || toolResult.documentContext) {
+                    fallbackContent = toolResult.summary || toolResult.documentContext;
                 } else if (toolResult.stdout !== undefined) {
                     fallbackContent = `**Python Sandbox Output:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || ""}\n\`\`\``;
+                }
+
+                // Persist fallback narrative to run_summary.md if target run directory exists
+                const targetDir = toolResult.targetRunDir || toolResult.runDir;
+                if (targetDir && fs.existsSync(targetDir)) {
+                    try {
+                        fs.writeFileSync(path.join(targetDir, "run_summary.md"), fallbackContent, "utf8");
+                    } catch (wErr) {}
                 }
 
                 return res.status(200).json({

@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const { runSandboxedPython } = require("../utils/sandboxedPythonRunner");
-const { generateRunSummary, listAvailableRuns } = require("../utils/runSummaryGenerator");
+const { generateRunSummary, listAvailableRuns, buildRunDocumentContext, persistCustomSummary } = require("../utils/runSummaryGenerator");
 
 async function executePythonSandbox(req, res) {
     try {
@@ -82,8 +82,47 @@ async function handleListRuns(req, res) {
     }
 }
 
+async function handleRunDocumentContext(req, res) {
+    try {
+        const { runDir, projectName, PName } = req.body || req.query || {};
+        const contextText = await buildRunDocumentContext(runDir, { projectName: projectName || PName });
+        return res.status(200).json({
+            success: true,
+            runDir,
+            contextText
+        });
+    } catch (err) {
+        return res.status(400).json({
+            success: false,
+            error: err.message
+        });
+    }
+}
+
+async function handlePersistCustomSummary(req, res) {
+    try {
+        const { runDir, customNarrative, narrative } = req.body || {};
+        const content = customNarrative || narrative;
+        if (!runDir || !content) {
+            return res.status(400).json({ success: false, error: "runDir and customNarrative are required" });
+        }
+        const summaryData = persistCustomSummary(runDir, content);
+        return res.status(200).json({
+            success: true,
+            summary: summaryData
+        });
+    } catch (err) {
+        return res.status(400).json({
+            success: false,
+            error: err.message
+        });
+    }
+}
+
 module.exports = {
     executePythonSandbox,
     handleRunSummary,
-    handleListRuns
+    handleListRuns,
+    handleRunDocumentContext,
+    handlePersistCustomSummary
 };
