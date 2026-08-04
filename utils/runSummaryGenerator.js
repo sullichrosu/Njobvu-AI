@@ -600,7 +600,52 @@ function generateAggregatedMarkdownSummary(summary) {
 }
 
 /**
- * Scans run directories for active training and inference runs and returns summary metadata.
+ * Recursively scans directory trees to discover historical/completed and active run output folders.
+ */
+function discoverRunDirectories(searchDir, visited = new Set(), maxDepth = 5, currentDepth = 0) {
+    const discovered = [];
+    if (!searchDir || currentDepth > maxDepth || !fs.existsSync(searchDir)) {
+        return discovered;
+    }
+
+    try {
+        const canonical = path.resolve(searchDir);
+        if (visited.has(canonical)) return discovered;
+        visited.add(canonical);
+
+        const stat = fs.statSync(canonical);
+        if (!stat.isDirectory()) return discovered;
+
+        const entries = fs.readdirSync(canonical);
+        
+        const isRunDir = entries.some(f => 
+            f === "results.csv" || f === "args.yaml" || f.endsWith(".pt") ||
+            (f === "weights" && fs.existsSync(path.join(canonical, "weights"))) ||
+            (f.endsWith(".png") && (f.includes("results") || f.includes("confusion") || f.includes("F1") || f.includes("labels")))
+        );
+
+        if (isRunDir) {
+            discovered.push(canonical);
+        }
+
+        for (const entry of entries) {
+            if (entry === "node_modules" || entry === ".git" || entry === "tmp") continue;
+            const childPath = path.join(canonical, entry);
+            try {
+                const childStat = fs.statSync(childPath);
+                if (childStat.isDirectory()) {
+                    const subDiscovered = discoverRunDirectories(childPath, visited, maxDepth, currentDepth + 1);
+                    discovered.push(...subDiscovered);
+                }
+            } catch (e) {}
+        }
+    } catch (e) {}
+
+    return discovered;
+}
+
+/**
+ * Scans run directories for active and historical training and inference runs and returns summary metadata.
  * 
  * @param {string|Object} [projectNameOrOptions] - Project name to filter by, or options object
  * @param {string} [baseRunsDir] - Base directory to scan (defaults to project runs directory)
@@ -625,112 +670,92 @@ function listAvailableRuns(projectNameOrOptions, baseRunsDir) {
         rootDir = baseRunsDir || null;
     }
 
-    const rootPath = rootDir || path.join(__dirname, "..", "runs");
-    const publicProjectsPath = path.join(__dirname, "..", "public", "projects");
+    const runsRoot = rootDir || path.join(__dirname, "..", "runs");
+    const publicProjectsRoot = path.join(__dirname, "..", "public", "projects");
 
-    const searchDirs = [
-        rootPath,
-        path.join(rootPath, "detect"),
-        path.join(rootPath, "train"),
-        path.join(rootPath, "inference"),
-        path.join(rootPath, "detect", "train"),
-        path.join(rootPath, "detect", "predict")
-    ];
+    const searchRoots = [runsRoot, publicProjectsRoot];
 
-    if (projectName) {
-        searchDirs.push(path.join(rootPath, projectName));
-        searchDirs.push(path.join(rootPath, "detect", projectName));
-        searchDirs.push(path.join(publicProjectsPath, projectName, "training"));
-        searchDirs.push(path.join(publicProjectsPath, projectName, "inference"));
-    }
+    const allDiscoveredPaths = new Set();
+    searchRoots.forEach(root => {
+        if (fs.existsSync(root)) {
+            const found = discoverRunDirectories(root);
+            found.forEach(p => allDiscoveredPaths.add(p));
+        }
+    });
 
     const discoveredRuns = [];
-    const visitedPaths = new Set();
 
-    searchDirs.forEach(dir => {
-        if (!fs.existsSync(dir)) return;
+    allDiscoveredPaths.forEach(itemPath => {
         try {
-            const items = fs.readdirSync(dir);
-            items.forEach(item => {
-                const itemPath = path.join(dir, item);
-                if (visitedPaths.has(itemPath)) return;
-                
+            const stat = fs.statSync(itemPath);
+            const subFiles = fs.readdirSync(itemPath);
+            const item = path.basename(itemPath);
+
+            let associatedProject = null;
+            const argsPath = path.join(itemPath, "args.yaml");
+            const summaryJsonPath = path.join(itemPath, "summary.json");
+            const configJsonPath = path.join(itemPath, "config.json");
+
+            if (fs.existsSync(summaryJsonPath)) {
                 try {
-                    const stat = fs.statSync(itemPath);
-                    if (stat.isDirectory()) {
-                        visitedPaths.add(itemPath);
-                        const subFiles = fs.readdirSync(itemPath);
-                        
-                        const hasRunFiles = subFiles.some(f => 
-                            f === "results.csv" || f === "args.yaml" || f === "summary.json" ||
-                            f === "run_summary.md" || f === "config.json" || f.endsWith(".pt") ||
-                            f.endsWith(".png") || f.endsWith(".jpg") || f === "weights"
-                        );
-
-                        if (hasRunFiles) {
-                            let associatedProject = null;
-                            const argsPath = path.join(itemPath, "args.yaml");
-                            const summaryJsonPath = path.join(itemPath, "summary.json");
-                            const configJsonPath = path.join(itemPath, "config.json");
-
-                            if (fs.existsSync(summaryJsonPath)) {
-                                try {
-                                    const sData = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
-                                    associatedProject = sData.projectName || (sData.config && (sData.config.project || sData.config.PName));
-                                } catch (e) {}
-                            }
-                            if (!associatedProject && fs.existsSync(argsPath)) {
-                                try {
-                                    const parsedArgs = parseYamlSimple(fs.readFileSync(argsPath, "utf8"));
-                                    associatedProject = parsedArgs.project || parsedArgs.PName || parsedArgs.projectName;
-                                } catch (e) {}
-                            }
-                            if (!associatedProject && fs.existsSync(configJsonPath)) {
-                                try {
-                                    const cData = JSON.parse(fs.readFileSync(configJsonPath, "utf8"));
-                                    associatedProject = cData.project || cData.PName || cData.projectName;
-                                } catch (e) {}
-                            }
-
-                            if (projectName) {
-                                const cleanProj = projectName.trim().toLowerCase();
-                                const pathLower = itemPath.toLowerCase();
-                                const nameLower = item.toLowerCase();
-                                const assocLower = associatedProject ? String(associatedProject).toLowerCase() : "";
-
-                                const matchesProject = 
-                                    pathLower.includes(cleanProj) ||
-                                    nameLower.includes(cleanProj) ||
-                                    (assocLower && assocLower.includes(cleanProj));
-
-                                if (!matchesProject) {
-                                    return;
-                                }
-                            }
-
-                            const isTraining = subFiles.includes("results.csv") || subFiles.includes("args.yaml") || itemPath.includes("train");
-                            const runType = isTraining ? "training" : "inference";
-                            const hasSummary = subFiles.includes("summary.json") || subFiles.includes("run_summary.md");
-                            const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".bmp"];
-                            const imageCount = subFiles.filter(f => imageExtensions.includes(path.extname(f).toLowerCase())).length;
-
-                            discoveredRuns.push({
-                                runName: item,
-                                projectName: associatedProject || projectName || null,
-                                runPath: path.resolve(itemPath),
-                                relPath: path.relative(path.join(__dirname, ".."), itemPath),
-                                runType,
-                                hasSummary,
-                                artifactCount: subFiles.length,
-                                imageCount,
-                                lastModified: stat.mtime.toISOString()
-                            });
-                        }
-                    }
+                    const sData = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
+                    associatedProject = sData.projectName || (sData.config && (sData.config.project || sData.config.PName));
                 } catch (e) {}
+            }
+            if (!associatedProject && fs.existsSync(argsPath)) {
+                try {
+                    const parsedArgs = parseYamlSimple(fs.readFileSync(argsPath, "utf8"));
+                    associatedProject = parsedArgs.project || parsedArgs.PName || parsedArgs.projectName;
+                } catch (e) {}
+            }
+            if (!associatedProject && fs.existsSync(configJsonPath)) {
+                try {
+                    const cData = JSON.parse(fs.readFileSync(configJsonPath, "utf8"));
+                    associatedProject = cData.project || cData.PName || cData.projectName;
+                } catch (e) {}
+            }
+
+            if (projectName) {
+                const cleanProj = projectName.trim().toLowerCase();
+                const pathLower = itemPath.toLowerCase();
+                const nameLower = item.toLowerCase();
+                const assocLower = associatedProject ? String(associatedProject).toLowerCase() : "";
+
+                const cleanProjNoHyphen = cleanProj.replace(/[-_]/g, "");
+                const pathNoHyphen = pathLower.replace(/[-_]/g, "");
+
+                const matchesProject = 
+                    pathLower.includes(cleanProj) ||
+                    nameLower.includes(cleanProj) ||
+                    (assocLower && assocLower.includes(cleanProj)) ||
+                    pathNoHyphen.includes(cleanProjNoHyphen);
+
+                if (!matchesProject) {
+                    return;
+                }
+            }
+
+            const isTraining = subFiles.includes("results.csv") || subFiles.includes("args.yaml") || itemPath.toLowerCase().includes("train");
+            const runType = isTraining ? "training" : "inference";
+            const hasSummary = subFiles.includes("summary.json") || subFiles.includes("run_summary.md");
+            const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".bmp"];
+            const imageCount = subFiles.filter(f => imageExtensions.includes(path.extname(f).toLowerCase())).length;
+
+            discoveredRuns.push({
+                runName: item,
+                projectName: associatedProject || projectName || null,
+                runPath: path.resolve(itemPath),
+                relPath: path.relative(path.join(__dirname, ".."), itemPath),
+                runType,
+                hasSummary,
+                artifactCount: subFiles.length,
+                imageCount,
+                lastModified: stat.mtime.toISOString()
             });
         } catch (e) {}
     });
+
+    discoveredRuns.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
     return discoveredRuns;
 }
@@ -739,6 +764,7 @@ module.exports = {
     generateRunSummary,
     generateSingleRunSummary,
     generateAggregatedRunSummary,
+    discoverRunDirectories,
     listAvailableRuns,
     parseYamlSimple,
     parseResultsCsvStream
