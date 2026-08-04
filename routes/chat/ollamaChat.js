@@ -26,15 +26,66 @@ Guidelines:
 - Respect user permissions and role gating (User vs Admin).`;
 
 /**
+ * Normalizes run listings into standardized train and inference arrays regardless of whether input is an Array or Object.
+ * Extracts runName, relPath, runType, id, or name from run metadata objects or strings.
+ */
+function normalizeRunListings(runs) {
+    let trainRuns = [];
+    let infRuns = [];
+
+    if (!runs) {
+        return { train: [], inference: [] };
+    }
+
+    if (Array.isArray(runs)) {
+        // Check if array has attached .train or .inference properties
+        if (Array.isArray(runs.train) && runs.train.length > 0) {
+            trainRuns = runs.train;
+        }
+        if (Array.isArray(runs.inference) && runs.inference.length > 0) {
+            infRuns = runs.inference;
+        }
+
+        // If no attached properties or if empty, categorize elements by runType/type
+        if (trainRuns.length === 0 && infRuns.length === 0 && runs.length > 0) {
+            runs.forEach(r => {
+                const rType = (typeof r === "object" ? (r.runType || r.type || "") : "").toLowerCase();
+                if (rType.includes("inf") || rType.includes("detect")) {
+                    infRuns.push(r);
+                } else {
+                    trainRuns.push(r);
+                }
+            });
+        }
+    } else if (typeof runs === "object") {
+        if (Array.isArray(runs.train)) {
+            trainRuns = runs.train;
+        }
+        if (Array.isArray(runs.inference)) {
+            infRuns = runs.inference;
+        }
+    }
+
+    const formatItem = r => {
+        if (typeof r === "string") return r;
+        if (!r || typeof r !== "object") return String(r);
+        return r.runName || r.name || r.id || r.relPath || r.runPath || JSON.stringify(r);
+    };
+
+    return {
+        train: trainRuns.map(formatItem),
+        inference: infRuns.map(formatItem)
+    };
+}
+
+/**
  * Formats available run listings into markdown text for display in chat messages.
+ * Seamlessly supports both Array<Object> and Object { train, inference } structures.
  */
 function formatRunListings(runs, projectName = null) {
-    const trainRuns = Array.isArray(runs?.train)
-        ? runs.train.map(r => typeof r === "string" ? r : (r.id || r.name || JSON.stringify(r)))
-        : [];
-    const infRuns = Array.isArray(runs?.inference)
-        ? runs.inference.map(r => typeof r === "string" ? r : (r.id || r.name || JSON.stringify(r)))
-        : [];
+    const normalized = normalizeRunListings(runs);
+    const trainRuns = normalized.train;
+    const infRuns = normalized.inference;
 
     let text = `### Available Runs${projectName ? ` for Project '${projectName}'` : ""}:\n\n`;
     text += `**Training Runs (${trainRuns.length}):**\n`;
@@ -212,7 +263,8 @@ function getLiveSystemContext(projectName = null, projectAuth = { hasAccess: tru
             } catch (e) {}
 
             if (runSummaryGen && typeof runSummaryGen.listAvailableRuns === "function") {
-                runs = runSummaryGen.listAvailableRuns(projectName);
+                const rawRuns = runSummaryGen.listAvailableRuns(projectName);
+                runs = normalizeRunListings(rawRuns);
             } else {
                 ["train", "inference"].forEach(type => {
                     const baseDir = path.join(process.cwd(), "runs", type);
@@ -231,6 +283,7 @@ function getLiveSystemContext(projectName = null, projectAuth = { hasAccess: tru
                         });
                     }
                 });
+                runs = normalizeRunListings(runs);
             }
         } catch (err) {
             global.logger?.error("Error discovering runs for live context:", err);
@@ -760,6 +813,7 @@ async function sandboxedPythonHandler(req, res) {
 }
 
 ollamaChat.NJOBVU_SYSTEM_PROMPT = NJOBVU_SYSTEM_PROMPT;
+ollamaChat.normalizeRunListings = normalizeRunListings;
 ollamaChat.formatRunListings = formatRunListings;
 ollamaChat.extractPythonCode = extractPythonCode;
 ollamaChat.verifyProjectAccess = verifyProjectAccess;
