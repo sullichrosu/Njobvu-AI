@@ -1,4 +1,4 @@
-<%- include('includes/header', { activePage: 'help', IDX: typeof IDX !== 'undefined' ? IDX : null }) %>
+<%- include('includes/header', { activePage: null }) %>
 
 <style>
     .wiki-container {
@@ -182,12 +182,12 @@
                 <div class="wiki-card-icon"><i class="fas fa-rocket"></i></div>
                 <div class="wiki-card-title">Getting Started & Overview</div>
                 <div class="wiki-card-body">
-                    <p>Njobvu-AI is designed for computer vision annotation and model management:</p>
+                    <p>Njobvu is designed for computer vision annotation and model management:</p>
                     <ul>
-                        <li><strong>Step 1:</strong> Create a project or import dataset archive.</li>
-                        <li><strong>Step 2:</strong> Draw bounding box annotations & verify labels.</li>
-                        <li><strong>Step 3:</strong> Train custom model architectures (YOLO, Inception, Custom).</li>
-                        <li><strong>Step 4:</strong> Deploy models for inference and export results.</li>
+                        <li><strong>1.</strong> Create a project or import a dataset archive.</li>
+                        <li><strong>2.</strong> Draw bounding box annotations & verify labels.</li>
+                        <li><strong>3.</strong> Train custom model architectures (YOLO, Inception, VIAME).</li>
+                        <li><strong>4.</strong> Run inference and export results.</li>
                     </ul>
                 </div>
             </div>
@@ -207,6 +207,7 @@
                         <li><strong>KW-COCO & IFCB:</strong> Import COCO format JSON files or IFCB plankton data archives.</li>
                         <li><strong>Bootstrap:</strong> Pre-annotate datasets using trained models.</li>
                     </ul>
+                    <button class="btn"><a href="/create">Go there</a></button>
                 </div>
             </div>
         </div>
@@ -240,7 +241,6 @@
                     <ul>
                         <li><strong>Dataset Split:</strong> Drag slider to adjust Train/Validation split ratio (50%-100%).</li>
                         <li><strong>YOLOv3 & YOLOX:</strong> Run specialized YOLO object detection training pipelines.</li>
-                        <li><strong>Custom Python Scripts:</strong> Upload Python scripts (<code>.py</code>) and model weights (<code>.h5</code>, <code>.pth</code>).</li>
                         <li><strong>Monitoring:</strong> Click run status buttons to inspect live training logs.</li>
                     </ul>
                 </div>
@@ -257,7 +257,7 @@
                     <p>Run model inference and cycle predictions back into dataset:</p>
                     <ul>
                         <li><strong>Min Confidence Threshold:</strong> Filter detections by minimum score (e.g., 0.50).</li>
-                        <li><strong>Add to Training Set:</strong> Instantly add inference detections to labeled dataset.</li>
+                        <li><strong>Add to Training Set:</strong> Instantly add inference detections to a labeled dataset.</li>
                         <li><strong>Image Carousel:</strong> View bounding box overlay outputs in interactive modal.</li>
                         <li><strong>Export Detections:</strong> Download logs and prediction files.</li>
                     </ul>
