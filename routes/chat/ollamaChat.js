@@ -6,21 +6,17 @@ const queries = require("../../queries/queries");
 const NJOBVU_SYSTEM_PROMPT = `You are Njobvu AI, an intelligent assistant built into the Njobvu Computer Vision & Machine Learning Platform.
 Your primary role is to assist engineers, researchers, and project managers in managing computer vision workflows including image labeling, dataset imports/exports, model training (YOLO, Darknet, Inception), model inference, and run performance analytics.
 
-You have access to and can provide structured instructions or payloads for interacting with Njobvu platform endpoints and system tools:
+The Njobvu backend automatically executes tools on your behalf whenever a request requires them, and injects the resulting tool output directly into your conversation context as [TOOL OUTPUT] / [INGESTED RUN DOCUMENT ARTIFACTS CONTEXT] blocks. You never need to ask the user for JSON payloads, structured instructions, endpoint paths, or to call platform endpoints manually.
 
-1. Python Sandbox Execution (/api/sandbox/python):
-   - Used for executing sandboxed Python code for custom data transformations, metrics calculation, and batch label processing.
-   - When proposing Python code to execute in the sandbox, format your request clearly or provide the exact JSON payload structured for /api/sandbox/python.
+Available auto-executed tools (results are injected into your context when run):
+1. Python Sandbox Execution: executes sandboxed Python code for custom data transformations, metrics calculation, and batch label processing. Its stdout/stderr are provided to you in the context.
+2. Run Summaries & Analytics: aggregates and inspects deep context run performance reports (loss curves, mAP, precision/recall, training/inference artifacts like args.yaml, config.json, results.csv).
+3. Project Run Listings & Inspection: lists available training and inference runs for the active project and exposes run images and run management actions.
 
-2. Run Summaries & Analytics (/api/runs/summary):
-   - Used for aggregating, generating, and inspecting deep context run performance reports (loss curves, mAP, precision/recall, training/inference file artifacts like args.yaml, config.json, results.csv).
-
-3. Project Run Listings & Inspection:
-   - Access run images via /runs/:runId/images.
-   - Manage training runs via /yolo-run, /run, /deleteRun.
-   - Manage inference via /yolo-inf, /inception-inf, and dataset integration via /inference/add-inference-run-to-dataset.
-
-Guidelines:
+Rules:
+- Answer directly from the injected tool output and live system context. Never fabricate metrics, results, or performance numbers.
+- Never ask the user to provide JSON payloads or to call endpoints manually; the tools are executed for you.
+- If a tool result or live context is not available, say plainly what could not be retrieved and why. Never respond with a canned acknowledgment such as "I will be ready to assist..." or "I will provide a summary..." — answer the user's actual question using the information you have.
 - Maintain a helpful, precise, and professional tone focused on CV/ML tasks.
 - Always sanitize and validate assumptions about bounding box coordinates, polygon formats, class labels, and pixel dimensions.
 - Respect user permissions and role gating (User vs Admin).`;
@@ -118,6 +114,37 @@ function setToolOutputAsPrimary(currentContent, toolOutput) {
         return toolOutput;
     }
     return `${toolOutput}\n\n${currentContent}`;
+}
+
+/**
+ * Broad free-text detection for run summary/report requests.
+ * Matches phrasings like "summarize runs", "give me a summary of the training run",
+ * "how is my training going", "report on the results", "what are the metrics".
+ */
+function matchesRunSummaryIntent(text) {
+    if (!text) return false;
+    return /\b(summar\w*|run report|report on|performance|metrics|results of)\b/i.test(text)
+        || /\bhow (did|is|was) (the |my |our |this )?(training|run|model)\b/i.test(text);
+}
+
+/**
+ * Broad free-text detection for run listing requests.
+ * Matches phrasings like "list available runs", "show me runs", "which runs",
+ * "what runs do I have", "available runs".
+ */
+function matchesListRunsIntent(text) {
+    if (!text) return false;
+    return /\blist\b.{0,60}?\bruns?\b/i.test(text)
+        || /\bshow\b.{0,60}?\bruns?\b/i.test(text)
+        || /\b(which|what|available)\s+runs?\b/i.test(text);
+}
+
+/**
+ * Detects Python sandbox execution requests from free text or provided code payloads.
+ */
+function matchesPythonIntent(code, text) {
+    if (code && typeof code === "string" && code.trim().length > 0) return true;
+    return Boolean(text) && (/```python[\s\S]*?```/i.test(text) || /\b(run_python|python sandbox|execute python)\b/i.test(text));
 }
 
 /**
@@ -598,7 +625,7 @@ async function ollamaChat(req, res) {
                 runs: liveContext.runs
             };
         } else if (!req.body.skipToolExecution) {
-            if (/\b(summarize|run summary|training run summary|inference run summary)\b/i.test(lastUserMessage)) {
+            if (matchesRunSummaryIntent(lastUserMessage)) {
                 if (projectName && !projectAuth.hasAccess) {
                     toolResult = {
                         success: false,
@@ -608,7 +635,19 @@ async function ollamaChat(req, res) {
                     const extractedRunId = runId || (lastUserMessage.match(/run\s+([a-zA-Z0-9_-]+)/i) ? lastUserMessage.match(/run\s+([a-zA-Z0-9_-]+)/i)[1] : null);
                     toolResult = await generateRunSummary(extractedRunId, runType || "train", projectName, username);
                 }
-            } else if (code || /```python[\s\S]*?```/i.test(lastUserMessage) || /\b(run_python|python sandbox|execute python)\b/i.test(lastUserMessage)) {
+            } else if (matchesListRunsIntent(lastUserMessage)) {
+                if (projectName && !projectAuth.hasAccess) {
+                    toolResult = {
+                        success: false,
+                        error: `Forbidden: User '${username}' does not have access to project '${projectName}'.`
+                    };
+                } else {
+                    toolResult = {
+                        success: true,
+                        runs: liveContext.runs
+                    };
+                }
+            } else if (matchesPythonIntent(code, lastUserMessage)) {
                 const pythonCode = extractPythonCode(code, lastUserMessage);
                 if (pythonCode) {
                     toolResult = await runSandboxedPython(pythonCode);
@@ -638,6 +677,13 @@ async function ollamaChat(req, res) {
                     content: `[TOOL OUTPUT - Available Runs]:\n${JSON.stringify(toolResult.runs, null, 2)}`
                 });
             }
+        } else if (toolResult && toolResult.success === false) {
+            // Surface the tool failure so the LLM explains the real reason instead of a generic acknowledgment.
+            const errorText = toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message.";
+            augmentedMessages.push({
+                role: "system",
+                content: `[TOOL EXECUTION FAILED]:\n${errorText}`
+            });
         }
 
         // 7. Resolve Ollama configuration
@@ -690,7 +736,9 @@ async function ollamaChat(req, res) {
                 const errorText = await response.text().catch(() => "");
                 if (toolResult) {
                     let fallbackContent = "Tool executed successfully.";
-                    if (toolResult.runs) {
+                    if (toolResult.success === false) {
+                        fallbackContent = `**Tool Execution Error:**\n${toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message."}`;
+                    } else if (toolResult.runs) {
                         fallbackContent = formatRunListings(toolResult.runs, projectName);
                     } else if (toolResult.summary || toolResult.documentContext) {
                         fallbackContent = toolResult.summary || toolResult.documentContext;
@@ -733,7 +781,10 @@ async function ollamaChat(req, res) {
             // Fragile substring checks (e.g. content.includes("Summary")) are avoided so a conversational LLM
             // preamble containing report keywords never suppresses the real tool result.
             if (toolResult) {
-                if (toolResult.runs) {
+                if (toolResult.success === false) {
+                    const errorText = toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message.";
+                    assistantReply.content = setToolOutputAsPrimary(assistantReply.content, `**Tool Execution Error:**\n${errorText}`);
+                } else if (toolResult.runs) {
                     const formattedRuns = formatRunListings(toolResult.runs, projectName);
                     assistantReply.content = setToolOutputAsPrimary(assistantReply.content, formattedRuns);
                 } else if (toolResult.summary || toolResult.documentContext) {
@@ -781,7 +832,9 @@ async function ollamaChat(req, res) {
             // Fallback response with tool output if Ollama is offline or errors
             if (toolResult) {
                 let fallbackContent = "Tool executed successfully.";
-                if (toolResult.runs) {
+                if (toolResult.success === false) {
+                    fallbackContent = `**Tool Execution Error:**\n${toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message."}`;
+                } else if (toolResult.runs) {
                     fallbackContent = formatRunListings(toolResult.runs, projectName);
                 } else if (toolResult.summary || toolResult.documentContext) {
                     fallbackContent = toolResult.summary || toolResult.documentContext;
@@ -865,6 +918,10 @@ async function sandboxedPythonHandler(req, res) {
 ollamaChat.NJOBVU_SYSTEM_PROMPT = NJOBVU_SYSTEM_PROMPT;
 ollamaChat.normalizeRunListings = normalizeRunListings;
 ollamaChat.formatRunListings = formatRunListings;
+ollamaChat.setToolOutputAsPrimary = setToolOutputAsPrimary;
+ollamaChat.matchesRunSummaryIntent = matchesRunSummaryIntent;
+ollamaChat.matchesListRunsIntent = matchesListRunsIntent;
+ollamaChat.matchesPythonIntent = matchesPythonIntent;
 ollamaChat.extractPythonCode = extractPythonCode;
 ollamaChat.verifyProjectAccess = verifyProjectAccess;
 ollamaChat.getLiveSystemContext = getLiveSystemContext;

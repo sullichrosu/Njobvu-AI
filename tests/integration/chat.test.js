@@ -485,6 +485,138 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
 
+        it('should trigger run summary tool via free text "give me a summary of the training run" and prepend the report', async () => {
+            const fs = require('fs');
+            const path = require('path');
+            const testRunDir = path.join(process.cwd(), 'runs', 'train', 'freetext_summary_run');
+            if (fs.existsSync(testRunDir)) {
+                fs.rmSync(testRunDir, { recursive: true, force: true });
+            }
+            fs.mkdirSync(testRunDir, { recursive: true });
+            fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
+
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'Okay, I understand. I will provide a concise summary of your current training run.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'give me a summary of the training run' }],
+                    model: 'llama3'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.summary).toBeTruthy();
+            const content = response.body.message.content;
+            expect(content.startsWith('## Run Summary Report: freetext_summary_run')).toBe(true);
+            expect(content).toContain('I will provide a concise summary');
+
+            global.fetch = originalFetch;
+            try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
+        });
+
+        it('should trigger run listing tool via free text "list available runs" and prepend formatted runs', async () => {
+            global.managedDbClient = {
+                get: jest.fn().mockImplementation(async (query, params) => {
+                    if (query.includes('FROM Projects WHERE PName = ? AND Admin = ?')) {
+                        return { count: 1 };
+                    }
+                    return { count: 0 };
+                })
+            };
+
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'Here are the available runs for your project.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=test'])
+                .send({
+                    messages: [{ role: 'user', content: 'list available runs' }],
+                    model: 'llama3',
+                    projectName: 'classification'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.runs).toBeDefined();
+            expect(response.body.message.content.startsWith('### Available Runs')).toBe(true);
+
+            global.fetch = originalFetch;
+            delete global.managedDbClient;
+        });
+
+        it('should surface the tool error when a run summary tool fails for a missing run', async () => {
+            const originalFetch = global.fetch;
+            let capturedPromptMessages = null;
+            global.fetch = jest.fn().mockImplementation((url, options) => {
+                capturedPromptMessages = JSON.parse(options.body).messages;
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        model: 'llama3',
+                        message: {
+                            role: 'assistant',
+                            content: 'Okay, I understand. I will be ready to assist with your Njobvu AI tasks.'
+                        },
+                        done: true
+                    })
+                });
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'summarize run nonexistent_run_xyz' }],
+                    model: 'llama3'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.success).toBe(false);
+            const content = response.body.message.content;
+            expect(content.startsWith('**Tool Execution Error:**')).toBe(true);
+            expect(content).toContain('not found');
+
+            expect(capturedPromptMessages).not.toBeNull();
+            const failureMsg = capturedPromptMessages.find(m => m.content.includes('TOOL EXECUTION FAILED'));
+            expect(failureMsg).toBeDefined();
+
+            global.fetch = originalFetch;
+        });
+
         it('should return 200 OK with assistant reply when Ollama returns a valid response', async () => {
             const originalFetch = global.fetch;
             global.fetch = jest.fn().mockResolvedValueOnce({
