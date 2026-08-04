@@ -29,7 +29,7 @@ async function handleRunSummary(req, res) {
     try {
         const { runDir, runType, runName } = req.body;
         if (!runDir) {
-            return res.status(400).json({ error: "runDir is required" });
+            return res.status(400).json({ success: false, error: "runDir is required" });
         }
 
         const summary = await generateRunSummary(runDir, { runType, runName });

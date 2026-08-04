@@ -284,7 +284,7 @@ describe('Chat Harness API Integration Tests', () => {
                     runType: 'train'
                 })
                 .expect('Content-Type', /json/)
-                .expect(404);
+                .expect(400);
 
             expect(response.body).toHaveProperty('success', false);
         });
