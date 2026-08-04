@@ -623,10 +623,14 @@ function discoverRunDirectories(searchDir, visited = new Set(), maxDepth = 5, cu
         if (!stat.isDirectory()) return discovered;
 
         const entries = fs.readdirSync(canonical);
-        
-        const isRunDir = entries.some(f => 
-            f === "results.csv" || f === "args.yaml" || f.endsWith(".pt") ||
-            (f === "weights" && fs.existsSync(path.join(canonical, "weights"))) ||
+
+        // A run output directory is identified by run-level marker files directly inside it.
+        // Structural directories (a project root that merely contains run folders, or a weights/
+        // checkpoint folder holding only *.pt files) must NOT be treated as runs, otherwise
+        // listings and aggregates fill with junk entries like "training" and "weights".
+        const isRunDir = entries.some(f =>
+            f === "results.csv" || f === "args.yaml" || f === "opt.yaml" || f === "hyp.yaml" ||
+            f === "labels.jpg" || f === "labels.png" ||
             (f.endsWith(".png") && (f.includes("results") || f.includes("confusion") || f.includes("F1") || f.includes("labels")))
         );
 
@@ -768,8 +772,22 @@ function listAvailableRuns(projectNameOrOptions, baseRunsDir) {
             } catch (e) {}
         });
 
-        runs.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
-        return runs;
+        // Deduplicate discovered runs. The same run name can appear under multiple search roots
+        // (e.g. runs/detect/train and public/projects/<proj>/training/train); within a project-scoped
+        // query collapse those to a single entry, keeping the most recently modified path, so listings
+        // and aggregated reports never show duplicate run names.
+        const uniqueRuns = new Map();
+        for (const r of runs) {
+            const key = filterProject ? String(r.runName).toLowerCase() : `path:${r.runPath}`;
+            const existing = uniqueRuns.get(key);
+            if (!existing || new Date(r.lastModified) > new Date(existing.lastModified)) {
+                uniqueRuns.set(key, r);
+            }
+        }
+
+        const dedupedRuns = Array.from(uniqueRuns.values());
+        dedupedRuns.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+        return dedupedRuns;
     }
 
     const targetPaths = Array.from(allDiscoveredPaths);

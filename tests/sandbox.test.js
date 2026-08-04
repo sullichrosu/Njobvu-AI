@@ -120,6 +120,80 @@ describe("Run Summary Generator & Discovery", () => {
         const mdContent = fs.readFileSync(path.join(testRunDir, "run_summary.md"), "utf8");
         expect(mdContent).toBe(narrative);
     });
+
+    test("discovery excludes structural directories and deduplicates duplicate run names", async () => {
+        const fixture = path.join(__dirname, "tmp_discovery_fixture");
+        const training = path.join(fixture, "classification", "training");
+        const trainingAlt = path.join(fixture, "classification", "training_alt");
+        const weightsDir = path.join(training, "weights");
+        const trainDir = path.join(training, "train");
+        const train2Dir = path.join(training, "train2");
+        const train2AltDir = path.join(trainingAlt, "train2");
+        const tsDir = path.join(training, "1785814743658");
+
+        fs.mkdirSync(weightsDir, { recursive: true });
+        fs.mkdirSync(trainDir, { recursive: true });
+        fs.mkdirSync(train2Dir, { recursive: true });
+        fs.mkdirSync(train2AltDir, { recursive: true });
+        fs.mkdirSync(tsDir, { recursive: true });
+
+        fs.writeFileSync(path.join(weightsDir, "best.pt"), "checkpoint", "utf8");
+        fs.writeFileSync(path.join(trainDir, "args.yaml"), "epochs: 100\n", "utf8");
+        fs.writeFileSync(path.join(trainDir, "results.csv"), "epoch,mAP50\n1,0.4\n", "utf8");
+        fs.writeFileSync(path.join(train2Dir, "args.yaml"), "epochs: 10\n", "utf8");
+        fs.writeFileSync(path.join(train2Dir, "results.csv"), "epoch,mAP50\n1,0.5\n", "utf8");
+        fs.writeFileSync(path.join(tsDir, "args.yaml"), "epochs: 3\n", "utf8");
+        fs.writeFileSync(path.join(tsDir, "labels.jpg"), "image", "utf8");
+        fs.writeFileSync(path.join(train2AltDir, "args.yaml"), "epochs: 10\n", "utf8");
+        fs.writeFileSync(path.join(train2AltDir, "results.csv"), "epoch,mAP50\n1,0.6\n", "utf8");
+        const later = new Date(Date.now() + 5000);
+        fs.utimesSync(train2AltDir, later, later);
+        fs.utimesSync(path.join(train2AltDir, "args.yaml"), later, later);
+        fs.utimesSync(path.join(train2AltDir, "results.csv"), later, later);
+
+        try {
+            const runs = listAvailableRuns("classification", fixture);
+            const names = runs.map(r => r.runName).sort();
+            expect(names).toEqual(["1785814743658", "train", "train2"]);
+
+            const train2Matches = runs.filter(r => r.runName === "train2");
+            expect(train2Matches.length).toBe(1);
+            expect(train2Matches[0].runPath).toBe(path.resolve(train2AltDir));
+
+            expect(runs.some(r => r.runName === "weights")).toBe(false);
+            expect(runs.some(r => r.runName === "training")).toBe(false);
+            expect(runs.some(r => r.runName === "training_alt")).toBe(false);
+        } finally {
+            fs.rmSync(fixture, { recursive: true, force: true });
+        }
+    });
+
+    test("aggregated summary writes per-run summaries into each run's own output directory", async () => {
+        const fixture = path.join(__dirname, "tmp_agg_fixture");
+        const runA = path.join(fixture, "training", "runA");
+        const runB = path.join(fixture, "training", "runB");
+        fs.mkdirSync(runA, { recursive: true });
+        fs.mkdirSync(runB, { recursive: true });
+        fs.writeFileSync(path.join(runA, "args.yaml"), "epochs: 5\n", "utf8");
+        fs.writeFileSync(path.join(runA, "results.csv"), "epoch,mAP50\n1,0.4\n", "utf8");
+        fs.writeFileSync(path.join(runB, "args.yaml"), "epochs: 3\n", "utf8");
+        fs.writeFileSync(path.join(runB, "results.csv"), "epoch,mAP50\n1,0.5\n", "utf8");
+
+        try {
+            const agg = await generateRunSummary(fixture, { allRuns: true, projectName: "tmp_agg_fixture", baseRunsDir: fixture });
+            expect(agg.isAggregated).toBe(true);
+            expect(agg.totalRuns).toBe(2);
+
+            for (const dir of [runA, runB]) {
+                expect(fs.existsSync(path.join(dir, "run_summary.md"))).toBe(true);
+                expect(fs.existsSync(path.join(dir, "summary.json"))).toBe(true);
+                const md = fs.readFileSync(path.join(dir, "run_summary.md"), "utf8");
+                expect(md.startsWith("# Run Summary:")).toBe(true);
+            }
+        } finally {
+            fs.rmSync(fixture, { recursive: true, force: true });
+        }
+    });
 });
 
 describe("Sandbox API Routes", () => {
