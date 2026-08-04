@@ -98,6 +98,8 @@ api.post("/api/chat", ollamaChat);
 api.get("/api/chat/config", getChatConfig);
 api.post("/api/chat/config", updateChatConfig);
 api.get("/api/chat/models", getOllamaModels);
+api.post("/api/runs/summary", ollamaChat.generateRunSummaryHandler);
+api.post("/api/sandbox/python", ollamaChat.sandboxedPythonHandler);
 
 // INFERENCE ROUTES
 api.post("/yolo-inf", yoloInference);
