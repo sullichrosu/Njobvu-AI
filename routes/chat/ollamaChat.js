@@ -148,6 +148,50 @@ function matchesPythonIntent(code, text) {
 }
 
 /**
+ * Recursively scans directory trees for run output folders (mirrors the summary generator util's
+ * discovery). Used by the legacy fallback so it searches the same roots as the util.
+ */
+function discoverRunDirectories(searchDir, visited = new Set(), maxDepth = 5, currentDepth = 0) {
+    const discovered = [];
+    if (!searchDir || currentDepth > maxDepth || !fs.existsSync(searchDir)) {
+        return discovered;
+    }
+
+    try {
+        const canonical = path.resolve(searchDir);
+        if (visited.has(canonical)) return discovered;
+        visited.add(canonical);
+
+        const stat = fs.statSync(canonical);
+        if (!stat.isDirectory()) return discovered;
+
+        const entries = fs.readdirSync(canonical);
+
+        const isRunDir = entries.some(f =>
+            f === "results.csv" || f === "args.yaml" || f.endsWith(".pt") ||
+            (f === "weights" && fs.existsSync(path.join(canonical, "weights"))) ||
+            (f.endsWith(".png") && (f.includes("results") || f.includes("confusion") || f.includes("F1") || f.includes("labels")))
+        );
+
+        if (isRunDir) {
+            discovered.push(canonical);
+        }
+
+        for (const entry of entries) {
+            if (entry === "node_modules" || entry === ".git" || entry === "tmp") continue;
+            const childPath = path.join(canonical, entry);
+            try {
+                if (fs.statSync(childPath).isDirectory()) {
+                    discovered.push(...discoverRunDirectories(childPath, visited, maxDepth, currentDepth + 1));
+                }
+            } catch (e) {}
+        }
+    } catch (e) {}
+
+    return discovered;
+}
+
+/**
  * Safely extracts Python code from incoming payload parameters or markdown code fences.
  * Prevents plain English prompt strings from being executed as Python scripts.
  * Returns a diagnostic status script if status/check chip is clicked without explicit code.
@@ -422,8 +466,10 @@ async function runSandboxedPython(code) {
 
 /**
  * Helper to generate or aggregate run summaries from run output folders.
- * Ingests all run document artifacts (args.yaml, config.json, results.csv, summary.json, metrics)
- * to construct document context for LLM narrative generation.
+ * Resolves the target run directory through the summary generator util's discovery so nested
+ * layouts (runs/detect/train) and project-scoped directories are found, matches a provided runId
+ * by runName/relPath, picks the most recent run (by mtime) when no runId is given, then invokes
+ * the util with its real contract: generateRunSummary(runDir, { runType, projectName }).
  */
 async function generateRunSummary(runId = null, runType = "train", projectName = null, username = null) {
     if (projectName && username) {
@@ -436,49 +482,165 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
         }
     }
 
+    const isInference = runType && String(runType).toLowerCase().includes("inf");
+    const type = isInference ? "inference" : "train";
+
     try {
         let runSummaryGen = null;
         try {
             runSummaryGen = require("../../utils/runSummaryGenerator");
         } catch (e) {}
 
-        if (runSummaryGen && typeof runSummaryGen.generateRunSummary === "function") {
-            const res = await runSummaryGen.generateRunSummary(runId, runType, projectName);
-            if (res && res.success) {
-                return res;
+        if (runSummaryGen && typeof runSummaryGen.listAvailableRuns === "function" && typeof runSummaryGen.generateRunSummary === "function") {
+            // 1. Resolve the target run directory through the util's discovery (handles nested
+            //    runs/detect/train layouts and project-scoped directories).
+            const availableRuns = runSummaryGen.listAvailableRuns(projectName);
+            let allRuns = Array.isArray(availableRuns) ? availableRuns : [];
+            let typedRuns = isInference ? availableRuns.inference : availableRuns.train;
+            // The util falls back to an unfiltered listing when a project filter matches nothing;
+            // for summary resolution that would summarize an unrelated run, so treat it as "no runs".
+            if (projectName && availableRuns.isFallback === true) {
+                allRuns = [];
+                typedRuns = [];
+            }
+            const candidates = (Array.isArray(typedRuns) && typedRuns.length > 0) ? typedRuns : allRuns;
+
+            let resolvedRunDir = null;
+            let selectedRunId = runId;
+
+            if (runId) {
+                const runIdLower = String(runId).trim().toLowerCase();
+                const matched = allRuns.find(r =>
+                    String(r.runName).toLowerCase() === runIdLower ||
+                    String(r.relPath).toLowerCase() === runIdLower ||
+                    String(r.runName).toLowerCase().includes(runIdLower)
+                );
+                if (!matched) {
+                    return {
+                        success: false,
+                        error: `Run '${runId}' not found. Available runs: ${allRuns.map(r => r.runName).join(", ") || "none"}.`
+                    };
+                }
+                resolvedRunDir = matched.runPath;
+                selectedRunId = matched.runName;
+            } else if (candidates.length > 0) {
+                // listAvailableRuns returns runs sorted by most recent mtime first.
+                const best = candidates[0];
+                resolvedRunDir = best.runPath;
+                selectedRunId = best.runName;
+            }
+
+            if (resolvedRunDir && fs.existsSync(resolvedRunDir)) {
+                // 2. Invoke the util with its real contract: generateRunSummary(runDir, { runType, projectName }).
+                let utilRunType;
+                if (isInference) utilRunType = "inference";
+                else if (String(runType || "").toLowerCase().startsWith("train")) utilRunType = "training";
+                else utilRunType = runType || "auto";
+
+                const utilResult = await runSummaryGen.generateRunSummary(resolvedRunDir, { runType: utilRunType, projectName });
+                const utilReport = utilResult && (utilResult.markdownSummary || utilResult.summaryMd || utilResult.summary);
+                if (utilResult && utilReport) {
+                    let artifactNames = [];
+                    try {
+                        artifactNames = fs.readdirSync(resolvedRunDir).filter(f =>
+                            ["args.yaml", "config.json", "results.csv", "summary.json", "metrics.json", "train.log", "inference.log"].includes(f)
+                        );
+                    } catch (e) {}
+
+                    const documentContext = `### INGESTED RUN DOCUMENT ARTIFACTS FOR RUN ${selectedRunId || path.basename(resolvedRunDir)}:\n` +
+                        `- Run Output Directory: \`${resolvedRunDir}\`\n` +
+                        `- Run Type: ${utilResult.runType || type}\n` +
+                        `- Ingested Artifact Files: ${artifactNames.join(", ") || "None"}\n\n${utilReport}`;
+
+                    return {
+                        success: true,
+                        runId: selectedRunId || path.basename(resolvedRunDir),
+                        runType: utilResult.runType || type,
+                        targetRunDir: resolvedRunDir,
+                        runDir: resolvedRunDir,
+                        documentContext: documentContext,
+                        summary: utilReport,
+                        markdownSummary: utilReport,
+                        artifacts: artifactNames
+                    };
+                }
+            } else if (!resolvedRunDir) {
+                return {
+                    success: false,
+                    error: `No ${type} runs found${projectName ? ` for project '${projectName}'` : ""}.`
+                };
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        global.logger?.error("Error resolving run summary via summary generator util:", e);
+    }
 
-    // Fallback run summary generator & document artifact context packager
-    const type = (runType && runType.toLowerCase().includes("inf")) ? "inference" : "train";
-    const baseDir = path.join(process.cwd(), "runs", type);
+    // 3. Fallback legacy generator with broadened scan roots so it never dead-ends on an empty runs/train.
+    const fallbackRoots = [
+        path.join(process.cwd(), "runs"),
+        path.join(process.cwd(), "runs", "train"),
+        path.join(process.cwd(), "runs", "inference"),
+        path.join(process.cwd(), "runs", "detect"),
+        path.join(process.cwd(), "public", "projects")
+    ];
+
+    const allFallbackDirs = [];
+    fallbackRoots.forEach(root => {
+        if (fs.existsSync(root)) {
+            allFallbackDirs.push(...discoverRunDirectories(root));
+        }
+    });
+    const uniqueDirs = Array.from(new Set(allFallbackDirs));
+
+    const projectFiltered = uniqueDirs.filter(dir => {
+        if (!projectName) return true;
+        const dirLower = dir.toLowerCase();
+        const projLower = projectName.toLowerCase();
+        return dirLower.includes(projLower) || path.basename(dir).toLowerCase().includes(projLower);
+    });
+
+    let candidateDirs = projectFiltered;
+    const typedFiltered = projectFiltered.filter(dir => {
+        const dirLower = dir.toLowerCase();
+        return isInference ? !dirLower.includes("train") : dirLower.includes("train");
+    });
+    if (typedFiltered.length > 0) {
+        candidateDirs = typedFiltered;
+    }
+    candidateDirs.sort((a, b) => {
+        try {
+            return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+        } catch (e) {
+            return 0;
+        }
+    });
+
     let targetRunDir = null;
     let selectedRunId = runId;
 
-    if (selectedRunId && fs.existsSync(path.join(baseDir, selectedRunId))) {
-        targetRunDir = path.join(baseDir, selectedRunId);
-    } else if (fs.existsSync(baseDir)) {
-        const dirs = fs.readdirSync(baseDir).filter(d => {
-            try {
-                const isDir = fs.statSync(path.join(baseDir, d)).isDirectory();
-                if (!isDir) return false;
-                if (projectName) return d.includes(projectName);
-                return true;
-            } catch (e) {
-                return false;
-            }
-        });
-        if (dirs.length > 0) {
-            selectedRunId = dirs[dirs.length - 1]; // Latest run
-            targetRunDir = path.join(baseDir, selectedRunId);
+    if (runId) {
+        const runIdLower = String(runId).trim().toLowerCase();
+        const matched = candidateDirs.find(dir =>
+            path.basename(dir).toLowerCase() === runIdLower ||
+            path.basename(dir).toLowerCase().includes(runIdLower)
+        );
+        if (!matched) {
+            return {
+                success: false,
+                error: `Run '${runId}' not found. Available runs: ${candidateDirs.map(d => path.basename(d)).join(", ") || "none"}.`
+            };
         }
+        targetRunDir = matched;
+        selectedRunId = path.basename(matched);
+    } else if (candidateDirs.length > 0) {
+        targetRunDir = candidateDirs[0];
+        selectedRunId = path.basename(candidateDirs[0]);
     }
 
     if (!targetRunDir || !fs.existsSync(targetRunDir)) {
         return {
             success: false,
-            error: `Run directory for '${selectedRunId || "active run"}' not found under runs/${type}.`
+            error: `No ${type} runs found${projectName ? ` for project '${projectName}'` : ""}.`
         };
     }
 
@@ -692,7 +854,31 @@ async function ollamaChat(req, res) {
 
         const endpoint = `${targetOllamaUrl.replace(/\/+$/, "")}/api/chat`;
 
-        // 8. Construct payload messages with dynamic system prompt
+        // 8. Short-circuit tool failures deterministically: never hand a failed tool to the LLM.
+        //    Small models ramble into a marketing-style feature list when asked to narrate a failure.
+        if (toolResult && toolResult.success === false) {
+            const errorText = toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message.";
+            const runs = liveContext.runs || { train: [], inference: [] };
+            const hasRuns = (Array.isArray(runs.train) && runs.train.length > 0) || (Array.isArray(runs.inference) && runs.inference.length > 0);
+            const runsHint = hasRuns
+                ? formatRunListings(runs, projectName)
+                : `No runs are currently available${projectName ? ` for project '${projectName}'` : ""}.`;
+            const content = `**Tool Execution Error:**\n${errorText}\n\n${runsHint}\n\nTip: ask to summarize a specific run, e.g. \`summarize run <run-name>\`.`;
+            return res.status(200).json({
+                success: true,
+                message: {
+                    role: "assistant",
+                    content: content
+                },
+                model: targetModel,
+                user: username,
+                role: userRole,
+                toolResult: toolResult,
+                liveContext: liveContext
+            });
+        }
+
+        // 9. Construct payload messages with dynamic system prompt
         const formattedMessages = [];
         const existingSystemIndex = augmentedMessages.findIndex(m => m.role === "system");
 
@@ -712,7 +898,7 @@ async function ollamaChat(req, res) {
             });
         }
 
-        // 9. Invoke Ollama API
+        // 10. Invoke Ollama API
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 

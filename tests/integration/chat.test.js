@@ -403,7 +403,7 @@ describe('Chat Harness API Integration Tests', () => {
 
             // The actual tool report must be the PRIMARY (prepended) content, not suppressed by the LLM preamble.
             const content = response.body.message.content;
-            expect(content.startsWith('## Run Summary Report: preamble_run')).toBe(true);
+            expect(content.startsWith('# Run Summary: preamble_run')).toBe(true);
             expect(content).toContain('I will provide a concise summary');
 
             global.fetch = originalFetch;
@@ -523,7 +523,7 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.summary).toBeTruthy();
             const content = response.body.message.content;
-            expect(content.startsWith('## Run Summary Report: freetext_summary_run')).toBe(true);
+            expect(content.startsWith('# Run Summary: freetext_summary_run')).toBe(true);
             expect(content).toContain('I will provide a concise summary');
 
             global.fetch = originalFetch;
@@ -574,23 +574,90 @@ describe('Chat Harness API Integration Tests', () => {
             delete global.managedDbClient;
         });
 
-        it('should surface the tool error when a run summary tool fails for a missing run', async () => {
+        it('should find a run under runs/detect/train via free text "summarize my training run" and prepend the report', async () => {
+            const fs = require('fs');
+            const path = require('path');
+            const testRunDir = path.join(process.cwd(), 'runs', 'detect', 'train', 'detect_summary_run');
+            if (fs.existsSync(testRunDir)) {
+                fs.rmSync(testRunDir, { recursive: true, force: true });
+            }
+            fs.mkdirSync(testRunDir, { recursive: true });
+            fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
+            // Pin the run as the most recent (by mtime) so free-text selection is deterministic,
+            // even though creating it bumps the parent runs/detect/train directory mtime.
+            const futureTime = new Date(Date.now() + 60000);
+            fs.utimesSync(testRunDir, futureTime, futureTime);
+
             const originalFetch = global.fetch;
-            let capturedPromptMessages = null;
-            global.fetch = jest.fn().mockImplementation((url, options) => {
-                capturedPromptMessages = JSON.parse(options.body).messages;
-                return Promise.resolve({
-                    ok: true,
-                    status: 200,
-                    json: async () => ({
-                        model: 'llama3',
-                        message: {
-                            role: 'assistant',
-                            content: 'Okay, I understand. I will be ready to assist with your Njobvu AI tasks.'
-                        },
-                        done: true
-                    })
-                });
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'Okay, I understand. I will provide a concise summary of your current training run.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'summarize my training run' }],
+                    model: 'llama3'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.success).toBe(true);
+            expect(response.body.toolResult.targetRunDir).toBe(testRunDir);
+            const content = response.body.message.content;
+            expect(content.startsWith('# Run Summary: detect_summary_run')).toBe(true);
+
+            global.fetch = originalFetch;
+            try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
+        });
+
+        it('should short-circuit with a deterministic error and NO LLM call when no runs are available', async () => {
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn(() => {
+                throw new Error('LLM should not be called for a failed tool');
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'summarize my training run' }],
+                    model: 'llama3',
+                    projectName: 'chat_no_runs_project'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.success).toBe(false);
+            const content = response.body.message.content;
+            expect(content.startsWith('**Tool Execution Error:**')).toBe(true);
+            expect(content).toContain("No train runs found for project 'chat_no_runs_project'");
+            expect(content).toContain('### Available Runs');
+            expect(content).toContain('summarize run');
+
+            expect(global.fetch).not.toHaveBeenCalled();
+
+            global.fetch = originalFetch;
+        });
+
+        it('should short-circuit with the tool error and available-runs hint when a named run is missing', async () => {
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn(() => {
+                throw new Error('LLM should not be called for a failed tool');
             });
 
             const response = await request(app)
@@ -608,11 +675,11 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult.success).toBe(false);
             const content = response.body.message.content;
             expect(content.startsWith('**Tool Execution Error:**')).toBe(true);
-            expect(content).toContain('not found');
+            expect(content).toContain("Run 'nonexistent_run_xyz' not found");
+            expect(content).toContain('Available runs');
+            expect(content).toContain('summarize run');
 
-            expect(capturedPromptMessages).not.toBeNull();
-            const failureMsg = capturedPromptMessages.find(m => m.content.includes('TOOL EXECUTION FAILED'));
-            expect(failureMsg).toBeDefined();
+            expect(global.fetch).not.toHaveBeenCalled();
 
             global.fetch = originalFetch;
         });
