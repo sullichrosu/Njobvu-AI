@@ -155,15 +155,58 @@
 												<p>(cpu,gpu#,mps)</p>
 											</div>
 										</div>
-										<div class="form-row">
-											<div class="form-group col-md-2">
-												<h5><label for="TrainingRange" style="width: 200%;">% Training
-														Data:</label></h5>
-												<input type="range" min="50" max="100" value="70" class="slider"
-													id="TrainingRange" style="width: 400%;">
-												<p>Value: <span id="demo"></span>%</p>
+										<!-- Class Subset Selection -->
+										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
+											<h5><label>Class Subset Selection</label></h5>
+											<p class="text-muted small">Select which classes to include in training:</p>
+											<div class="mb-2">
+												<button type="button" class="btn btn-sm btn-outline-primary" id="selectAllClasses">Select All</button>
+												<button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllClasses">Deselect All</button>
+											</div>
+											<div class="class-selection-container" style="max-height: 150px; overflow-y: auto;">
+												<% if (typeof classes !== 'undefined' && classes.length > 0) { %>
+													<% for (var i = 0; i < classes.length; i++) { %>
+														<div class="form-check form-check-inline mr-3 my-1">
+															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" checked>
+															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %></label>
+														</div>
+													<% } %>
+												<% } else { %>
+													<span class="text-muted">No classes defined in project.</span>
+												<% } %>
 											</div>
 										</div>
+
+										<div class="form-row">
+											<div class="form-group col-md-3">
+												<h5><label for="max_images">Max Image Clamping:</label></h5>
+												<input type="number" id="max_images" name="max_images" min="0" placeholder="Unlimited (all images)" class="form-control" style="width: 100%;">
+												<small class="form-text text-muted">Limit max total images (0 or empty = all)</small>
+											</div>
+										</div>
+
+										<!-- Train : Validate : Test Split Ratio Controls -->
+										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
+											<h5><label>Dataset Split Ratio (Train : Validate : Test)</label></h5>
+											<div class="form-row align-items-center">
+												<div class="form-group col-md-3">
+													<label for="TrainingRange">Train %</label>
+													<input type="number" min="0" max="100" value="70" class="form-control split-ratio-input" id="TrainingRange" name="TrainingPercent">
+												</div>
+												<div class="form-group col-md-3">
+													<label for="ValRange">Validate %</label>
+													<input type="number" min="0" max="100" value="20" class="form-control split-ratio-input" id="ValRange" name="ValPercent">
+												</div>
+												<div class="form-group col-md-3">
+													<label for="TestRange">Test %</label>
+													<input type="number" min="0" max="100" value="10" class="form-control split-ratio-input" id="TestRange" name="TestPercent">
+												</div>
+												<div class="form-group col-md-3 pt-3">
+													<span id="ratioSummary" class="badge badge-info p-2" style="font-size: 0.95rem;">Ratio: 70 : 20 : 10 %</span>
+												</div>
+											</div>
+										</div>
+
 										<div class="form-row">
 											<div class="form-group col-md-6">
 												<h5><label for="upload-command">YOLO Advanced Arguments:</label></h5>
@@ -279,12 +322,36 @@
 						});
 					});
 
-					var slider = document.getElementById("TrainingRange");
-					var sliderval = document.getElementById("demo");
-					sliderval.innerHTML = slider.value;
-					slider.oninput = function () {
-						sliderval.innerHTML = this.value;
+					// Class selection helper buttons
+					var selectAllBtn = document.getElementById("selectAllClasses");
+					var deselectAllBtn = document.getElementById("deselectAllClasses");
+					if (selectAllBtn) {
+						selectAllBtn.addEventListener("click", function() {
+							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = true; });
+						});
 					}
+					if (deselectAllBtn) {
+						deselectAllBtn.addEventListener("click", function() {
+							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = false; });
+						});
+					}
+
+					// Split ratio summary update
+					function updateRatioSummary() {
+						var train = parseInt(document.getElementById("TrainingRange").value) || 0;
+						var val = parseInt(document.getElementById("ValRange").value) || 0;
+						var test = parseInt(document.getElementById("TestRange").value) || 0;
+						var summary = document.getElementById("ratioSummary");
+						if (summary) {
+							summary.innerText = "Ratio: " + train + " : " + val + " : " + test + " %";
+						}
+					}
+					["TrainingRange", "ValRange", "TestRange"].forEach(function(id) {
+						var el = document.getElementById(id);
+						if (el) {
+							el.addEventListener("input", updateRatioSummary);
+						}
+					});
 
 					document.forms['yolo-run'].addEventListener('submit', (event) => {
 						event.preventDefault();
@@ -299,10 +366,19 @@
 							return;
 						}
 
+						var selectedClasses = [];
+						document.querySelectorAll(".class-checkbox:checked").forEach(function(cb) {
+							selectedClasses.push(cb.value);
+						});
+
 						var formData = new FormData();
 						formData.append("PName", "<%= PName %>");
 						formData.append("Admin", "<%= Admin %>");
 						formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+						formData.append("ValPercent", document.getElementById("ValRange").value);
+						formData.append("TestPercent", document.getElementById("TestRange").value);
+						formData.append("max_images", document.getElementById("max_images").value);
+						formData.append("selected_classes", JSON.stringify(selectedClasses));
 						formData.append("batch", document.getElementById("batch").value);
 						formData.append("subdiv", document.getElementById("subdiv").value);
 						formData.append("yolovx_path", document.getElementById("Yolo").value);
