@@ -8,31 +8,66 @@ const readline = require("readline");
  * Inspects a training or inference run output directory, deeply ingests complete run file
  * artifacts (args.yaml, config.json, results.csv, log files, plots, weight checkpoints),
  * and generates structured, context-aware analysis reports (summary.json & run_summary.md).
+ * Supports both single-run analysis and all-run summary aggregations for a project.
  */
 
 /**
- * Deeply analyzes a run directory and writes comprehensive summary files.
+ * Analyzes a run directory (or project run set) and writes comprehensive summary files.
  * 
- * @param {string} runDir - Absolute or relative path to the run directory
+ * @param {string} [runDir] - Absolute or relative path to a run directory or project directory
  * @param {Object} [options]
  * @param {string} [options.runType] - 'training' | 'inference' | 'auto'
  * @param {string} [options.runName] - Custom run name or label
+ * @param {string} [options.projectName] - Project name to aggregate runs for
+ * @param {boolean} [options.allRuns] - Explicitly generate aggregated summary across all project runs
  * @returns {Promise<Object>} Summary object
  */
 async function generateRunSummary(runDir, options = {}) {
-    if (!runDir || !fs.existsSync(runDir)) {
-        throw new Error(`Run directory does not exist: ${runDir}`);
+    const projectName = options.projectName || options.PName || null;
+    let targetPath = runDir;
+
+    if ((!targetPath || !fs.existsSync(targetPath)) && projectName) {
+        const candidate1 = path.join(__dirname, "..", "public", "projects", projectName);
+        const candidate2 = path.join(__dirname, "..", "runs", projectName);
+        const candidate3 = path.join(__dirname, "..", "runs");
+        if (fs.existsSync(candidate1)) targetPath = candidate1;
+        else if (fs.existsSync(candidate2)) targetPath = candidate2;
+        else if (fs.existsSync(candidate3)) targetPath = candidate3;
     }
 
-    const stat = fs.statSync(runDir);
+    if (!targetPath && !projectName) {
+        targetPath = path.join(__dirname, "..", "runs");
+    }
+
+    if (!targetPath || !fs.existsSync(targetPath)) {
+        throw new Error(`Run directory does not exist: ${runDir || projectName || 'unspecified'}`);
+    }
+
+    const stat = fs.statSync(targetPath);
     if (!stat.isDirectory()) {
-        throw new Error(`Path is not a directory: ${runDir}`);
+        throw new Error(`Path is not a directory: ${targetPath}`);
     }
 
+    const topFiles = fs.readdirSync(targetPath);
+    const hasDirectRunFiles = topFiles.some(f => 
+        f === "results.csv" || f === "args.yaml" || f === "labels.jpg" ||
+        (f === "config.json" && !topFiles.includes("projects"))
+    );
+
+    if (options.allRuns || !hasDirectRunFiles) {
+        return await generateAggregatedRunSummary(targetPath, { ...options, projectName });
+    }
+
+    return await generateSingleRunSummary(targetPath, options);
+}
+
+/**
+ * Generates summary for a single run directory.
+ */
+async function generateSingleRunSummary(runDir, options = {}) {
     const runName = options.runName || path.basename(runDir);
     const allFileEntries = getFilesRecursive(runDir);
 
-    // Detect run type
     let runType = options.runType || "auto";
     if (runType === "auto") {
         const hasTrainingFiles = allFileEntries.some(f => 
@@ -41,7 +76,6 @@ async function generateRunSummary(runDir, options = {}) {
         runType = hasTrainingFiles ? "training" : "inference";
     }
 
-    // Categorize artifacts
     const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".bmp"];
     const artifactFiles = [];
     const visualPlots = [];
@@ -58,7 +92,6 @@ async function generateRunSummary(runDir, options = {}) {
         }
     });
 
-    // 1. Ingest configuration & hyperparameters
     let configData = {};
     const argsPath = path.join(runDir, "args.yaml");
     const hypPath = path.join(runDir, "hyp.yaml");
@@ -80,7 +113,6 @@ async function generateRunSummary(runDir, options = {}) {
         configData.options = parseYamlSimple(fs.readFileSync(optPath, "utf8"));
     }
 
-    // 2. Ingest metrics & performance data (stream results.csv or metrics.json)
     let metrics = {};
     let performanceAnalysis = {};
     const resultsCsvPath = path.join(runDir, "results.csv");
@@ -96,13 +128,9 @@ async function generateRunSummary(runDir, options = {}) {
         } catch (e) {}
     }
 
-    // 3. Ingest log files
     const logDiagnostics = await parseLogFilesStream(runDir, allFileEntries);
-
-    // 4. Ingest weight checkpoints
     const weightsInfo = parseWeightFiles(runDir, allFileEntries);
 
-    // 5. Synthesize findings and actionable recommendations
     const findings = generateFindings(runType, metrics, imageCount, artifactFiles, weightsInfo, logDiagnostics);
     const recommendations = generateRecommendations(runType, metrics, performanceAnalysis, logDiagnostics);
 
@@ -110,6 +138,7 @@ async function generateRunSummary(runDir, options = {}) {
         runName,
         runDir: path.resolve(runDir),
         runType,
+        isAggregated: false,
         generatedAt: new Date().toISOString(),
         artifactCount: artifactFiles.length,
         imageCount,
@@ -123,16 +152,114 @@ async function generateRunSummary(runDir, options = {}) {
         recommendations
     };
 
-    // Write summary.json
     const summaryJsonPath = path.join(runDir, "summary.json");
     fs.writeFileSync(summaryJsonPath, JSON.stringify(summary, null, 2), "utf8");
 
-    // Write run_summary.md
     const summaryMdPath = path.join(runDir, "run_summary.md");
     const mdContent = generateMarkdownSummary(summary);
     fs.writeFileSync(summaryMdPath, mdContent, "utf8");
 
     return summary;
+}
+
+/**
+ * Generates an aggregated summary across all available runs in a project/directory.
+ */
+async function generateAggregatedRunSummary(targetPath, options = {}) {
+    const projectName = options.projectName || options.PName || null;
+    const availableRuns = listAvailableRuns(projectName || targetPath, options.baseRunsDir);
+    const runName = options.runName || (projectName ? `${projectName}_all_runs_summary` : "all_runs_summary");
+
+    const runSummaries = [];
+    let totalEpochsTrained = 0;
+    let bestOverallMap50 = 0;
+    let bestRunName = "None";
+    let trainingRunCount = 0;
+    let inferenceRunCount = 0;
+
+    for (const r of availableRuns) {
+        try {
+            if (path.resolve(r.runPath) === path.resolve(targetPath)) continue;
+
+            const singleSummary = await generateSingleRunSummary(r.runPath, {
+                runName: r.runName,
+                runType: r.runType
+            });
+            runSummaries.push(singleSummary);
+
+            if (r.runType === "training") {
+                trainingRunCount++;
+                if (singleSummary.metrics && singleSummary.metrics.totalEpochs) {
+                    totalEpochsTrained += singleSummary.metrics.totalEpochs;
+                }
+                if (singleSummary.metrics && singleSummary.metrics.bestMap50) {
+                    if (singleSummary.metrics.bestMap50 > bestOverallMap50) {
+                        bestOverallMap50 = singleSummary.metrics.bestMap50;
+                        bestRunName = r.runName;
+                    }
+                }
+            } else {
+                inferenceRunCount++;
+            }
+        } catch (err) {
+            // Skip unparseable run
+        }
+    }
+
+    const findings = [
+        `Aggregated analysis for ${runSummaries.length} run(s)${projectName ? ` in project '${projectName}'` : ""}.`,
+        `Training runs: ${trainingRunCount}, Inference runs: ${inferenceRunCount}.`
+    ];
+
+    if (trainingRunCount > 0) {
+        findings.push(`Total epochs trained across all runs: ${totalEpochsTrained}.`);
+        if (bestOverallMap50 > 0) {
+            findings.push(`Top performing training run: '${bestRunName}' with peak mAP@50 of ${(bestOverallMap50 * 100).toFixed(2)}%.`);
+        }
+    }
+
+    const recommendations = [];
+    if (trainingRunCount === 0 && inferenceRunCount === 0) {
+        findings.push("No active run output directories found for analysis.");
+        recommendations.push("Initiate a training or inference job to generate model run outputs.");
+    } else if (bestOverallMap50 > 0.8) {
+        recommendations.push(`Run '${bestRunName}' demonstrated high detection performance (mAP@50 > 80%). Recommended for deployment.`);
+    } else if (trainingRunCount > 0) {
+        recommendations.push("Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.");
+    }
+
+    const aggregated = {
+        runName,
+        runDir: path.resolve(targetPath),
+        runType: "aggregated",
+        isAggregated: true,
+        projectName,
+        generatedAt: new Date().toISOString(),
+        totalRuns: runSummaries.length,
+        trainingRunCount,
+        inferenceRunCount,
+        aggregateMetrics: {
+            totalEpochsTrained,
+            bestOverallMap50,
+            bestRunName
+        },
+        findings,
+        recommendations,
+        runs: runSummaries
+    };
+
+    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory()) {
+        try {
+            const summaryJsonPath = path.join(targetPath, "summary.json");
+            fs.writeFileSync(summaryJsonPath, JSON.stringify(aggregated, null, 2), "utf8");
+
+            const summaryMdPath = path.join(targetPath, "run_summary.md");
+            const mdContent = generateAggregatedMarkdownSummary(aggregated);
+            fs.writeFileSync(summaryMdPath, mdContent, "utf8");
+        } catch (e) {}
+    }
+
+    return aggregated;
 }
 
 function getFilesRecursive(dir, baseDir = dir) {
@@ -282,7 +409,7 @@ async function parseLogFilesStream(runDir, fileEntries) {
     if (logEntries.length === 0) return diagnostics;
 
     for (const logFile of logEntries) {
-        if (logFile.sizeBytes > 10 * 1024 * 1024) continue; // Skip huge binary log files > 10MB
+        if (logFile.sizeBytes > 10 * 1024 * 1024) continue;
 
         const fileStream = fs.createReadStream(logFile.fullPath, { encoding: "utf8" });
         const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
@@ -432,6 +559,46 @@ function generateMarkdownSummary(summary) {
     return md;
 }
 
+function generateAggregatedMarkdownSummary(summary) {
+    let md = `# Run Summary: ${summary.runName}\n\n`;
+    md += `- **Type**: AGGREGATED ALL-RUNS REPORT\n`;
+    md += `- **Project**: ${summary.projectName || "All Projects"}\n`;
+    md += `- **Generated At**: ${summary.generatedAt}\n`;
+    md += `- **Total Runs Analyzed**: ${summary.totalRuns} (${summary.trainingRunCount} training, ${summary.inferenceRunCount} inference)\n\n`;
+
+    md += `## Executive Summary & Findings\n`;
+    summary.findings.forEach(f => {
+        md += `- ${f}\n`;
+    });
+
+    if (summary.trainingRunCount > 0) {
+        md += `\n## Aggregate Metrics\n`;
+        md += `- **Total Epochs Trained**: ${summary.aggregateMetrics.totalEpochsTrained}\n`;
+        md += `- **Best Overall mAP@50**: ${(summary.aggregateMetrics.bestOverallMap50 * 100).toFixed(2)}%\n`;
+        md += `- **Top Performing Run**: \`${summary.aggregateMetrics.bestRunName}\`\n`;
+    }
+
+    if (summary.runs && summary.runs.length > 0) {
+        md += `\n## Individual Run Breakdown\n`;
+        md += `| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n`;
+        md += `| --- | --- | --- | --- | --- |\n`;
+        summary.runs.forEach(r => {
+            const mapStr = r.metrics && r.metrics.bestMap50 ? `${(r.metrics.bestMap50 * 100).toFixed(2)}%` : "N/A";
+            const epochsStr = r.metrics && r.metrics.totalEpochs ? r.metrics.totalEpochs : "N/A";
+            md += `| \`${r.runName}\` | ${r.runType} | ${r.imageCount} | ${mapStr} | ${epochsStr} |\n`;
+        });
+    }
+
+    if (summary.recommendations && summary.recommendations.length > 0) {
+        md += `\n## AI Recommendations & Next Steps\n`;
+        summary.recommendations.forEach(r => {
+            md += `- 💡 ${r}\n`;
+        });
+    }
+
+    return md;
+}
+
 /**
  * Scans run directories for active training and inference runs and returns summary metadata.
  * 
@@ -570,6 +737,8 @@ function listAvailableRuns(projectNameOrOptions, baseRunsDir) {
 
 module.exports = {
     generateRunSummary,
+    generateSingleRunSummary,
+    generateAggregatedRunSummary,
     listAvailableRuns,
     parseYamlSimple,
     parseResultsCsvStream
