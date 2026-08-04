@@ -15,9 +15,9 @@
 		<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
 		</div>
 		<div class="col-6" style="float: right">
-			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="validationPage()">Switch to Validation</button>
-			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="createpage()">Create Project</button>
-			<button type="button" class="btn btn-primary" style="float:right" id="importbtn" data-toggle="modal" data-target="#import_modal" >Import Project</button>
+			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="validationPage()" data-toggle="tooltip" title="Switch between standard labeling and validation mode">Switch to Validation <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Toggle validation quality assurance mode">?</span></button>
+			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="createpage()" data-toggle="tooltip" title="Create a new labeling or classification project">Create Project <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create project from scratch or import archives (YOLO/KW-COCO/IFCB)">?</span></button>
+			<button type="button" class="btn btn-primary" style="float:right" id="importbtn" data-toggle="modal" data-target="#import_modal" data-toggle="tooltip" title="Import existing project database archive">Import Project <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Import an exported project zip database">?</span></button>
 	   </div>
 	</div>
     <div class="col-12">
@@ -41,7 +41,7 @@
 				<tr>
 					<th scope="col">Project Name</th>
 					<th class="text-center" scope="col">Admin</th>
-					<th class="text-center" scope="col">Review Status</th>
+					<th class="text-center" scope="col">Review Status <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Shows if project images are flagged as Needs Review for expert audit">?</span></th>
 					<th class="text-center" scope="col">Number of Labels</th>
 					<th class="text-center" scope="col">Number of Images</th>
 					<th class="text-center" scope="col">% Labeled</th>

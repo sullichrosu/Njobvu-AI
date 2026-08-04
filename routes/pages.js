@@ -34,6 +34,7 @@ const getYolo3SettingsPage = require("./pages/getYolo3SettingsPage");
 const getUserPage = require("./pages/getUserPage");
 const get404Page = require("./pages/get404Page");
 const getInceptionSettingsPage = require("./pages/getInceptionSettingsPage");
+const getHelpPage = require("./pages/getHelpPage");
 
 module.exports = {
     getLoginPage: getLoginPage,
@@ -72,4 +73,5 @@ module.exports = {
     getInferencePage: getInferencePage,
     getTrainingPage: getTrainingPage,
     getInceptionSettingsPage: getInceptionSettingsPage,
+    getHelpPage: getHelpPage,
 };

@@ -332,3 +332,53 @@ btn-info:hover {
     background-color: rgb(15, 107, 122) !important;
     color: rgb(255, 255, 255) !important;
 }
+
+/* Njobvu-AI Help Tooltips & Question Mark Icons */
+.help-tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #0284c7;
+    color: #ffffff !important;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-left: 5px;
+    margin-right: 5px;
+    vertical-align: middle;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.15s ease-in-out;
+}
+
+.help-tooltip-icon:hover {
+    background-color: #0369a1;
+    transform: scale(1.15);
+    text-decoration: none;
+}
+
+.help-tooltip-icon-light {
+    background-color: #e0f2fe;
+    color: #0284c7 !important;
+    border: 1px solid #bae6fd;
+}
+
+.help-tooltip-icon-light:hover {
+    background-color: #0284c7;
+    color: #ffffff !important;
+}
+
+.popover-header {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    border-bottom: none;
+}
+
+.popover-body {
+    color: #334155;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}

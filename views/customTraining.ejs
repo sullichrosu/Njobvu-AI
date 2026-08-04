@@ -11,11 +11,11 @@
 		<h1 style="text-align: center;"><%= PName %></h1>
 	</div>
 	<div class="container">
-		<h3>Add a New Training</h3>
+		<h3>Add a New Training <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Configure custom training runs with Python training scripts and pre-trained weights">?</span></h3>
 		<form class="add-script" action="/script" enctype="multipart/form-data" id="add-script">
 			<div class="form-row">
 				<div class="form-group col-md-6">
-					<label for="upload-python">Upload python file (.py)</label>
+					<label for="upload-python">Upload python file (.py) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Upload custom Python script containing model architecture and training loop">?</span></label>
 					<input id = "upload_python" aria-label="Upload Python" name="upload_python" type="file" class="form-control-file" required>
 				</div>
 			</div>
@@ -28,7 +28,7 @@
 		<form class="add-weights" action="/upload_weights" enctype="multipart/form-data" id="add-weights">
 			<div class="form-row">
 				<div class="form-group col-md-6">
-					<label for="upload-weights">Upload weights file (.h5, .weights)</label>
+					<label for="upload-weights">Upload weights file (.h5, .weights) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Upload pre-trained neural network weights file">?</span></label>
 					<input id = "upload-weights" name="upload-weights" type="file" class="form-control-file" required>
 				</div>
 			</div>
@@ -41,7 +41,7 @@
 		<form class="add-python" action="/python" enctype="multipart/form-data" id="pythonForm">
 			<div class="form-row">
 				<div class="form-group col-md-6">
-					<label for="project-name">Python Path</label>
+					<label for="project-name">Python Path <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Path to system or venv Python executable (e.g. /usr/bin/python3)">?</span></label>
 					<input id = "python_path" aria-label="Enter Python path" name="python_path" type="text" class="form-control" id="python_path" placeholder="Python Path" required>
 				</div>
 			</div>
@@ -54,7 +54,7 @@
 		
 		<form class="start-run" action="/run" enctype="multipart/form-data" id="start-run">
 			<div class="slidecontainer">
-				<label for="TrainingRange">Training Data Percentage</label>
+				<label for="TrainingRange">Training Data Percentage <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Percentage of project images allocated to training (remainder allocated to validation)">?</span></label>
 				<input type="range" min="50" max="100" value="50" class="slider" id="TrainingRange">
 				<p>Value: <span id="demo"></span></p>
 			</div>
@@ -85,12 +85,12 @@
 					</select>
 				</div>
 				<div class="form-group col-md-6">
-					<label for="upload-command">Script Options: Please add "&lt;data_dir&gt;" "&lt;training_csv&gt;" "&lt;validation_csv&gt;" "&lt;output_dir&gt;" "&lt;weights&gt;"</label>
+					<label for="upload-command">Script Options: Please add "&lt;data_dir&gt;" "&lt;training_csv&gt;" "&lt;validation_csv&gt;" "&lt;output_dir&gt;" "&lt;weights&gt;" <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Pass custom CLI flags or path arguments to your python script execution">?</span></label>
 					<input id ="options" aria-label="Enter script options" name="options" type="text" class="form-control-file">
 				</div>
 			</div>
 			<div class="col text-center">
-				<button id="Trainbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">TRAIN</button>
+				<button id="Trainbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0" data-toggle="tooltip" title="Start deep learning model training run">TRAIN <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Launch model training pipeline">?</span></button>
 				<hr class="my-4">
 			</div>
 		</form>
