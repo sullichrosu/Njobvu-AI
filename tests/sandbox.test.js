@@ -77,6 +77,15 @@ describe("Run Summary Generator & Discovery", () => {
         expect(mdContent).toContain("# Run Summary: test_training_run");
     });
 
+    test("generates aggregated all-runs summary when target directory contains multiple run subdirectories", async () => {
+        const aggregatedSummary = await generateRunSummary(__dirname, { allRuns: true, projectName: "tmp_test_run", baseRunsDir: __dirname });
+
+        expect(aggregatedSummary.isAggregated).toBe(true);
+        expect(aggregatedSummary.totalRuns).toBeGreaterThan(0);
+        expect(aggregatedSummary.findings).toBeDefined();
+        expect(Array.isArray(aggregatedSummary.runs)).toBe(true);
+    });
+
     test("listAvailableRuns discovers run directories and metadata with project filtering", () => {
         const allRuns = listAvailableRuns(null, __dirname);
         expect(Array.isArray(allRuns)).toBe(true);

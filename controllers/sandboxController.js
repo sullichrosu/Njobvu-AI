@@ -1,3 +1,5 @@
+const path = require("path");
+const fs = require("fs");
 const { runSandboxedPython } = require("../utils/sandboxedPythonRunner");
 const { generateRunSummary, listAvailableRuns } = require("../utils/runSummaryGenerator");
 
@@ -27,12 +29,27 @@ async function executePythonSandbox(req, res) {
 
 async function handleRunSummary(req, res) {
     try {
-        const { runDir, runType, runName } = req.body;
-        if (!runDir) {
-            return res.status(400).json({ error: "runDir is required" });
+        const { runDir, runType, runName, projectName, PName, allRuns } = req.body || {};
+        const targetProject = projectName || PName || null;
+
+        let targetDir = runDir;
+        if (!targetDir && targetProject) {
+            targetDir = path.join(__dirname, "..", "public", "projects", targetProject);
+            if (!fs.existsSync(targetDir)) {
+                targetDir = path.join(__dirname, "..", "runs");
+            }
+        }
+        if (!targetDir) {
+            targetDir = path.join(__dirname, "..", "runs");
         }
 
-        const summary = await generateRunSummary(runDir, { runType, runName });
+        const summary = await generateRunSummary(targetDir, {
+            runType,
+            runName,
+            projectName: targetProject,
+            allRuns: allRuns || !runDir
+        });
+
         return res.status(200).json({
             success: true,
             summary
