@@ -89,6 +89,8 @@ describe("Run Summary Generator & Discovery", () => {
     test("listAvailableRuns discovers run directories and metadata with project filtering", () => {
         const allRuns = listAvailableRuns(null, __dirname);
         expect(Array.isArray(allRuns)).toBe(true);
+        expect(Array.isArray(allRuns.train)).toBe(true);
+        expect(Array.isArray(allRuns.inference)).toBe(true);
         const testRun = allRuns.find(r => r.runName === "tmp_test_run");
         expect(testRun).toBeDefined();
         expect(testRun.runType).toBe("training");
@@ -96,6 +98,7 @@ describe("Run Summary Generator & Discovery", () => {
         const filteredRuns = listAvailableRuns("tmp_test_run", __dirname);
         expect(filteredRuns.length).toBeGreaterThan(0);
         expect(filteredRuns[0].runName).toBe("tmp_test_run");
+        expect(filteredRuns.train.length).toBeGreaterThan(0);
 
         const nonExistentFilter = listAvailableRuns("non_existent_project_12345", __dirname);
         expect(nonExistentFilter.length).toBe(0);
