@@ -172,6 +172,43 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
 
+        it('should inject the Njobvu AI master system prompt into messages sent to Ollama', async () => {
+            const originalFetch = global.fetch;
+            let capturedRequestBody = null;
+
+            global.fetch = jest.fn().mockImplementationOnce((url, options) => {
+                capturedRequestBody = JSON.parse(options.body);
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        model: 'llama3',
+                        message: { role: 'assistant', content: 'System prompt received.' },
+                        done: true
+                    })
+                });
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'How do I run sandbox python?' }],
+                    model: 'llama3'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(capturedRequestBody).not.toBeNull();
+            expect(capturedRequestBody.messages[0].role).toBe('system');
+            expect(capturedRequestBody.messages[0].content).toContain('You are Njobvu AI');
+            expect(capturedRequestBody.messages[0].content).toContain('/api/sandbox/python');
+            expect(capturedRequestBody.messages[0].content).toContain('/api/runs/summary');
+
+            global.fetch = originalFetch;
+        });
+
         it('should return 200 OK with assistant reply when Ollama returns a valid response', async () => {
             const originalFetch = global.fetch;
             global.fetch = jest.fn().mockResolvedValueOnce({
@@ -203,3 +240,4 @@ describe('Chat Harness API Integration Tests', () => {
         });
     });
 });
+

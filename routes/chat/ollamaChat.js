@@ -1,5 +1,27 @@
 const queries = require("../../queries/queries");
 
+const NJOBVU_SYSTEM_PROMPT = `You are Njobvu AI, an intelligent assistant built into the Njobvu Computer Vision & Machine Learning Platform.
+Your primary role is to assist engineers, researchers, and project managers in managing computer vision workflows including image labeling, dataset imports/exports, model training (YOLO, Darknet, Inception), model inference, and run performance analytics.
+
+You have access to and can provide structured instructions or payloads for interacting with Njobvu platform endpoints and system tools:
+
+1. Python Sandbox Execution (/api/sandbox/python):
+   - Used for executing sandboxed Python code for custom data transformations, metrics calculation, and batch label processing.
+   - When proposing Python code to execute in the sandbox, format your request clearly or provide the exact JSON payload structured for /api/sandbox/python.
+
+2. Run Summaries & Analytics (/api/runs/summary):
+   - Used for aggregating, generating, and inspecting deep context run performance reports (loss curves, mAP, precision/recall, training/inference file artifacts like args.yaml, config.json, results.csv).
+
+3. Project Run Listings & Inspection:
+   - Access run images via /runs/:runId/images.
+   - Manage training runs via /yolo-run, /run, /deleteRun.
+   - Manage inference via /yolo-inf, /inception-inf, and dataset integration via /inference/add-inference-run-to-dataset.
+
+Guidelines:
+- Maintain a helpful, precise, and professional tone focused on CV/ML tasks.
+- Always sanitize and validate assumptions about bounding box coordinates, polygon formats, class labels, and pixel dimensions.
+- Respect user permissions and role gating (User vs Admin).`;
+
 /**
  * Handles Ollama Chat requests with role gating and input validation.
  */
@@ -75,7 +97,27 @@ async function ollamaChat(req, res) {
 
         const endpoint = `${targetOllamaUrl.replace(/\/+$/, "")}/api/chat`;
 
-        // 5. Invoke Ollama API
+        // 5. Construct payload messages with Njobvu AI master system prompt
+        const formattedMessages = [];
+        const existingSystemIndex = messages.findIndex(m => m.role === "system");
+
+        if (existingSystemIndex === -1) {
+            formattedMessages.push({ role: "system", content: NJOBVU_SYSTEM_PROMPT });
+            messages.forEach(m => formattedMessages.push({ role: m.role, content: m.content }));
+        } else {
+            messages.forEach((m, idx) => {
+                if (idx === existingSystemIndex) {
+                    formattedMessages.push({
+                        role: "system",
+                        content: `${NJOBVU_SYSTEM_PROMPT}\n\nAdditional System Context:\n${m.content}`
+                    });
+                } else {
+                    formattedMessages.push({ role: m.role, content: m.content });
+                }
+            });
+        }
+
+        // 6. Invoke Ollama API
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
@@ -87,7 +129,7 @@ async function ollamaChat(req, res) {
                 },
                 body: JSON.stringify({
                     model: targetModel,
-                    messages: messages.map(m => ({ role: m.role, content: m.content })),
+                    messages: formattedMessages,
                     stream: false
                 }),
                 signal: controller.signal
@@ -140,4 +182,7 @@ async function ollamaChat(req, res) {
     }
 }
 
+ollamaChat.NJOBVU_SYSTEM_PROMPT = NJOBVU_SYSTEM_PROMPT;
+
 module.exports = ollamaChat;
+
