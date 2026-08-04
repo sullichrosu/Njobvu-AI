@@ -574,6 +574,52 @@ describe('Chat Harness API Integration Tests', () => {
             delete global.managedDbClient;
         });
 
+        it('should short-circuit a successful run listing deterministically and NOT call the LLM', async () => {
+            global.managedDbClient = {
+                get: jest.fn().mockImplementation(async (query, params) => {
+                    if (query.includes('FROM Projects WHERE PName = ? AND Admin = ?')) {
+                        return { count: 1 };
+                    }
+                    return { count: 0 };
+                })
+            };
+
+            const originalFetch = global.fetch;
+            let fetchCallCount = 0;
+            global.fetch = jest.fn(() => {
+                fetchCallCount++;
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        model: 'llama3',
+                        message: { role: 'assistant', content: 'LLM should never be consulted for a listing' },
+                        done: true
+                    })
+                });
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=test'])
+                .send({
+                    messages: [{ role: 'user', content: 'List available runs' }],
+                    model: 'llama3',
+                    intent: 'list_runs',
+                    projectName: 'classification'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.message.content.startsWith('### Available Runs')).toBe(true);
+            expect(response.body.message.content).not.toContain('should never be consulted');
+            expect(fetchCallCount).toBe(0);
+
+            global.fetch = originalFetch;
+            delete global.managedDbClient;
+        });
+
         it('should find a run under runs/detect/train via free text "summarize my training run" and prepend the report', async () => {
             const fs = require('fs');
             const path = require('path');

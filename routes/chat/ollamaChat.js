@@ -167,9 +167,11 @@ function discoverRunDirectories(searchDir, visited = new Set(), maxDepth = 5, cu
 
         const entries = fs.readdirSync(canonical);
 
+        // Mirrors the util's strict run-marker heuristic: only run-level marker files identify a run
+        // output folder. Structural dirs (project roots, weights/ checkpoint folders) are excluded.
         const isRunDir = entries.some(f =>
-            f === "results.csv" || f === "args.yaml" || f.endsWith(".pt") ||
-            (f === "weights" && fs.existsSync(path.join(canonical, "weights"))) ||
+            f === "results.csv" || f === "args.yaml" || f === "opt.yaml" || f === "hyp.yaml" ||
+            f === "labels.jpg" || f === "labels.png" ||
             (f.endsWith(".png") && (f.includes("results") || f.includes("confusion") || f.includes("F1") || f.includes("labels")))
         );
 
@@ -864,6 +866,25 @@ async function ollamaChat(req, res) {
                 ? formatRunListings(runs, projectName)
                 : `No runs are currently available${projectName ? ` for project '${projectName}'` : ""}.`;
             const content = `**Tool Execution Error:**\n${errorText}\n\n${runsHint}\n\nTip: ask to summarize a specific run, e.g. \`summarize run <run-name>\`.`;
+            return res.status(200).json({
+                success: true,
+                message: {
+                    role: "assistant",
+                    content: content
+                },
+                model: targetModel,
+                user: username,
+                role: userRole,
+                toolResult: toolResult,
+                liveContext: liveContext
+            });
+        }
+
+        // 8b. Short-circuit successful run listings deterministically: never hand a formatted listing to
+        //     the LLM. Small models append unsolicited prose/feature lists after the listing, so the
+        //     formatted markdown IS the final assistant reply.
+        if (toolResult && toolResult.success === true && toolResult.runs) {
+            const content = formatRunListings(toolResult.runs, projectName);
             return res.status(200).json({
                 success: true,
                 message: {
