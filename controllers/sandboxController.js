@@ -32,6 +32,10 @@ async function handleRunSummary(req, res) {
         const { runDir, runType, runName, projectName, PName, allRuns } = req.body || {};
         const targetProject = projectName || PName || null;
 
+        if (!runDir && !targetProject && !allRuns) {
+            return res.status(400).json({ success: false, error: "runDir or projectName is required" });
+        }
+
         let targetDir = runDir;
         if (!targetDir && targetProject) {
             targetDir = path.join(__dirname, "..", "public", "projects", targetProject);
