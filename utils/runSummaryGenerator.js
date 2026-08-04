@@ -151,11 +151,13 @@ async function generateSingleRunSummary(runDir, options = {}) {
         recommendations
     };
 
-    const summaryJsonPath = path.join(runDir, "summary.json");
-    fs.writeFileSync(summaryJsonPath, JSON.stringify(summary, null, 2), "utf8");
-
     const summaryMdPath = path.join(runDir, "run_summary.md");
     const mdContent = generateMarkdownSummary(summary);
+    summary.markdownSummary = mdContent;
+    summary.summaryMd = mdContent;
+
+    const summaryJsonPath = path.join(runDir, "summary.json");
+    fs.writeFileSync(summaryJsonPath, JSON.stringify(summary, null, 2), "utf8");
     fs.writeFileSync(summaryMdPath, mdContent, "utf8");
 
     return summary;
@@ -247,13 +249,16 @@ async function generateAggregatedRunSummary(targetPath, options = {}) {
         runs: runSummaries
     };
 
+    const mdContent = generateAggregatedMarkdownSummary(aggregated);
+    aggregated.markdownSummary = mdContent;
+    aggregated.summaryMd = mdContent;
+
     if (fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory()) {
         try {
             const summaryJsonPath = path.join(targetPath, "summary.json");
             fs.writeFileSync(summaryJsonPath, JSON.stringify(aggregated, null, 2), "utf8");
 
             const summaryMdPath = path.join(targetPath, "run_summary.md");
-            const mdContent = generateAggregatedMarkdownSummary(aggregated);
             fs.writeFileSync(summaryMdPath, mdContent, "utf8");
         } catch (e) {}
     }
@@ -510,11 +515,12 @@ function generateRecommendations(runType, metrics, performanceAnalysis, logDiagn
 }
 
 function generateMarkdownSummary(summary) {
-    let md = `# Run Summary: ${summary.runName}\n\n`;
-    md += `- **Run Type**: ${summary.runType.toUpperCase()}\n`;
-    md += `- **Execution Status**: ${summary.logDiagnostics.completionStatus || "Completed"}\n`;
-    md += `- **Generated At**: ${summary.generatedAt}\n`;
-    md += `- **Artifact Count**: ${summary.artifactCount} files (${summary.imageCount} images)\n\n`;
+    const title = summary.runName || "Model Execution Report";
+    let md = `# Run Summary: ${title}\n\n`;
+    md += `- **Run Type**: ${summary.runType ? summary.runType.toUpperCase() : "TRAINING/INFERENCE"}\n`;
+    md += `- **Execution Status**: ${summary.logDiagnostics && summary.logDiagnostics.completionStatus ? summary.logDiagnostics.completionStatus : "Completed"}\n`;
+    md += `- **Generated At**: ${summary.generatedAt || new Date().toISOString()}\n`;
+    md += `- **Artifact Count**: ${summary.artifactCount || 0} files (${summary.imageCount || 0} images)\n\n`;
 
     md += `## Executive Summary & Findings\n`;
     if (summary.findings && summary.findings.length) {
@@ -525,9 +531,9 @@ function generateMarkdownSummary(summary) {
         md += `- No summary findings recorded.\n`;
     }
 
-    if (Object.keys(summary.metrics).length > 0 || Object.keys(summary.performanceAnalysis).length > 0) {
+    if (summary.metrics && (Object.keys(summary.metrics).length > 0 || (summary.performanceAnalysis && Object.keys(summary.performanceAnalysis).length > 0))) {
         md += `\n## Performance & Metrics Analysis\n`;
-        if (summary.performanceAnalysis.lossReductionPercent) {
+        if (summary.performanceAnalysis && summary.performanceAnalysis.lossReductionPercent) {
             md += `- **Loss Reduction**: ${summary.performanceAnalysis.lossReductionPercent} (Initial: ${summary.performanceAnalysis.initialLoss}, Final: ${summary.performanceAnalysis.finalLoss})\n`;
             md += `- **Loss Trajectory**: ${summary.performanceAnalysis.lossTrend}\n`;
         }
@@ -550,7 +556,7 @@ function generateMarkdownSummary(summary) {
         });
     }
 
-    if (Object.keys(summary.config).length > 0) {
+    if (summary.config && Object.keys(summary.config).length > 0) {
         md += `\n## Configuration & Hyperparameters\n`;
         md += `\`\`\`json\n${JSON.stringify(summary.config, null, 2)}\n\`\`\`\n`;
     }
@@ -559,11 +565,12 @@ function generateMarkdownSummary(summary) {
 }
 
 function generateAggregatedMarkdownSummary(summary) {
-    let md = `# Run Summary: ${summary.runName}\n\n`;
+    const title = summary.runName || (summary.projectName ? `${summary.projectName} All Runs` : "All Projects");
+    let md = `# Run Summary: ${title}\n\n`;
     md += `- **Type**: AGGREGATED ALL-RUNS REPORT\n`;
     md += `- **Project**: ${summary.projectName || "All Projects"}\n`;
-    md += `- **Generated At**: ${summary.generatedAt}\n`;
-    md += `- **Total Runs Analyzed**: ${summary.totalRuns} (${summary.trainingRunCount} training, ${summary.inferenceRunCount} inference)\n\n`;
+    md += `- **Generated At**: ${summary.generatedAt || new Date().toISOString()}\n`;
+    md += `- **Total Runs Analyzed**: ${summary.totalRuns || 0} (${summary.trainingRunCount || 0} training, ${summary.inferenceRunCount || 0} inference)\n\n`;
 
     md += `## Executive Summary & Findings\n`;
     summary.findings.forEach(f => {
