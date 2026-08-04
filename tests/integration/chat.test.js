@@ -278,6 +278,23 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult.stdout).toContain('hello sandbox');
         });
 
+        it('should handle python sandbox status check prompts with status diagnostics without syntax error', async () => {
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'Run python sandbox status check' }],
+                    model: 'llama3',
+                    intent: 'run_python'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.stdout).toContain('Python Sandbox Status');
+        });
+
         it('should return 200 OK with assistant reply when Ollama returns a valid response', async () => {
             const originalFetch = global.fetch;
             global.fetch = jest.fn().mockResolvedValueOnce({

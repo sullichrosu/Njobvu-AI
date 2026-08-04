@@ -55,6 +55,37 @@ function formatRunListings(runs, projectName = null) {
 }
 
 /**
+ * Safely extracts Python code from incoming payload parameters or markdown code fences.
+ * Prevents plain English prompt strings from being executed as Python scripts.
+ * Returns a diagnostic status script if status/check chip is clicked without explicit code.
+ */
+function extractPythonCode(code, lastUserMessage = "") {
+    if (code && typeof code === "string" && code.trim().length > 0) {
+        const fenceMatch = code.match(/```(?:python)?\s*([\s\S]*?)\s*```/i);
+        return fenceMatch ? fenceMatch[1].trim() : code.trim();
+    }
+
+    if (lastUserMessage && typeof lastUserMessage === "string") {
+        const fenceMatch = lastUserMessage.match(/```(?:python)?\s*([\s\S]*?)\s*```/i);
+        if (fenceMatch && fenceMatch[1].trim().length > 0) {
+            return fenceMatch[1].trim();
+        }
+    }
+
+    // Default to diagnostic status script if status check or chip clicked
+    if (/\b(status|check|info|health|diagnostic)\b/i.test(lastUserMessage) || !lastUserMessage) {
+        return `import sys, platform, os
+print("=== Njobvu AI Python Sandbox Status ===")
+print(f"Python Version: {platform.python_version()} on {platform.system()} ({platform.machine()})")
+print(f"Working Directory: {os.getcwd()}")
+print(f"Process PID: {os.getpid()}")
+print("Sandbox Execution: ONLINE & OPERATIONAL")`;
+    }
+
+    return null;
+}
+
+/**
  * Verifies if a project exists and whether the user has access permissions.
  * Checks both Projects table (where Admin = username) and Access table (secondary access).
  * Expands filesystem folder matching for hyphenated (user-project) and underscore (user_project) formats.
@@ -470,8 +501,15 @@ async function ollamaChat(req, res) {
             const extractedRunId = runId || (lastUserMessage.match(/run\s+([a-zA-Z0-9_-]+)/i) ? lastUserMessage.match(/run\s+([a-zA-Z0-9_-]+)/i)[1] : null);
             toolResult = await generateRunSummary(extractedRunId, runType || "train", projectName, username);
         } else if (intent === "run_python") {
-            const pythonCode = code || (lastUserMessage.match(/```python\s*([\s\S]*?)\s*```/) ? lastUserMessage.match(/```python\s*([\s\S]*?)\s*```/)[1] : null) || lastUserMessage;
-            toolResult = await runSandboxedPython(pythonCode);
+            const pythonCode = extractPythonCode(code, lastUserMessage);
+            if (pythonCode) {
+                toolResult = await runSandboxedPython(pythonCode);
+            } else {
+                toolResult = {
+                    success: false,
+                    error: "No valid Python code block provided. Please provide Python code wrapped in ```python ... ``` fences."
+                };
+            }
         } else if (intent === "list_runs") {
             toolResult = {
                 success: true,
@@ -488,8 +526,8 @@ async function ollamaChat(req, res) {
                     const extractedRunId = runId || (lastUserMessage.match(/run\s+([a-zA-Z0-9_-]+)/i) ? lastUserMessage.match(/run\s+([a-zA-Z0-9_-]+)/i)[1] : null);
                     toolResult = await generateRunSummary(extractedRunId, runType || "train", projectName, username);
                 }
-            } else if (code || /\b(run_python|python sandbox|execute python)\b/i.test(lastUserMessage)) {
-                const pythonCode = code || (lastUserMessage.match(/```python\s*([\s\S]*?)\s*```/) ? lastUserMessage.match(/```python\s*([\s\S]*?)\s*```/)[1] : null);
+            } else if (code || /```python[\s\S]*?```/i.test(lastUserMessage) || /\b(run_python|python sandbox|execute python)\b/i.test(lastUserMessage)) {
+                const pythonCode = extractPythonCode(code, lastUserMessage);
                 if (pythonCode) {
                     toolResult = await runSandboxedPython(pythonCode);
                 }
@@ -709,7 +747,7 @@ async function generateRunSummaryHandler(req, res) {
 async function sandboxedPythonHandler(req, res) {
     try {
         const { code, script } = req.body || {};
-        const pythonCode = code || script;
+        const pythonCode = extractPythonCode(code, code || script) || code || script;
         const result = await runSandboxedPython(pythonCode);
         if (result.success) {
             return res.status(200).json(result);
@@ -723,6 +761,7 @@ async function sandboxedPythonHandler(req, res) {
 
 ollamaChat.NJOBVU_SYSTEM_PROMPT = NJOBVU_SYSTEM_PROMPT;
 ollamaChat.formatRunListings = formatRunListings;
+ollamaChat.extractPythonCode = extractPythonCode;
 ollamaChat.verifyProjectAccess = verifyProjectAccess;
 ollamaChat.getLiveSystemContext = getLiveSystemContext;
 ollamaChat.buildDynamicSystemPrompt = buildDynamicSystemPrompt;

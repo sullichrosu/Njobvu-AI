@@ -305,6 +305,69 @@
     align-self: flex-start;
 }
 
+/* Markdown Formatting & Typography Styles */
+.njobvu-msg-bubble h1,
+.njobvu-msg-bubble h2,
+.njobvu-msg-bubble h3,
+.njobvu-msg-bubble h4,
+.njobvu-msg-bubble h5,
+.njobvu-msg-bubble h6,
+.chat-message h1,
+.chat-message h2,
+.chat-message h3,
+.chat-message h4,
+.chat-message h5,
+.chat-message h6 {
+    color: #f8fafc;
+    font-weight: 700;
+    margin-top: 12px;
+    margin-bottom: 8px;
+    line-height: 1.3;
+}
+
+.njobvu-msg-bubble h1, .chat-message h1 { font-size: 1.25em; border-bottom: 1px solid rgba(255, 255, 255, 0.15); padding-bottom: 4px; }
+.njobvu-msg-bubble h2, .chat-message h2 { font-size: 1.15em; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 3px; }
+.njobvu-msg-bubble h3, .chat-message h3 { font-size: 1.05em; color: var(--njobvu-chat-accent, #38bdf8); }
+.njobvu-msg-bubble h4, .chat-message h4 { font-size: 1em; }
+.njobvu-msg-bubble h5, .chat-message h5 { font-size: 0.95em; }
+.njobvu-msg-bubble h6, .chat-message h6 { font-size: 0.9em; text-transform: uppercase; color: var(--njobvu-chat-text-muted, #94a3b8); }
+
+/* High-Contrast Code Block & Inline Code Styling */
+.njobvu-msg-bubble pre,
+.chat-message pre {
+    background: #090d16 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 10px 0;
+    overflow-x: auto;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.njobvu-msg-bubble pre code,
+.chat-message pre code {
+    background: transparent !important;
+    color: #f1f5f9 !important; /* High contrast light text on dark background */
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    white-space: pre;
+    word-spacing: normal;
+    word-break: normal;
+    tab-size: 4;
+}
+
+.njobvu-msg-bubble code:not(pre code),
+.chat-message code:not(pre code) {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #38bdf8 !important;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 12px;
+}
+
 /* Quick Action Chips */
 .njobvu-quick-actions {
     display: flex;
