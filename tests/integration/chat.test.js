@@ -409,9 +409,16 @@ describe('Chat Harness API Integration Tests', () => {
             expect(content.startsWith('# Run Summary: preamble_run')).toBe(true);
             expect(content).not.toContain('HTML tutorial');
 
+            // The response must say plainly that this is the fallback, not silently swap in a
+            // static report while claiming it's LLM-authored.
+            expect(response.body.reportSource).toBe('deterministic-fallback');
+            expect(content).toContain('quality check');
+
+            // The persisted file stays a clean report — the transparency note is chat-only.
             const savedContent = fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8');
             expect(savedContent.startsWith('# Run Summary: preamble_run')).toBe(true);
             expect(savedContent).not.toContain('HTML tutorial');
+            expect(savedContent).not.toContain('quality check');
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}

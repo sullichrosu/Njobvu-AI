@@ -1098,13 +1098,19 @@ async function ollamaChat(req, res) {
         //     context-aware natural-language report (not the static JS template). Runs are
         //     authored sequentially to avoid hammering a local Ollama. If a call fails, the run
         //     keeps the deterministic report the tool already wrote as a fallback.
+        // Tracks how many of the per-run files actually ended up LLM-authored vs. left as the
+        // deterministic report the tool already wrote, surfaced in toolResult so the response itself
+        // proves what happened per run instead of requiring a guess.
         if (toolResult && toolResult.success === true && toolResult.isAggregated &&
             Array.isArray(toolResult.targetRuns) && Array.isArray(toolResult.contextArtifacts) &&
             toolResult.targetRuns.length > 0) {
+            let llmAuthoredCount = 0;
+            let attemptedCount = 0;
             for (let i = 0; i < toolResult.targetRuns.length; i++) {
                 const runTarget = toolResult.targetRuns[i];
                 const runArtifacts = toolResult.contextArtifacts[i];
                 if (!runTarget || !runTarget.runDir || !runArtifacts) continue;
+                attemptedCount++;
                 try {
                     // Include an explicit user turn, not just a system message: chat-tuned models
                     // (especially small ones) respond far more reliably to instructions delivered
@@ -1122,9 +1128,18 @@ async function ollamaChat(req, res) {
                     ]);
                     if (narrative && looksLikeRunSummary(narrative) && fs.existsSync(runTarget.runDir)) {
                         fs.writeFileSync(path.join(runTarget.runDir, "run_summary.md"), narrative.trim(), "utf8");
+                        llmAuthoredCount++;
+                    } else {
+                        global.logger?.debug(`Per-run summary quality guard rejected the LLM output for run '${runTarget.runName}'; kept the deterministic report.`, {
+                            model: targetModel,
+                            runName: runTarget.runName,
+                            rawModelOutput: String(narrative || "(no response)").slice(0, 1000)
+                        });
                     }
                 } catch (authErr) {}
             }
+            toolResult.llmAuthoredRunCount = llmAuthoredCount;
+            toolResult.attemptedRunCount = attemptedCount;
         }
 
         // 8. Short-circuit tool failures deterministically: never hand a failed tool to the LLM.
@@ -1214,6 +1229,7 @@ async function ollamaChat(req, res) {
                 const errorText = await response.text().catch(() => "");
                 if (toolResult) {
                     let fallbackContent = "Tool executed successfully.";
+                    const isSummaryReport = !!(toolResult.summary || toolResult.documentContext) && !toolResult.runs;
                     if (toolResult.success === false) {
                         fallbackContent = `**Tool Execution Error:**\n${toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message."}`;
                     } else if (toolResult.runs) {
@@ -1232,16 +1248,23 @@ async function ollamaChat(req, res) {
                         } catch (wErr) {}
                     }
 
+                    // The LLM never got a chance to respond at all here (Ollama itself errored), which is
+                    // a different, more actionable signal than the quality guard rejecting real output.
+                    const chatContent = isSummaryReport
+                        ? `${fallbackContent}\n\n_(Note: the Ollama request itself failed — the model never responded — so this is the data-backed report. Details: Ollama returned status ${response.status}.)_`
+                        : fallbackContent;
+
                     return res.status(200).json({
                         success: true,
                         message: {
                             role: "assistant",
-                            content: fallbackContent
+                            content: chatContent
                         },
                         model: targetModel,
                         user: username,
                         role: userRole,
-                        toolResult: toolResult
+                        toolResult: toolResult,
+                        reportSource: isSummaryReport ? "deterministic-error" : null
                     });
                 }
 
@@ -1254,6 +1277,11 @@ async function ollamaChat(req, res) {
 
             const data = await response.json();
             let assistantReply = data.message || { role: "assistant", content: data.response || "" };
+
+            // Tracks, for summary requests specifically, whether the visible report is the model's own
+            // prose or the deterministic fallback — surfaced in the response (`reportSource`) and as a
+            // short in-chat note so "is this actually LLM-generated?" never has to be guessed at again.
+            let reportSource = null;
 
             // Guarantee the actual tool output/report is ALWAYS the primary content of assistantReply.content.
             // Fragile substring checks (e.g. content.includes("Summary")) are avoided so a conversational LLM
@@ -1271,14 +1299,23 @@ async function ollamaChat(req, res) {
                     // weak models (e.g. an HTML tutorial instead of a summary) so the deterministic
                     // data-backed report is always returned and persisted instead of the ramble.
                     if (!looksLikeRunSummary(assistantReply.content)) {
+                        global.logger?.debug("Run-summary quality guard rejected the LLM output; falling back to the deterministic report.", {
+                            model: targetModel,
+                            rawModelOutput: String(assistantReply.content || "").slice(0, 1000)
+                        });
                         assistantReply.content = toolResult.summary || toolResult.documentContext;
+                        reportSource = "deterministic-fallback";
+                    } else {
+                        reportSource = "llm";
                     }
                 } else if (toolResult.stdout !== undefined) {
                     const pyOutput = `**Python Sandbox Execution Result:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || "(No output)"}\n\`\`\``;
                     assistantReply.content = setToolOutputAsPrimary(assistantReply.content, pyOutput);
                 }
 
-                // Persist the LLM-generated custom Markdown analysis narrative into run_summary.md
+                // Persist the LLM-generated custom Markdown analysis narrative into run_summary.md.
+                // Persisted before the in-chat transparency note below is appended, so the saved file
+                // stays a clean report either way.
                 const targetDir = toolResult.targetRunDir || toolResult.runDir;
                 if (targetDir && fs.existsSync(targetDir) && assistantReply.content) {
                     try {
@@ -1287,6 +1324,10 @@ async function ollamaChat(req, res) {
                     } catch (writeErr) {
                         global.logger?.error("Error persisting LLM narrative to run_summary.md:", writeErr);
                     }
+                }
+
+                if (reportSource === "deterministic-fallback") {
+                    assistantReply.content += `\n\n_(Note: the "${targetModel}" model's response didn't pass the run-summary quality check, so this is the data-backed report rather than AI-authored analysis. A larger model is more likely to pass; server logs have the raw model output.)_`;
                 }
             }
 
@@ -1297,6 +1338,7 @@ async function ollamaChat(req, res) {
                 user: username,
                 role: userRole,
                 toolResult: toolResult || null,
+                reportSource: reportSource,
                 liveContext: liveContext
             });
         } catch (fetchErr) {
@@ -1315,6 +1357,7 @@ async function ollamaChat(req, res) {
             // Fallback response with tool output if Ollama is offline or errors
             if (toolResult) {
                 let fallbackContent = "Tool executed successfully.";
+                const isSummaryReport = !!(toolResult.summary || toolResult.documentContext) && !toolResult.runs;
                 if (toolResult.success === false) {
                     fallbackContent = `**Tool Execution Error:**\n${toolResult.error || toolResult.stderr || "Tool execution failed without a specific error message."}`;
                 } else if (toolResult.runs) {
@@ -1333,16 +1376,21 @@ async function ollamaChat(req, res) {
                     } catch (wErr) {}
                 }
 
+                const chatContent = isSummaryReport
+                    ? `${fallbackContent}\n\n_(Note: could not reach Ollama at all — the model never responded — so this is the data-backed report. Details: ${fetchErr.message})_`
+                    : fallbackContent;
+
                 return res.status(200).json({
                     success: true,
                     message: {
                         role: "assistant",
-                        content: fallbackContent
+                        content: chatContent
                     },
                     model: targetModel,
                     user: username,
                     role: userRole,
-                    toolResult: toolResult
+                    toolResult: toolResult,
+                    reportSource: isSummaryReport ? "deterministic-error" : null
                 });
             }
 
