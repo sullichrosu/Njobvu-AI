@@ -148,6 +148,15 @@ async function getProcessingPage(req, res) {
 
     // get training runs
     var runs = await readdirAsync(log_path);
+    // Non-directory entries (e.g. summary.json / run_summary.md written by the chat run-summary
+    // feature directly into this folder) are not run folders and must be skipped, not scandir'd.
+    runs = runs.filter((r) => {
+        try {
+            return fs.statSync(`${log_path}${r}`).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    });
     runs = runs.reverse();
 
     // get training logfiles
@@ -173,6 +182,13 @@ async function getProcessingPage(req, res) {
 
     // get inference runs
     var inf_runs = await readdirAsync(inf_log_path);
+    inf_runs = inf_runs.filter((r) => {
+        try {
+            return fs.statSync(`${inf_log_path}${r}`).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    });
     inf_runs = inf_runs.reverse();
 
     // get inference logfiles

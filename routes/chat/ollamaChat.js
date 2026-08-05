@@ -225,6 +225,39 @@ print("Sandbox Execution: ONLINE & OPERATIONAL")`;
 }
 
 /**
+ * Resolves a project name to its actual on-disk folder under public/projects/ (which is typically
+ * stored as `<admin>-<projectName>`, not the bare project name). Returns the matched folder's
+ * basename, or null if nothing matches. Any run-summary code that writes files must resolve through
+ * this (never assume `public/projects/<projectName>` exists) so writes always land at the real
+ * project root instead of a mismatched or nonexistent path.
+ */
+function resolveProjectDirName(username, projectName) {
+    if (!projectName) return null;
+    try {
+        const projectsDir = path.join(process.cwd(), "public", "projects");
+        if (!fs.existsSync(projectsDir)) return null;
+        const entries = fs.readdirSync(projectsDir).filter(e => {
+            try {
+                return fs.statSync(path.join(projectsDir, e)).isDirectory();
+            } catch (err) {
+                return false;
+            }
+        });
+        // Prefer the most specific match first: exact name, then this user's own hyphenated/
+        // underscored folder, then any admin's hyphenated/underscored folder, then a loose substring match.
+        return (
+            entries.find(e => e === projectName) ||
+            entries.find(e => username && (e === `${username}-${projectName}` || e === `${username}_${projectName}`)) ||
+            entries.find(e => e.endsWith(`-${projectName}`) || e.endsWith(`_${projectName}`)) ||
+            entries.find(e => e.includes(projectName)) ||
+            null
+        );
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * Verifies if a project exists and whether the user has access permissions.
  * Checks both Projects table (where Admin = username) and Access table (secondary access).
  * Expands filesystem folder matching for hyphenated (user-project) and underscore (user_project) formats.
@@ -240,18 +273,7 @@ async function verifyProjectAccess(username, projectName) {
 
     // 1. Check directory existence in public/projects/ (supporting exact, hyphenated, or underscore formats)
     try {
-        const projectsDir = path.join(process.cwd(), "public", "projects");
-        if (fs.existsSync(projectsDir)) {
-            const entries = fs.readdirSync(projectsDir);
-            exists = entries.some(e =>
-                e === projectName ||
-                e.endsWith(`-${projectName}`) ||
-                e.endsWith(`_${projectName}`) ||
-                e.startsWith(`${username}-${projectName}`) ||
-                e.startsWith(`${username}_${projectName}`) ||
-                e.includes(projectName)
-            );
-        }
+        exists = !!resolveProjectDirName(username, projectName);
     } catch (e) {}
 
     // 2. Check Database if managedDbClient exists
@@ -600,7 +622,14 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
                 // (nested layouts like training/logs/<timestamp>/<run> included) and the all-runs
                 // report once at the project root — the end state the user asked for.
                 selectedRunId = projectName ? `${projectName}_all_runs_summary` : "all_runs_summary";
-                resolvedRunDir = projectName ? path.join(process.cwd(), "public", "projects", projectName) : null;
+                // The on-disk folder is typically `<admin>-<projectName>`, not the bare project name —
+                // resolve it for real instead of guessing, so the aggregate report (and its summary.json/
+                // run_summary.md) is written at the actual project root and never at a mismatched or
+                // nonexistent path that could fall back onto an unrelated shared directory.
+                const projectDirName = projectName ? resolveProjectDirName(username, projectName) : null;
+                resolvedRunDir = projectDirName
+                    ? path.join(process.cwd(), "public", "projects", projectDirName)
+                    : null;
                 utilOptions = { runType: utilRunType, projectName, allRuns: true };
             }
 

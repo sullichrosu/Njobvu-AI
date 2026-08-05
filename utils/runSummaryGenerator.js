@@ -27,12 +27,28 @@ async function generateRunSummary(runDir, options = {}) {
     let targetPath = runDir;
 
     if ((!targetPath || !fs.existsSync(targetPath)) && projectName) {
-        const candidate1 = path.join(__dirname, "..", "public", "projects", projectName);
-        const candidate2 = path.join(__dirname, "..", "runs", projectName);
-        const candidate3 = path.join(__dirname, "..", "runs");
-        if (fs.existsSync(candidate1)) targetPath = candidate1;
-        else if (fs.existsSync(candidate2)) targetPath = candidate2;
-        else if (fs.existsSync(candidate3)) targetPath = candidate3;
+        // The on-disk project folder is typically `<admin>-<projectName>`, not the bare project name,
+        // so search public/projects for the real match instead of guessing a path that won't exist.
+        const projectsRoot = path.join(__dirname, "..", "public", "projects");
+        let matchedProjectDir = null;
+        if (fs.existsSync(projectsRoot)) {
+            const entries = fs.readdirSync(projectsRoot).filter(e => {
+                try { return fs.statSync(path.join(projectsRoot, e)).isDirectory(); } catch (e) { return false; }
+            });
+            matchedProjectDir =
+                entries.find(e => e === projectName) ||
+                entries.find(e => e.endsWith(`-${projectName}`) || e.endsWith(`_${projectName}`)) ||
+                entries.find(e => e.includes(projectName)) ||
+                null;
+        }
+        if (matchedProjectDir) {
+            targetPath = path.join(projectsRoot, matchedProjectDir);
+        } else {
+            // Only fall back to the shared global runs/ dir when no project scope was matched at all —
+            // never silently write a named project's aggregate report into that unrelated shared folder.
+            const candidate2 = path.join(__dirname, "..", "runs", projectName);
+            if (fs.existsSync(candidate2)) targetPath = candidate2;
+        }
     }
 
     if (!targetPath && !projectName) {

@@ -46,7 +46,9 @@ class Logger {
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
 
-            if (line.includes('utils/logger.js') || line.includes('node:internal') || line.includes('(node:')) {
+            // Path separator is platform-dependent (Windows stack frames use backslashes), so match
+            // both to actually skip logger.js's own wrapper frames instead of always falling through.
+            if (/utils[\\/]logger\.js/.test(line) || line.includes('node:internal') || line.includes('(node:')) {
                 continue;
             }
 
@@ -57,17 +59,22 @@ class Logger {
             }
 
             const location = match[1] || match[2];
-            const parts = location.split(':');
+            // Match trailing ":<line>:<col>" and treat everything before it as the file path.
+            // A naive split(':') breaks on Windows absolute paths (e.g. "C:\\...\\file.js:30:36"),
+            // since the drive letter's colon gets treated as the first delimiter.
+            const locationMatch = location.match(/^(.*):(\d+):(\d+)$/);
 
-            if (parts.length >= 2) {
-                const filePath = parts[0];
-                const lineNo = parts[1];
+            if (locationMatch) {
+                const filePath = locationMatch[1];
+                const lineNo = locationMatch[2];
 
                 if (filePath.includes('node_modules')) {
                     continue;
                 }
 
-                const relativePath = path.relative(process.cwd(), filePath);
+                // Normalize to forward slashes so log output is consistent across platforms
+                // (path.relative returns backslash-separated paths on Windows).
+                const relativePath = path.relative(process.cwd(), filePath).split(path.sep).join('/');
 
                 return {
                     file: relativePath,
