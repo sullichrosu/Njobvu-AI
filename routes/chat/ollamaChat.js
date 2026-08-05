@@ -486,7 +486,22 @@ function buildSummaryInstruction() {
         `trajectory, mAP/precision/recall metrics where present), what succeeded, what failed or needs ` +
         `attention, and concrete, actionable recommendations for improvement. Explain numbers with prose; ` +
         `do not invent metrics or values that are not present in the artifacts. Start the report with a ` +
-        `top-level H1 heading like "# Run Summary: <run-or-project>".`;
+        `top-level H1 heading like "# Run Summary: <run-or-project>". Respond with ONLY the Markdown ` +
+        `report. Do not include any preamble, explanations, tutorials, HTML, code blocks, or anything ` +
+        `that is not part of the report itself.`;
+}
+
+/**
+ * Quality guard for LLM-authored summaries. A small or distracted model sometimes ignores the ingested
+ * run documents and replies with an off-topic ramble (e.g. an HTML tutorial) instead of a run summary.
+ * Only accept output that actually looks like the report we asked for; otherwise the caller falls back
+ * to the deterministic data-backed report so the user always receives a real summary.
+ */
+function looksLikeRunSummary(content) {
+    if (!content || typeof content !== "string") return false;
+    const trimmed = content.trim();
+    if (trimmed.length < 50) return false;
+    return trimmed.startsWith("# Run Summary:");
 }
 
 /**
@@ -1015,7 +1030,7 @@ async function ollamaChat(req, res) {
                                      buildSummaryInstruction()
                         }
                     ]);
-                    if (narrative && narrative.trim() && fs.existsSync(runTarget.runDir)) {
+                    if (narrative && looksLikeRunSummary(narrative) && fs.existsSync(runTarget.runDir)) {
                         fs.writeFileSync(path.join(runTarget.runDir, "run_summary.md"), narrative.trim(), "utf8");
                     }
                 } catch (authErr) {}
@@ -1162,9 +1177,10 @@ async function ollamaChat(req, res) {
                     assistantReply.content = setToolOutputAsPrimary(assistantReply.content, formattedRuns);
                 } else if (toolResult.summary || toolResult.documentContext) {
                     // The LLM narrative IS the summary report (context-aware natural language authored
-                    // from the ingested run documents). Fall back to the deterministic report only when
-                    // the model returned nothing usable.
-                    if (!assistantReply.content || !assistantReply.content.trim()) {
+                    // from the ingested run documents). A quality guard rejects off-topic output from
+                    // weak models (e.g. an HTML tutorial instead of a summary) so the deterministic
+                    // data-backed report is always returned and persisted instead of the ramble.
+                    if (!looksLikeRunSummary(assistantReply.content)) {
                         assistantReply.content = toolResult.summary || toolResult.documentContext;
                     }
                 } else if (toolResult.stdout !== undefined) {

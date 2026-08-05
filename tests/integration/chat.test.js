@@ -327,7 +327,7 @@ describe('Chat Harness API Integration Tests', () => {
                     status: 200,
                     json: async () => ({
                         model: 'llama3',
-                        message: { role: 'assistant', content: '# Custom LLM Analysis Report\n\nModel yolo11n trained cleanly.' },
+                        message: { role: 'assistant', content: '# Run Summary: test_doc_run\n\nCustom LLM Analysis Report: Model yolo11n trained cleanly across 10 epochs with a clean loss trajectory.' },
                         done: true
                     })
                 });
@@ -361,7 +361,7 @@ describe('Chat Harness API Integration Tests', () => {
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
         });
 
-        it('should keep the LLM-authored narrative as the run summary report', async () => {
+        it('should reject off-topic LLM output and fall back to the deterministic run summary report', async () => {
             const fs = require('fs');
             const path = require('path');
             const testRunDir = path.join(process.cwd(), 'runs', 'train', 'preamble_run');
@@ -371,6 +371,8 @@ describe('Chat Harness API Integration Tests', () => {
             fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
 
             const originalFetch = global.fetch;
+            // A weak model (e.g. small Gemma) ignores the ingested run documents and rambles about
+            // something unrelated (here: an HTML tutorial) instead of authoring the report.
             global.fetch = jest.fn().mockResolvedValueOnce({
                 ok: true,
                 status: 200,
@@ -378,7 +380,7 @@ describe('Chat Harness API Integration Tests', () => {
                     model: 'llama3',
                     message: {
                         role: 'assistant',
-                        content: 'Okay, I understand. I will provide a concise summary of your current training run. I am ready to assist you.'
+                        content: 'Here is an HTML tutorial explaining how to create a webpage with the Gemma UI.'
                     },
                     done: true
                 })
@@ -401,14 +403,15 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.summary).toBeTruthy();
 
-            // The LLM's natural-language narrative IS the report (no static JS template prepended).
+            // The off-topic ramble must be rejected: the deterministic data-backed report is returned
+            // and persisted so the user always receives a real run summary.
             const content = response.body.message.content;
-            expect(content.startsWith('Okay, I understand.')).toBe(true);
-            expect(content).toContain('I will provide a concise summary');
+            expect(content.startsWith('# Run Summary: preamble_run')).toBe(true);
+            expect(content).not.toContain('HTML tutorial');
 
-            // The LLM-authored narrative is persisted into the run's own output folder.
             const savedContent = fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8');
-            expect(savedContent.startsWith('Okay, I understand.')).toBe(true);
+            expect(savedContent.startsWith('# Run Summary: preamble_run')).toBe(true);
+            expect(savedContent).not.toContain('HTML tutorial');
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
@@ -507,7 +510,7 @@ describe('Chat Harness API Integration Tests', () => {
                     model: 'llama3',
                     message: {
                         role: 'assistant',
-                        content: 'Okay, I understand. I will provide a concise summary of your current training run.'
+                        content: '# Run Summary: all_runs_summary\n\nNatural-language analysis of the training runs covering configuration, outcomes, successes, failures, and actionable recommendations for improvement.'
                     },
                     done: true
                 })
@@ -527,12 +530,12 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.summary).toBeTruthy();
             const content = response.body.message.content;
-            expect(content).toContain('I will provide a concise summary');
+            expect(content).toContain('actionable recommendations');
 
             // Every discovered run must get an LLM-authored summary written into its OWN output folder.
             expect(fs.existsSync(path.join(testRunDir, 'run_summary.md'))).toBe(true);
             expect(fs.existsSync(path.join(testRunDir, 'summary.json'))).toBe(true);
-            expect(fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8')).toContain('I will provide a concise summary');
+            expect(fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8')).toContain('actionable recommendations');
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'run_summary.md')));
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'summary.json')));
 
@@ -648,7 +651,7 @@ describe('Chat Harness API Integration Tests', () => {
                     model: 'llama3',
                     message: {
                         role: 'assistant',
-                        content: 'Okay, I understand. I will provide a concise summary of your current training run.'
+                        content: '# Run Summary: all_runs_summary\n\nNatural-language analysis of the training runs covering configuration, outcomes, successes, failures, and actionable recommendations for improvement.'
                     },
                     done: true
                 })
@@ -668,13 +671,13 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.success).toBe(true);
             const content = response.body.message.content;
-            expect(content).toContain('I will provide a concise summary');
+            expect(content).toContain('actionable recommendations');
 
             // The summary must be written into the run's own output folder, and the tool result must
             // confirm exactly where (no silent failures).
             expect(fs.existsSync(path.join(testRunDir, 'run_summary.md'))).toBe(true);
             expect(fs.existsSync(path.join(testRunDir, 'summary.json'))).toBe(true);
-            expect(fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8')).toContain('I will provide a concise summary');
+            expect(fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8')).toContain('actionable recommendations');
             expect(Array.isArray(response.body.toolResult.summaryFiles)).toBe(true);
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'run_summary.md')));
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'summary.json')));
@@ -702,7 +705,7 @@ describe('Chat Harness API Integration Tests', () => {
                     model: 'llama3',
                     message: {
                         role: 'assistant',
-                        content: 'Here is your run summary.'
+                        content: '# Run Summary: chat_nested_proj_all_runs_summary\n\nHere is your run summary. Natural-language analysis of both training runs with successes, failures, and recommendations.'
                     },
                     done: true
                 })
