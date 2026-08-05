@@ -5,6 +5,7 @@ const classes = require("./classes/classes");
 const images = require("./images/images");
 const labelling = require("./labelling/labelling");
 const validation = require("./validation/validation");
+const getDbClient = require("./getDbClient");
 
 module.exports = {
     managed: {
@@ -29,7 +30,7 @@ module.exports = {
         ...validation.project,
         sql: async function (projectPath, sql, params) {
             try {
-                const db = global.projectDbClients[projectPath];
+                const db = getDbClient(projectPath);
                 const result = await db.run(sql, params);
 
                 return result;

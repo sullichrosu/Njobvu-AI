@@ -127,7 +127,7 @@ async function updateLabels(req, res) {
 
         if (formAction == "save") {
             return res.redirect(
-                "/labeling?IDX=" +
+                "/annotate?IDX=" +
                     IDX +
                     "&IName=" +
                     IName +
@@ -136,7 +136,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "auto-prev") {
             return res.redirect(
-                "/labeling?IDX=" +
+                "/annotate?IDX=" +
                     IDX +
                     "&IName=" +
                     prev_IName +
@@ -145,7 +145,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "auto-next") {
             return res.redirect(
-                "/labeling?IDX=" +
+                "/annotate?IDX=" +
                     IDX +
                     "&IName=" +
                     next_IName +
@@ -201,7 +201,7 @@ async function updateLabels(req, res) {
 
         // Fallback redirect to prevent request hanging if formAction is invalid/unmatched
         return res.redirect(
-            "/labeling?IDX=" +
+            "/annotate?IDX=" +
                 IDX +
                 "&IName=" +
                 IName +

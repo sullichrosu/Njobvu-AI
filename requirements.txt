@@ -1,0 +1,15 @@
+# Core ML & Vision Frameworks
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+tensorflow>=2.15.0
+keras>=3.0.0
+
+# Data Processing & Utilities
+numpy>=1.24.0
+pillow>=10.0.0
+PyYAML>=6.0
+opencv-python-headless>=4.8.0
+h5py>=3.9.0
+requests>=2.31.0
+scipy>=1.11.0

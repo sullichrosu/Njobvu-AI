@@ -319,6 +319,17 @@ except getopt.error as err:
     showHelpInfo(err)
 
 else:
+    if darknet_path:
+        darknet_path = os.path.normpath(darknet_path)
+    if data_path:
+        data_path = os.path.normpath(data_path)
+    if name_path:
+        name_path = os.path.normpath(name_path)
+    if weight_path:
+        weight_path = os.path.normpath(weight_path)
+    if log_file:
+        log_file = os.path.normpath(log_file)
+
     print(f"=== VALIDATION CHECKS ===")
     print(f"data_path: {data_path}")
     print(f"yolo_version: {yolo_version}")
@@ -369,16 +380,21 @@ elif yolo_version == 5:
     cmd = ""
     print("Ultralytics Version of YOLO Requested:")
 
+    if weight_path and ("-cls" in os.path.basename(weight_path).lower() or "classify" in os.path.basename(weight_path).lower()):
+        if yolo_task != "classify":
+            print(f"Auto-correcting yolo_task from '{yolo_task}' to 'classify' based on classification model weights: {weight_path}")
+            yolo_task = "classify"
+
     if yolo_task == "detect":
         # Command to start running ultralytics using the training files
-        cmd = darknet_path + " detect train data=" + name_path + " project=" + data_path + " epochs=" + epochs + \
-            " imgsz=" + imgsz + " device=" + device + " model=" + \
-            weight_path + " " + adv_options + " 2>&1 > " + log_file
+        cmd = darknet_path + " detect train data=" + name_path + " project=" + data_path + " epochs=" + str(epochs) + \
+            " imgsz=" + str(imgsz) + " device=" + str(device) + " model=" + \
+            weight_path + " " + adv_options + (" 2>&1 > " + log_file if log_file else "")
 
     elif yolo_task == "classify":
         cmd = darknet_path + " classify train data=" + data_path + " project=" + data_path + " epochs=" + str(epochs) + \
             " imgsz=" + str(imgsz) + " device=" + str(device) + " model=" + \
-            weight_path + " " + adv_options
+            weight_path + " " + adv_options + (" 2>&1 > " + log_file if log_file else "")
         print(f"Classify command constructed: {cmd}")
 
     elif yolo_task == "pose":

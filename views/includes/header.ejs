@@ -17,6 +17,7 @@
     <script src="/libraries/bootstrap-toggle/js/bootstrap4-toggle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="/js/help-tooltip.js"></script>
 </head>
 
 <body>
@@ -44,18 +45,21 @@
                     type="submit">Logout</button>
             </form>
             <a class="navbar-brand" href="/user" style="left: 100%; float: right;">User: <%= user%></a>
-            <% if (activePage !==null) { %>
+            <a class="navbar-brand text-light ml-2" href="/help" style="font-size: 0.95rem;" title="Help & Documentation Wiki" data-toggle="tooltip">
+                <i class="fas fa-question-circle text-info"></i> Help / Wiki
+            </a>
+            <% if (typeof activePage !== 'undefined' && activePage !== null) { %>
                 <ul class="nav nav-tabs" style="border-bottom: 0px; margin-left: 10px;">
                     <li class="nav-item">
                         <a class="nav-link <%= activePage === 'project' ? 'active' : '' %>"
                             href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">
-                            <font color="<%= activePage === 'project' ? '#000000' : '#FFFFFF' %>">Label</font>
+                            <font color="<%= activePage === 'project' ? '#000000' : '#FFFFFF' %>">Annotate</font>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <%= activePage === 'Annotate' ? 'active' : '' %>"
-                            href="/annotate?IDX=<%= IDX %>" style="border-radius: 0">
-                            <font color="<%= activePage === 'Annotate' ? '#000000' : '#FFFFFF' %>">Annotate</font>
+                        <a class="nav-link <%= activePage === 'Label' ? 'active' : '' %>"
+                            href="/labeling?IDX=<%= IDX %>" style="border-radius: 0">
+                            <font color="<%= activePage === 'Label' ? '#000000' : '#FFFFFF' %>">Label</font>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -87,6 +91,12 @@
                         <a class="nav-link <%= activePage === 'Inference' ? 'active' : '' %>"
                             href="/inference?IDX=<%= IDX %>" style="border-radius: 0">
                             <font color="<%= activePage === 'Inference' ? '#000000' : '#FFFFFF' %>">Inference</font>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <%= activePage === 'help' ? 'active' : '' %>"
+                            href="/help?IDX=<%= IDX %>" style="border-radius: 0">
+                            <font color="<%= activePage === 'help' ? '#000000' : '#FFFFFF' %>">Help</font>
                         </a>
                     </li>
                 </ul>

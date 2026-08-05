@@ -59,28 +59,29 @@ class Logger {
             }
 
             const location = match[1] || match[2];
-            // Match trailing ":<line>:<col>" and treat everything before it as the file path.
-            // A naive split(':') breaks on Windows absolute paths (e.g. "C:\\...\\file.js:30:36"),
-            // since the drive letter's colon gets treated as the first delimiter.
-            const locationMatch = location.match(/^(.*):(\d+):(\d+)$/);
+            const lastColonIndex = location.lastIndexOf(':');
+            if (lastColonIndex === -1) continue;
 
-            if (locationMatch) {
-                const filePath = locationMatch[1];
-                const lineNo = locationMatch[2];
-
-                if (filePath.includes('node_modules')) {
-                    continue;
-                }
-
-                // Normalize to forward slashes so log output is consistent across platforms
-                // (path.relative returns backslash-separated paths on Windows).
-                const relativePath = path.relative(process.cwd(), filePath).split(path.sep).join('/');
-
-                return {
-                    file: relativePath,
-                    line: parseInt(lineNo, 10)
-                };
+            const secondLastColonIndex = location.lastIndexOf(':', lastColonIndex - 1);
+            let filePath, lineNo;
+            if (secondLastColonIndex !== -1 && !isNaN(location.substring(secondLastColonIndex + 1, lastColonIndex))) {
+                filePath = location.substring(0, secondLastColonIndex);
+                lineNo = location.substring(secondLastColonIndex + 1, lastColonIndex);
+            } else {
+                filePath = location.substring(0, lastColonIndex);
+                lineNo = location.substring(lastColonIndex + 1);
             }
+
+            if (filePath.includes('node_modules')) {
+                continue;
+            }
+
+            const relativePath = path.relative(process.cwd(), filePath);
+
+            return {
+                file: relativePath,
+                line: parseInt(lineNo, 10)
+            };
         }
         return null;
     }

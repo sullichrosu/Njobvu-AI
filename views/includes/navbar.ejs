@@ -1,10 +1,10 @@
 <div class="col-md-12">
     <ul class="nav nav-tabs">
         <li class="nav-item">
-            <a class="nav-link <%= activePage === 'project' ? 'active' : '' %>" href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Label</a>
+            <a class="nav-link <%= activePage === 'project' ? 'active' : '' %>" href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Annotate</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <%= activePage === 'Annotate' ? 'active' : '' %>" href="/annotate?IDX=<%= IDX %>" style="border-radius: 0">Annotate</a>
+            <a class="nav-link <%= activePage === 'Label' ? 'active' : '' %>" href="/labeling?IDX=<%= IDX %>" style="border-radius: 0">Label</a>
         </li>
         <li class="nav-item">
             <a class="nav-link <%= activePage === 'Stats' ? 'active' : '' %>" href="/stats?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
