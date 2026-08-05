@@ -868,6 +868,79 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body).toHaveProperty('success', false);
         });
     });
+
+    describe('looksLikeRunSummary quality guard', () => {
+        const ollamaChat = require('../../routes/chat/ollamaChat');
+
+        it('accepts a report that starts with a Run Summary heading', () => {
+            const content = '# Run Summary: train\n\nThe model trained for 10 epochs with a steadily decreasing loss curve, indicating healthy convergence.';
+            expect(ollamaChat.looksLikeRunSummary(content)).toBe(true);
+        });
+
+        it('accepts a report with a short lead-in sentence before the heading', () => {
+            const content = 'Sure, here is the analysis:\n\n# Run Summary: train2\n\nTraining completed successfully across 10 epochs with no errors logged.';
+            expect(ollamaChat.looksLikeRunSummary(content)).toBe(true);
+        });
+
+        it('rejects an HTML tutorial ramble even if long enough', () => {
+            const content = '<html><head><title>My Awesome Photo</title></head><body><h1>Welcome!</h1><p>I am a friendly AI assistant.</p></body></html>';
+            expect(ollamaChat.looksLikeRunSummary(content)).toBe(false);
+        });
+
+        it('rejects a canned "ready to assist" acknowledgment', () => {
+            const content = 'Okay, I understand. I will be ready to assist with your Njobvu AI tasks by providing structured instructions and payloads.';
+            expect(ollamaChat.looksLikeRunSummary(content)).toBe(false);
+        });
+
+        it('rejects content with no heading at all', () => {
+            const content = 'This run performed reasonably well overall with a stable loss trajectory and no notable errors during training or validation.';
+            expect(ollamaChat.looksLikeRunSummary(content)).toBe(false);
+        });
+
+        it('rejects content that is too short to be a real report', () => {
+            expect(ollamaChat.looksLikeRunSummary('# Run Summary: x')).toBe(false);
+        });
+
+        it('rejects a heading buried deep after an off-topic ramble', () => {
+            const filler = 'A'.repeat(250);
+            expect(ollamaChat.looksLikeRunSummary(`${filler}\n# Run Summary: train`)).toBe(false);
+        });
+    });
+
+    describe('serializeRunArtifacts context trimming', () => {
+        const ollamaChat = require('../../routes/chat/ollamaChat');
+
+        it('keeps only the essential config fields instead of dumping the full raw args.yaml', () => {
+            const artifact = {
+                runName: 'train',
+                runType: 'training',
+                config: {
+                    model: 'yolo11s-cls.pt',
+                    epochs: 10,
+                    batch: 16,
+                    // Real YOLO args.yaml carries ~90 fields like these — they should not appear.
+                    nbs: 64,
+                    erasing: 0.4,
+                    copy_paste_mode: 'flip',
+                    hsv_h: 0.015
+                },
+                metrics: { bestMap50: 0.5 },
+                artifactFiles: ['a.jpg', 'b.jpg', 'c.yaml'],
+                visualPlots: ['a.jpg', 'b.jpg']
+            };
+
+            const serialized = ollamaChat.serializeRunArtifacts([artifact]);
+
+            expect(serialized).toContain('"model":"yolo11s-cls.pt"');
+            expect(serialized).toContain('"epochs":10');
+            expect(serialized).not.toContain('nbs');
+            expect(serialized).not.toContain('erasing');
+            expect(serialized).not.toContain('copy_paste_mode');
+            // File lists are summarized as counts, not enumerated in full.
+            expect(serialized).toContain('Artifacts: 3 files (2 images/plots)');
+            expect(serialized).not.toContain('a.jpg');
+        });
+    });
 });
 
 

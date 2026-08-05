@@ -23,29 +23,136 @@
             .replace(/'/g, "&#039;");
     }
 
-    // Basic Markdown formatting helper
+    // Applies inline-level Markdown (inline code, bold, italic) to a single already-escaped line/cell.
+    function renderInline(str) {
+        let out = str;
+        out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+        out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        return out;
+    }
+
+    function isTableRowLine(line) {
+        return /^\s*\|.*\|\s*$/.test(line);
+    }
+
+    function isTableSeparatorLine(line) {
+        return /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$/.test(line);
+    }
+
+    function splitTableRow(line) {
+        const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+        return trimmed.split("|").map(function (cell) { return cell.trim(); });
+    }
+
+    // Renders a Markdown report (headers, tables, lists, bold/italic/code) into safe HTML.
+    // A flat regex pass can't express these block-level structures (a heading is a whole line, a
+    // table spans several), so the text is walked line by line, grouping headings/tables/lists into
+    // their own blocks and applying inline formatting within each.
     function renderMarkdown(text) {
         if (!text) return "";
-        let escaped = escapeHtml(text);
-        
-        // Code blocks ```code```
-        escaped = escaped.replace(/```([\s\S]*?)```/g, function (match, p1) {
-            return `<pre style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 8px; overflow-x: auto; font-family: monospace; margin: 6px 0;"><code>${p1}</code></pre>`;
+
+        // Pull fenced code blocks out first so nothing inside them is touched by other rules, then
+        // put escaped/highlighted versions back in once the rest of the text has been escaped.
+        const codeBlocks = [];
+        const withPlaceholders = text.replace(/```(?:[a-zA-Z0-9_-]*\n)?([\s\S]*?)```/g, function (match, code) {
+            codeBlocks.push(code.replace(/\n$/, ""));
+            return "\nCODEBLOCKMARKER" + (codeBlocks.length - 1) + "\n";
         });
 
-        // Inline code `code`
-        escaped = escaped.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>');
+        const escaped = escapeHtml(withPlaceholders);
+        const lines = escaped.split(/\r\n|\r|\n/);
 
-        // Bold **text**
-        escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        const htmlParts = [];
+        let listItems = [];
+        let listTag = null;
 
-        // Italic *text*
-        escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        function flushList() {
+            if (listItems.length) {
+                htmlParts.push("<" + listTag + ">" + listItems.join("") + "</" + listTag + ">");
+                listItems = [];
+                listTag = null;
+            }
+        }
 
-        // Newlines to <br>
-        escaped = escaped.replace(/\n/g, '<br>');
+        function flushTable(rows) {
+            if (rows.length < 2 || !isTableSeparatorLine(rows[1])) return false;
+            const headerCells = splitTableRow(rows[0]);
+            const bodyRows = rows.slice(2).map(splitTableRow);
+            let html = "<table><thead><tr>";
+            html += headerCells.map(function (c) { return "<th>" + renderInline(c) + "</th>"; }).join("");
+            html += "</tr></thead><tbody>";
+            bodyRows.forEach(function (row) {
+                html += "<tr>" + row.map(function (c) { return "<td>" + renderInline(c) + "</td>"; }).join("") + "</tr>";
+            });
+            html += "</tbody></table>";
+            htmlParts.push(html);
+            return true;
+        }
 
-        return escaped;
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+
+            // Fenced code block placeholder.
+            const codeMatch = line.trim().match(/^CODEBLOCKMARKER(\d+)$/);
+            if (codeMatch) {
+                flushList();
+                htmlParts.push("<pre><code>" + escapeHtml(codeBlocks[parseInt(codeMatch[1], 10)]) + "</code></pre>");
+                i++;
+                continue;
+            }
+
+            // Table: a run of consecutive "| ... |" lines starting with a header + separator row.
+            if (isTableRowLine(line)) {
+                const tableLines = [line];
+                let j = i + 1;
+                while (j < lines.length && isTableRowLine(lines[j])) {
+                    tableLines.push(lines[j]);
+                    j++;
+                }
+                flushList();
+                if (flushTable(tableLines)) {
+                    i = j;
+                    continue;
+                }
+                // Not a real table (no separator row) — fall through and render as plain lines.
+            }
+
+            // ATX headings: # through ######
+            const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+            if (headingMatch) {
+                flushList();
+                const level = headingMatch[1].length;
+                htmlParts.push("<h" + level + ">" + renderInline(headingMatch[2]) + "</h" + level + ">");
+                i++;
+                continue;
+            }
+
+            // Unordered / ordered list items.
+            const ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
+            const olMatch = !ulMatch && line.match(/^\s*\d+\.\s+(.*)$/);
+            if (ulMatch || olMatch) {
+                const tag = ulMatch ? "ul" : "ol";
+                if (listTag && listTag !== tag) flushList();
+                listTag = tag;
+                listItems.push("<li>" + renderInline((ulMatch || olMatch)[1]) + "</li>");
+                i++;
+                continue;
+            }
+            flushList();
+
+            if (line.trim() === "") {
+                i++;
+                continue;
+            }
+
+            htmlParts.push("<p>" + renderInline(line) + "</p>");
+            i++;
+        }
+        flushList();
+
+        return htmlParts.join("");
     }
 
     document.addEventListener("DOMContentLoaded", function () {

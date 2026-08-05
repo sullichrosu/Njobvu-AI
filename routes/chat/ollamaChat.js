@@ -489,11 +489,46 @@ async function runSandboxedPython(code) {
 }
 
 /**
- * Serializes the raw ingested run artifacts (config, metrics, log diagnostics, findings) into a
- * compact context block fed to the LLM so summaries are authored from the actual run documents.
+ * Picks the handful of hyperparameters that actually matter for a training/inference narrative.
+ * A raw YOLO args.yaml has ~90 fields (nbs, erasing, copy_paste_mode, ...); dumping all of them
+ * drowns a small local model's limited context in noise it was never asked to reason about.
+ */
+function summarizeConfigForPrompt(config) {
+    if (!config || typeof config !== "object") return "None";
+    const keys = ["model", "data", "epochs", "batch", "imgsz", "lr0", "lrf", "optimizer", "device", "pretrained", "patience"];
+    const picked = {};
+    keys.forEach(k => {
+        if (config[k] !== undefined && config[k] !== null && config[k] !== "null") picked[k] = config[k];
+    });
+    return Object.keys(picked).length > 0 ? JSON.stringify(picked) : "None";
+}
+
+/**
+ * Serializes the ingested run artifacts (config, metrics, log diagnostics, findings) into a compact,
+ * plain-language context block fed to the LLM so summaries are authored from the actual run
+ * documents. Kept deliberately small (counts instead of full file lists, key hyperparameters instead
+ * of the full raw config) — small local models lose track of the instruction when handed a large raw
+ * JSON dump, which is why the LLM-authored report kept losing out to the deterministic fallback.
  */
 function serializeRunArtifacts(artifacts) {
-    return JSON.stringify(artifacts, null, 2);
+    const list = Array.isArray(artifacts) ? artifacts : [artifacts];
+    return list.map(a => {
+        if (!a) return "";
+        const lines = [];
+        lines.push(`Run: ${a.runName || "unknown"} (${a.runType || "unknown"})`);
+        lines.push(`Key Config: ${summarizeConfigForPrompt(a.config)}`);
+        lines.push(`Metrics: ${a.metrics && Object.keys(a.metrics).length ? JSON.stringify(a.metrics) : "None recorded"}`);
+        if (a.logDiagnostics && Object.keys(a.logDiagnostics).length) {
+            lines.push(`Log Diagnostics: ${JSON.stringify(a.logDiagnostics)}`);
+        }
+        if (Array.isArray(a.findings) && a.findings.length) {
+            lines.push(`Deterministic Findings: ${a.findings.join("; ")}`);
+        }
+        const fileCount = Array.isArray(a.artifactFiles) ? a.artifactFiles.length : 0;
+        const imageCount = Array.isArray(a.visualPlots) ? a.visualPlots.length : 0;
+        lines.push(`Artifacts: ${fileCount} files (${imageCount} images/plots)`);
+        return lines.join("\n");
+    }).filter(Boolean).join("\n\n---\n\n");
 }
 
 /**
@@ -515,15 +550,34 @@ function buildSummaryInstruction() {
 
 /**
  * Quality guard for LLM-authored summaries. A small or distracted model sometimes ignores the ingested
- * run documents and replies with an off-topic ramble (e.g. an HTML tutorial) instead of a run summary.
- * Only accept output that actually looks like the report we asked for; otherwise the caller falls back
- * to the deterministic data-backed report so the user always receives a real summary.
+ * run documents and replies with an off-topic ramble (e.g. an HTML tutorial, a canned "ready to
+ * assist" acknowledgment) instead of a run summary. Reject those on unmistakable off-topic signals
+ * rather than requiring an exact heading string — a weak model that adds a one-line lead-in before an
+ * otherwise-real "# Run Summary: ..." heading (e.g. "Sure, here's the analysis:\n\n# Run Summary: ...")
+ * still produced a real report and should not be thrown away; only genuinely off-topic output should
+ * fall back to the deterministic data-backed report.
  */
 function looksLikeRunSummary(content) {
     if (!content || typeof content !== "string") return false;
     const trimmed = content.trim();
-    if (trimmed.length < 50) return false;
-    return trimmed.startsWith("# Run Summary:");
+    if (trimmed.length < 80) return false;
+
+    const offTopicPatterns = [
+        /<\s*!doctype/i, /<\s*html/i, /<\s*body/i, /<\s*img\b/i, /<\s*head\b/i,
+        /\bGemma\s+UI\b/i,
+        /this example demonstrates/i,
+        /\bi (will be ready|am committed) to assist/i,
+        /provide (the )?(exact )?json payload/i
+    ];
+    if (offTopicPatterns.some(p => p.test(trimmed))) return false;
+
+    // The report must contain a genuine top-level (or second-level) Markdown heading, and it must
+    // appear near the start — a heading buried deep in an otherwise off-topic ramble doesn't count.
+    const headingMatch = trimmed.match(/^#{1,2}\s+\S.*$/m);
+    if (!headingMatch) return false;
+    if (headingMatch.index > 200) return false;
+
+    return true;
 }
 
 /**
@@ -1052,11 +1106,18 @@ async function ollamaChat(req, res) {
                 const runArtifacts = toolResult.contextArtifacts[i];
                 if (!runTarget || !runTarget.runDir || !runArtifacts) continue;
                 try {
+                    // Include an explicit user turn, not just a system message: chat-tuned models
+                    // (especially small ones) respond far more reliably to instructions delivered
+                    // as something to act on rather than a system message with nothing to reply to.
                     const narrative = await callOllamaChat(targetOllamaUrl, targetModel, [
                         {
                             role: "system",
                             content: `[INGESTED RUN DOCUMENT ARTIFACTS CONTEXT]:\n${serializeRunArtifacts([runArtifacts])}\n\n` +
                                      buildSummaryInstruction()
+                        },
+                        {
+                            role: "user",
+                            content: `Write the run summary report for run "${runTarget.runName || path.basename(runTarget.runDir)}" now, using only the ingested artifacts above.`
                         }
                     ]);
                     if (narrative && looksLikeRunSummary(narrative) && fs.existsSync(runTarget.runDir)) {
@@ -1352,5 +1413,7 @@ ollamaChat.generateRunSummary = generateRunSummary;
 ollamaChat.runSandboxedPython = runSandboxedPython;
 ollamaChat.generateRunSummaryHandler = generateRunSummaryHandler;
 ollamaChat.sandboxedPythonHandler = sandboxedPythonHandler;
+ollamaChat.looksLikeRunSummary = looksLikeRunSummary;
+ollamaChat.serializeRunArtifacts = serializeRunArtifacts;
 
 module.exports = ollamaChat;

@@ -368,6 +368,69 @@
     font-size: 12px;
 }
 
+/* Paragraphs & Lists */
+.njobvu-msg-bubble p,
+.chat-message p {
+    margin: 6px 0;
+}
+
+.njobvu-msg-bubble p:first-child,
+.chat-message p:first-child {
+    margin-top: 0;
+}
+
+.njobvu-msg-bubble ul,
+.njobvu-msg-bubble ol,
+.chat-message ul,
+.chat-message ol {
+    margin: 6px 0;
+    padding-left: 22px;
+}
+
+.njobvu-msg-bubble li,
+.chat-message li {
+    margin: 3px 0;
+}
+
+/* Tables */
+.njobvu-msg-bubble table,
+.chat-message table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 12.5px;
+    overflow-x: auto;
+    display: block;
+}
+
+.njobvu-msg-bubble table thead,
+.njobvu-msg-bubble table tbody,
+.njobvu-msg-bubble table tr,
+.chat-message table thead,
+.chat-message table tbody,
+.chat-message table tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.njobvu-msg-bubble th,
+.njobvu-msg-bubble td,
+.chat-message th,
+.chat-message td {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 5px 8px;
+    text-align: left;
+    word-break: break-word;
+}
+
+.njobvu-msg-bubble th,
+.chat-message th {
+    background: rgba(99, 102, 241, 0.15);
+    color: #f8fafc;
+    font-weight: 700;
+}
+
 /* Quick Action Chips */
 .njobvu-quick-actions {
     display: flex;
