@@ -549,10 +549,27 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
                         );
                     } catch (e) {}
 
+                    // Confirm where the generated summaries were actually written so callers can verify
+                    // the per-run summary landed in the run's own output folder (never silent).
+                    const summaryFiles = [];
+                    for (const f of ["run_summary.md", "summary.json"]) {
+                        if (fs.existsSync(path.join(resolvedRunDir, f))) {
+                            summaryFiles.push(path.resolve(path.join(resolvedRunDir, f)));
+                        }
+                    }
+                    if (utilResult.isAggregated && Array.isArray(utilResult.runs)) {
+                        utilResult.runs.forEach(r => {
+                            if (r && r.runDir && fs.existsSync(path.join(r.runDir, "run_summary.md"))) {
+                                summaryFiles.push(path.resolve(path.join(r.runDir, "run_summary.md")));
+                            }
+                        });
+                    }
+
                     const documentContext = `### INGESTED RUN DOCUMENT ARTIFACTS FOR RUN ${selectedRunId || path.basename(resolvedRunDir)}:\n` +
                         `- Run Output Directory: \`${resolvedRunDir}\`\n` +
                         `- Run Type: ${utilResult.runType || type}\n` +
-                        `- Ingested Artifact Files: ${artifactNames.join(", ") || "None"}\n\n${utilReport}`;
+                        `- Ingested Artifact Files: ${artifactNames.join(", ") || "None"}\n` +
+                        `- Summary Files Written: ${summaryFiles.join(", ") || "none"}\n\n${utilReport}`;
 
                     return {
                         success: true,
@@ -560,6 +577,7 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
                         runType: utilResult.runType || type,
                         targetRunDir: resolvedRunDir,
                         runDir: resolvedRunDir,
+                        summaryFiles: summaryFiles,
                         documentContext: documentContext,
                         summary: utilReport,
                         markdownSummary: utilReport,

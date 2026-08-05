@@ -665,6 +665,14 @@ describe('Chat Harness API Integration Tests', () => {
             const content = response.body.message.content;
             expect(content.startsWith('# Run Summary: detect_summary_run')).toBe(true);
 
+            // The summary must be written into the run's own output folder, and the tool result must
+            // confirm exactly where (no silent failures).
+            expect(fs.existsSync(path.join(testRunDir, 'run_summary.md'))).toBe(true);
+            expect(fs.existsSync(path.join(testRunDir, 'summary.json'))).toBe(true);
+            expect(Array.isArray(response.body.toolResult.summaryFiles)).toBe(true);
+            expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'run_summary.md')));
+            expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'summary.json')));
+
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
         });
