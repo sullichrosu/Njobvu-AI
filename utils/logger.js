@@ -46,7 +46,9 @@ class Logger {
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
 
-            if (line.replace(/\\/g, '/').includes('utils/logger.js') || line.includes('node:internal') || line.includes('(node:')) {
+            // Path separator is platform-dependent (Windows stack frames use backslashes), so match
+            // both to actually skip logger.js's own wrapper frames instead of always falling through.
+            if (/utils[\\/]logger\.js/.test(line) || line.includes('node:internal') || line.includes('(node:')) {
                 continue;
             }
 

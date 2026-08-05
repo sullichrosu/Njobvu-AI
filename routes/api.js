@@ -86,11 +86,31 @@ const changeClass = require("./validation/changeClass");
 
 const bootstrapController = require("./bootstrap/bootstrapController");
 
+const ollamaChat = require("./chat/ollamaChat");
+const { getChatConfig, updateChatConfig, getOllamaModels } = require("./chat/chatConfig");
+
 const yoloInference = require("./inference/yoloInference");
 const getRunImages = require("./inference/getRunImages");
 const uploadInferenceFile = require("./inference/uploadInferenceFile");
 const inceptionInference = require("./inference/inceptionInference");
 const addYoloInferenceToDataset = require("./inference/addYoloInferenceToDataset");
+
+const { executePythonSandbox, handleRunSummary, handleListRuns, handleRunDocumentContext, handlePersistCustomSummary } = require("../controllers/sandboxController");
+
+// CHAT HARNESS ROUTES
+api.post("/api/chat", ollamaChat);
+api.get("/api/chat/config", getChatConfig);
+api.post("/api/chat/config", updateChatConfig);
+api.get("/api/chat/models", getOllamaModels);
+
+// SANDBOX & RUN SUMMARY ROUTES
+api.post("/api/sandbox/python", executePythonSandbox);
+api.post("/api/runs/summary", handleRunSummary);
+api.get("/api/runs/list", handleListRuns);
+api.post("/api/runs/list", handleListRuns);
+api.get("/api/runs/context", handleRunDocumentContext);
+api.post("/api/runs/context", handleRunDocumentContext);
+api.post("/api/runs/persist-summary", handlePersistCustomSummary);
 
 // INFERENCE ROUTES
 api.post("/yolo-inf", yoloInference);
