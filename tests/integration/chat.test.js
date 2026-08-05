@@ -361,7 +361,7 @@ describe('Chat Harness API Integration Tests', () => {
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
         });
 
-        it('should ALWAYS prepend the actual run summary report even when the LLM preamble mentions "summary"', async () => {
+        it('should keep the LLM-authored narrative as the run summary report', async () => {
             const fs = require('fs');
             const path = require('path');
             const testRunDir = path.join(process.cwd(), 'runs', 'train', 'preamble_run');
@@ -401,10 +401,14 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.summary).toBeTruthy();
 
-            // The actual tool report must be the PRIMARY (prepended) content, not suppressed by the LLM preamble.
+            // The LLM's natural-language narrative IS the report (no static JS template prepended).
             const content = response.body.message.content;
-            expect(content.startsWith('# Run Summary: preamble_run')).toBe(true);
+            expect(content.startsWith('Okay, I understand.')).toBe(true);
             expect(content).toContain('I will provide a concise summary');
+
+            // The LLM-authored narrative is persisted into the run's own output folder.
+            const savedContent = fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8');
+            expect(savedContent.startsWith('Okay, I understand.')).toBe(true);
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
@@ -496,7 +500,7 @@ describe('Chat Harness API Integration Tests', () => {
             fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
 
             const originalFetch = global.fetch;
-            global.fetch = jest.fn().mockResolvedValueOnce({
+            global.fetch = jest.fn().mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: async () => ({
@@ -523,12 +527,12 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.summary).toBeTruthy();
             const content = response.body.message.content;
-            expect(content.startsWith('# Run Summary: all_runs_summary')).toBe(true);
             expect(content).toContain('I will provide a concise summary');
 
-            // Every discovered run must get a summary written into its OWN output folder.
+            // Every discovered run must get an LLM-authored summary written into its OWN output folder.
             expect(fs.existsSync(path.join(testRunDir, 'run_summary.md'))).toBe(true);
             expect(fs.existsSync(path.join(testRunDir, 'summary.json'))).toBe(true);
+            expect(fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8')).toContain('I will provide a concise summary');
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'run_summary.md')));
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'summary.json')));
 
@@ -637,7 +641,7 @@ describe('Chat Harness API Integration Tests', () => {
             fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
 
             const originalFetch = global.fetch;
-            global.fetch = jest.fn().mockResolvedValueOnce({
+            global.fetch = jest.fn().mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: async () => ({
@@ -664,12 +668,13 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.success).toBe(true);
             const content = response.body.message.content;
-            expect(content.startsWith('# Run Summary: all_runs_summary')).toBe(true);
+            expect(content).toContain('I will provide a concise summary');
 
             // The summary must be written into the run's own output folder, and the tool result must
             // confirm exactly where (no silent failures).
             expect(fs.existsSync(path.join(testRunDir, 'run_summary.md'))).toBe(true);
             expect(fs.existsSync(path.join(testRunDir, 'summary.json'))).toBe(true);
+            expect(fs.readFileSync(path.join(testRunDir, 'run_summary.md'), 'utf8')).toContain('I will provide a concise summary');
             expect(Array.isArray(response.body.toolResult.summaryFiles)).toBe(true);
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'run_summary.md')));
             expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'summary.json')));
@@ -690,7 +695,7 @@ describe('Chat Harness API Integration Tests', () => {
             }
 
             const originalFetch = global.fetch;
-            global.fetch = jest.fn().mockResolvedValueOnce({
+            global.fetch = jest.fn().mockResolvedValue({
                 ok: true,
                 status: 200,
                 json: async () => ({
@@ -718,18 +723,20 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.success).toBe(true);
             const content = response.body.message.content;
-            expect(content.startsWith('# Run Summary: chat_nested_proj_all_runs_summary')).toBe(true);
+            expect(content).toContain('Here is your run summary.');
 
-            // Both runs get run_summary.md + summary.json inside their OWN output directory.
+            // Both runs get an LLM-authored run_summary.md + data summary.json inside their OWN output directory.
             for (const runDir of [runA, runB]) {
                 expect(fs.existsSync(path.join(runDir, 'run_summary.md'))).toBe(true);
                 expect(fs.existsSync(path.join(runDir, 'summary.json'))).toBe(true);
+                expect(fs.readFileSync(path.join(runDir, 'run_summary.md'), 'utf8')).toContain('Here is your run summary.');
                 expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(runDir, 'run_summary.md')));
                 expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(runDir, 'summary.json')));
             }
 
             // The all-runs report lands once at the project root.
             expect(fs.existsSync(path.join(projRoot, 'run_summary.md'))).toBe(true);
+            expect(fs.readFileSync(path.join(projRoot, 'run_summary.md'), 'utf8')).toContain('Here is your run summary.');
 
             global.fetch = originalFetch;
             try { fs.rmSync(projRoot, { recursive: true, force: true }); } catch (e) {}

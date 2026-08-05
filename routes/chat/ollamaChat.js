@@ -467,6 +467,53 @@ async function runSandboxedPython(code) {
 }
 
 /**
+ * Serializes the raw ingested run artifacts (config, metrics, log diagnostics, findings) into a
+ * compact context block fed to the LLM so summaries are authored from the actual run documents.
+ */
+function serializeRunArtifacts(artifacts) {
+    return JSON.stringify(artifacts, null, 2);
+}
+
+/**
+ * Instruction used whenever the LLM is asked to author a run summary: a context-aware,
+ * natural-language Markdown report (not a static field-by-field template).
+ */
+function buildSummaryInstruction() {
+    return `INSTRUCTION FOR LLM ASSISTANT:\n` +
+        `You are the run-summary author. Using ONLY the ingested run document artifacts above, write a ` +
+        `detailed, context-aware Markdown report in natural language that covers, for each run: what was ` +
+        `configured and executed (hyperparameters, epochs, data), the training/inference outcome (loss ` +
+        `trajectory, mAP/precision/recall metrics where present), what succeeded, what failed or needs ` +
+        `attention, and concrete, actionable recommendations for improvement. Explain numbers with prose; ` +
+        `do not invent metrics or values that are not present in the artifacts. Start the report with a ` +
+        `top-level H1 heading like "# Run Summary: <run-or-project>".`;
+}
+
+/**
+ * Makes a single Ollama chat call and returns the assistant's text content, or null on failure.
+ */
+async function callOllamaChat(ollamaUrl, model, messages, timeoutMs = 45000) {
+    const endpoint = `${(ollamaUrl || "").replace(/\/+$/, "")}/api/chat`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model, messages, stream: false }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return (data && data.message && data.message.content) || (data && data.response) || "";
+    } catch (err) {
+        clearTimeout(timeoutId);
+        return null;
+    }
+}
+
+/**
  * Helper to generate or aggregate run summaries from run output folders.
  * Resolves the target run directory through the summary generator util's discovery so nested
  * layouts (runs/detect/train) and project-scoped directories are found, matches a provided runId
@@ -607,12 +654,47 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
                         `- Ingested Artifact Files: ${artifactNames.join(", ") || "None"}\n` +
                         `- Summary Files Written: ${summaryFiles.join(", ") || "none"}\n\n${utilReport}`;
 
+                    // Raw ingested artifacts per run so the LLM can author a context-aware,
+                    // natural-language report from the actual run documents (not a JS template).
+                    const contextArtifacts = utilResult.isAggregated && Array.isArray(utilResult.runs)
+                        ? utilResult.runs.map(r => ({
+                            runName: r.runName,
+                            runDir: r.runDir,
+                            runType: r.runType,
+                            artifactFiles: r.artifactFiles || [],
+                            config: r.config,
+                            metrics: r.metrics,
+                            logDiagnostics: r.logDiagnostics,
+                            findings: r.findings,
+                            recommendations: r.recommendations,
+                            visualPlots: r.visualPlots
+                        }))
+                        : [{
+                            runName: selectedRunId || path.basename(resolvedRunDir),
+                            runDir: resolvedRunDir,
+                            runType: utilResult.runType || type,
+                            artifactFiles: artifactNames,
+                            config: utilResult.config,
+                            metrics: utilResult.metrics,
+                            logDiagnostics: utilResult.logDiagnostics,
+                            findings: utilResult.findings,
+                            recommendations: utilResult.recommendations,
+                            visualPlots: utilResult.visualPlots
+                        }];
+
+                    const targetRuns = utilResult.isAggregated && Array.isArray(utilResult.runs)
+                        ? utilResult.runs.map(r => ({ runDir: r.runDir, runName: r.runName }))
+                        : [{ runDir: resolvedRunDir, runName: selectedRunId || path.basename(resolvedRunDir) }];
+
                     return {
                         success: true,
                         runId: selectedRunId || path.basename(resolvedRunDir || ""),
                         runType: utilResult.runType || type,
+                        isAggregated: !!utilResult.isAggregated,
                         targetRunDir: targetDir || resolvedRunDir,
                         runDir: targetDir || resolvedRunDir,
+                        targetRuns: targetRuns,
+                        contextArtifacts: contextArtifacts,
                         summaryFiles: summaryFiles,
                         documentContext: documentContext,
                         summary: utilReport,
@@ -877,12 +959,16 @@ async function ollamaChat(req, res) {
         let augmentedMessages = [...messages];
         if (toolResult && toolResult.success) {
             if (toolResult.documentContext || toolResult.summary) {
-                const ingestedContext = toolResult.documentContext || toolResult.summary;
+                // For summary requests feed the RAW ingested run documents to the LLM so it can author a
+                // context-aware natural-language report; fall back to the templated report when the raw
+                // artifacts are unavailable (e.g. legacy fallback generator).
+                const ingestedContext = Array.isArray(toolResult.contextArtifacts)
+                    ? serializeRunArtifacts(toolResult.contextArtifacts)
+                    : (toolResult.documentContext || toolResult.summary);
                 augmentedMessages.push({
                     role: "system",
                     content: `[INGESTED RUN DOCUMENT ARTIFACTS CONTEXT]:\n${ingestedContext}\n\n` +
-                             `INSTRUCTION FOR LLM ASSISTANT:\n` +
-                             `Analyze the ingested run document artifacts above. Generate a detailed, professional custom Markdown narrative report interpreting loss trajectories, mAP performance metrics, hyperparameter choices, and concrete technical recommendations for model optimization.`
+                             buildSummaryInstruction()
                 });
             } else if (toolResult.stdout !== undefined) {
                 augmentedMessages.push({
@@ -909,6 +995,32 @@ async function ollamaChat(req, res) {
         const targetModel = model || (global.configFile && global.configFile.ollama_default_model) || "llama3";
 
         const endpoint = `${targetOllamaUrl.replace(/\/+$/, "")}/api/chat`;
+
+        // 7b. Author each run's summary with the LLM so every run's output directory gets a
+        //     context-aware natural-language report (not the static JS template). Runs are
+        //     authored sequentially to avoid hammering a local Ollama. If a call fails, the run
+        //     keeps the deterministic report the tool already wrote as a fallback.
+        if (toolResult && toolResult.success === true && toolResult.isAggregated &&
+            Array.isArray(toolResult.targetRuns) && Array.isArray(toolResult.contextArtifacts) &&
+            toolResult.targetRuns.length > 0) {
+            for (let i = 0; i < toolResult.targetRuns.length; i++) {
+                const runTarget = toolResult.targetRuns[i];
+                const runArtifacts = toolResult.contextArtifacts[i];
+                if (!runTarget || !runTarget.runDir || !runArtifacts) continue;
+                try {
+                    const narrative = await callOllamaChat(targetOllamaUrl, targetModel, [
+                        {
+                            role: "system",
+                            content: `[INGESTED RUN DOCUMENT ARTIFACTS CONTEXT]:\n${serializeRunArtifacts([runArtifacts])}\n\n` +
+                                     buildSummaryInstruction()
+                        }
+                    ]);
+                    if (narrative && narrative.trim() && fs.existsSync(runTarget.runDir)) {
+                        fs.writeFileSync(path.join(runTarget.runDir, "run_summary.md"), narrative.trim(), "utf8");
+                    }
+                } catch (authErr) {}
+            }
+        }
 
         // 8. Short-circuit tool failures deterministically: never hand a failed tool to the LLM.
         //    Small models ramble into a marketing-style feature list when asked to narrate a failure.
@@ -1049,8 +1161,12 @@ async function ollamaChat(req, res) {
                     const formattedRuns = formatRunListings(toolResult.runs, projectName);
                     assistantReply.content = setToolOutputAsPrimary(assistantReply.content, formattedRuns);
                 } else if (toolResult.summary || toolResult.documentContext) {
-                    const report = toolResult.summary || toolResult.documentContext;
-                    assistantReply.content = setToolOutputAsPrimary(assistantReply.content, report);
+                    // The LLM narrative IS the summary report (context-aware natural language authored
+                    // from the ingested run documents). Fall back to the deterministic report only when
+                    // the model returned nothing usable.
+                    if (!assistantReply.content || !assistantReply.content.trim()) {
+                        assistantReply.content = toolResult.summary || toolResult.documentContext;
+                    }
                 } else if (toolResult.stdout !== undefined) {
                     const pyOutput = `**Python Sandbox Execution Result:**\n\`\`\`\n${toolResult.stdout || toolResult.stderr || toolResult.error || "(No output)"}\n\`\`\``;
                     assistantReply.content = setToolOutputAsPrimary(assistantReply.content, pyOutput);
