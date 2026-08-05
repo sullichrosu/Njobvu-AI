@@ -509,6 +509,12 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
 
             let resolvedRunDir = null;
             let selectedRunId = runId;
+            let utilOptions = null;
+
+            let utilRunType;
+            if (isInference) utilRunType = "inference";
+            else if (String(runType || "").toLowerCase().startsWith("train")) utilRunType = "training";
+            else utilRunType = runType || "auto";
 
             if (runId) {
                 const runIdLower = String(runId).trim().toLowerCase();
@@ -525,58 +531,88 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
                 }
                 resolvedRunDir = matched.runPath;
                 selectedRunId = matched.runName;
+                utilOptions = { runType: utilRunType, projectName };
             } else if (candidates.length > 0) {
-                // listAvailableRuns returns runs sorted by most recent mtime first.
-                const best = candidates[0];
-                resolvedRunDir = best.runPath;
-                selectedRunId = best.runName;
+                // No run was named: summarize EVERY discovered run for the project. The aggregated
+                // generator writes run_summary.md + summary.json into each run's own output directory
+                // (nested layouts like training/logs/<timestamp>/<run> included) and the all-runs
+                // report once at the project root — the end state the user asked for.
+                selectedRunId = projectName ? `${projectName}_all_runs_summary` : "all_runs_summary";
+                resolvedRunDir = projectName ? path.join(process.cwd(), "public", "projects", projectName) : null;
+                utilOptions = { runType: utilRunType, projectName, allRuns: true };
             }
 
-            if (resolvedRunDir && fs.existsSync(resolvedRunDir)) {
+            if (utilOptions) {
                 // 2. Invoke the util with its real contract: generateRunSummary(runDir, { runType, projectName }).
-                let utilRunType;
-                if (isInference) utilRunType = "inference";
-                else if (String(runType || "").toLowerCase().startsWith("train")) utilRunType = "training";
-                else utilRunType = runType || "auto";
-
-                const utilResult = await runSummaryGen.generateRunSummary(resolvedRunDir, { runType: utilRunType, projectName });
+                let utilResult = null;
+                try {
+                    utilResult = await runSummaryGen.generateRunSummary(resolvedRunDir, utilOptions);
+                } catch (e) {
+                    if (!runId && candidates.length > 0) {
+                        // Project-root resolution failed (e.g. runs live outside public/projects);
+                        // target the first discovered run's parent so per-run summaries still land
+                        // in each run's own output directory.
+                        const fallbackTarget = path.dirname(candidates[0].runPath);
+                        try {
+                            utilResult = await runSummaryGen.generateRunSummary(fallbackTarget, { runType: utilRunType, projectName, allRuns: true });
+                        } catch (e2) {
+                            utilResult = null;
+                        }
+                    } else {
+                        throw e;
+                    }
+                }
                 const utilReport = utilResult && (utilResult.markdownSummary || utilResult.summaryMd || utilResult.summary);
                 if (utilResult && utilReport) {
                     let artifactNames = [];
-                    try {
-                        artifactNames = fs.readdirSync(resolvedRunDir).filter(f =>
-                            ["args.yaml", "config.json", "results.csv", "summary.json", "metrics.json", "train.log", "inference.log"].includes(f)
-                        );
-                    } catch (e) {}
+                    if (utilResult.isAggregated) {
+                        artifactNames = Array.isArray(utilResult.runs) ? utilResult.runs.map(r => r.runName) : [];
+                    } else {
+                        try {
+                            artifactNames = fs.readdirSync(resolvedRunDir).filter(f =>
+                                ["args.yaml", "config.json", "results.csv", "summary.json", "metrics.json", "train.log", "inference.log"].includes(f)
+                            );
+                        } catch (e) {}
+                    }
 
                     // Confirm where the generated summaries were actually written so callers can verify
-                    // the per-run summary landed in the run's own output folder (never silent).
+                    // the per-run summary landed in each run's own output folder (never silent).
                     const summaryFiles = [];
-                    for (const f of ["run_summary.md", "summary.json"]) {
-                        if (fs.existsSync(path.join(resolvedRunDir, f))) {
-                            summaryFiles.push(path.resolve(path.join(resolvedRunDir, f)));
+                    const targetDir = utilResult.isAggregated ? (utilResult.runDir || resolvedRunDir) : resolvedRunDir;
+                    if (targetDir) {
+                        for (const f of ["run_summary.md", "summary.json"]) {
+                            if (fs.existsSync(path.join(targetDir, f))) {
+                                summaryFiles.push(path.resolve(path.join(targetDir, f)));
+                            }
                         }
                     }
                     if (utilResult.isAggregated && Array.isArray(utilResult.runs)) {
                         utilResult.runs.forEach(r => {
-                            if (r && r.runDir && fs.existsSync(path.join(r.runDir, "run_summary.md"))) {
-                                summaryFiles.push(path.resolve(path.join(r.runDir, "run_summary.md")));
+                            if (r && r.runDir) {
+                                for (const f of ["run_summary.md", "summary.json"]) {
+                                    if (fs.existsSync(path.join(r.runDir, f))) {
+                                        summaryFiles.push(path.resolve(path.join(r.runDir, f)));
+                                    }
+                                }
                             }
                         });
                     }
 
-                    const documentContext = `### INGESTED RUN DOCUMENT ARTIFACTS FOR RUN ${selectedRunId || path.basename(resolvedRunDir)}:\n` +
-                        `- Run Output Directory: \`${resolvedRunDir}\`\n` +
+                    const contextLabel = utilResult.isAggregated
+                        ? `AGGREGATED RUN DOCUMENT ARTIFACTS FOR PROJECT ${projectName || path.basename(targetDir || "")}`
+                        : `INGESTED RUN DOCUMENT ARTIFACTS FOR RUN ${selectedRunId || path.basename(resolvedRunDir)}`;
+                    const documentContext = `### ${contextLabel}:\n` +
+                        `- Run Output Directory: \`${targetDir}\`\n` +
                         `- Run Type: ${utilResult.runType || type}\n` +
                         `- Ingested Artifact Files: ${artifactNames.join(", ") || "None"}\n` +
                         `- Summary Files Written: ${summaryFiles.join(", ") || "none"}\n\n${utilReport}`;
 
                     return {
                         success: true,
-                        runId: selectedRunId || path.basename(resolvedRunDir),
+                        runId: selectedRunId || path.basename(resolvedRunDir || ""),
                         runType: utilResult.runType || type,
-                        targetRunDir: resolvedRunDir,
-                        runDir: resolvedRunDir,
+                        targetRunDir: targetDir || resolvedRunDir,
+                        runDir: targetDir || resolvedRunDir,
                         summaryFiles: summaryFiles,
                         documentContext: documentContext,
                         summary: utilReport,

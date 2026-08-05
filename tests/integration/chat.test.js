@@ -485,7 +485,7 @@ describe('Chat Harness API Integration Tests', () => {
             global.fetch = originalFetch;
         });
 
-        it('should trigger run summary tool via free text "give me a summary of the training run" and prepend the report', async () => {
+        it('should aggregate ALL runs via free text "give me a summary of the training run" and prepend the report', async () => {
             const fs = require('fs');
             const path = require('path');
             const testRunDir = path.join(process.cwd(), 'runs', 'train', 'freetext_summary_run');
@@ -523,8 +523,14 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.summary).toBeTruthy();
             const content = response.body.message.content;
-            expect(content.startsWith('# Run Summary: freetext_summary_run')).toBe(true);
+            expect(content.startsWith('# Run Summary: all_runs_summary')).toBe(true);
             expect(content).toContain('I will provide a concise summary');
+
+            // Every discovered run must get a summary written into its OWN output folder.
+            expect(fs.existsSync(path.join(testRunDir, 'run_summary.md'))).toBe(true);
+            expect(fs.existsSync(path.join(testRunDir, 'summary.json'))).toBe(true);
+            expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'run_summary.md')));
+            expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(testRunDir, 'summary.json')));
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
@@ -629,10 +635,6 @@ describe('Chat Harness API Integration Tests', () => {
             }
             fs.mkdirSync(testRunDir, { recursive: true });
             fs.writeFileSync(path.join(testRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
-            // Pin the run as the most recent (by mtime) so free-text selection is deterministic,
-            // even though creating it bumps the parent runs/detect/train directory mtime.
-            const futureTime = new Date(Date.now() + 60000);
-            fs.utimesSync(testRunDir, futureTime, futureTime);
 
             const originalFetch = global.fetch;
             global.fetch = jest.fn().mockResolvedValueOnce({
@@ -661,9 +663,8 @@ describe('Chat Harness API Integration Tests', () => {
             expect(response.body).toHaveProperty('success', true);
             expect(response.body.toolResult).not.toBeNull();
             expect(response.body.toolResult.success).toBe(true);
-            expect(response.body.toolResult.targetRunDir).toBe(testRunDir);
             const content = response.body.message.content;
-            expect(content.startsWith('# Run Summary: detect_summary_run')).toBe(true);
+            expect(content.startsWith('# Run Summary: all_runs_summary')).toBe(true);
 
             // The summary must be written into the run's own output folder, and the tool result must
             // confirm exactly where (no silent failures).
@@ -675,6 +676,63 @@ describe('Chat Harness API Integration Tests', () => {
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
+        });
+
+        it('should summarize EVERY run in the nested training/logs/<timestamp>/<run> layout and write per-run summaries', async () => {
+            const fs = require('fs');
+            const path = require('path');
+            const projRoot = path.join(process.cwd(), 'public', 'projects', 'chat_nested_proj');
+            const runA = path.join(projRoot, 'training', 'logs', '1785814629898', 'train');
+            const runB = path.join(projRoot, 'training', 'logs', '1785814880596', 'train2');
+            for (const dir of [runA, runB]) {
+                fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(path.join(dir, 'args.yaml'), 'model: yolo11s-cls.pt\ntask: classify\nepochs: 10\nname: train\n', 'utf8');
+            }
+
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    model: 'llama3',
+                    message: {
+                        role: 'assistant',
+                        content: 'Here is your run summary.'
+                    },
+                    done: true
+                })
+            });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('Cookie', ['Username=TestUser'])
+                .send({
+                    messages: [{ role: 'user', content: 'summarize my training run' }],
+                    model: 'llama3',
+                    projectName: 'chat_nested_proj'
+                })
+                .expect('Content-Type', /json/)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body.toolResult).not.toBeNull();
+            expect(response.body.toolResult.success).toBe(true);
+            const content = response.body.message.content;
+            expect(content.startsWith('# Run Summary: chat_nested_proj_all_runs_summary')).toBe(true);
+
+            // Both runs get run_summary.md + summary.json inside their OWN output directory.
+            for (const runDir of [runA, runB]) {
+                expect(fs.existsSync(path.join(runDir, 'run_summary.md'))).toBe(true);
+                expect(fs.existsSync(path.join(runDir, 'summary.json'))).toBe(true);
+                expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(runDir, 'run_summary.md')));
+                expect(response.body.toolResult.summaryFiles).toContain(path.resolve(path.join(runDir, 'summary.json')));
+            }
+
+            // The all-runs report lands once at the project root.
+            expect(fs.existsSync(path.join(projRoot, 'run_summary.md'))).toBe(true);
+
+            global.fetch = originalFetch;
+            try { fs.rmSync(projRoot, { recursive: true, force: true }); } catch (e) {}
         });
 
         it('should short-circuit with a deterministic error and NO LLM call when no runs are available', async () => {
