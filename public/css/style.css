@@ -382,3 +382,14 @@ btn-info:hover {
     font-size: 0.875rem;
     line-height: 1.5;
 }
+
+/* Labeling page: make the "Unlabeled" bucket row stand out from Classes rows.
+   !important needed to win over Bootstrap's .table-striped nth-of-type background. */
+.unlabeled-row {
+    background-color: rgba(21, 105, 174, 0.08) !important;
+    border-left: 4px solid #1569AE;
+}
+
+.unlabeled-row a {
+    font-weight: bold;
+}
