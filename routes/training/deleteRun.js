@@ -5,7 +5,8 @@ async function deleteRun(req, res) {
         weights = req.body.weights,
         user = req.cookies.Username,
         runPath = req.body.run_path,
-        logFile = req.body.log_file;
+        logFile = req.body.log_file,
+        type = req.body.type || "training";
 
     var publicPath = currentPath,
         mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
@@ -15,13 +16,18 @@ async function deleteRun(req, res) {
         trainingPath = projectPath + "/training",
         logsPath = trainingPath + "/logs/";
 
-    rimraf(runPath, function (err) {
+    rimraf(runPath, function(err) {
         if (err) {
             global.logger.error(err);
         }
         global.logger.debug(`${runPath} deleted`);
     });
-    return res.redirect("/training?IDX=" + IDX);
+
+    if (type === "training") {
+        return res.redirect("/training?IDX=" + IDX);
+    } else {
+        return res.redirect("/inference?IDX=" + IDX);
+    }
 }
 
 module.exports = deleteRun;
