@@ -1,3 +1,5 @@
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
+
 async function getLabelingPage(req, res) {
     var username = req.cookies.Username;
     var IDX = parseInt(req.query.IDX, 10);
@@ -149,6 +151,11 @@ async function getLabelingPage(req, res) {
     var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
     var results6 = await sdb.allAsync("SELECT DISTINCT IName FROM Labels");
 
+    var unlabeledCountQuery = await sdb.getAsync(
+        "SELECT COUNT(*) as count FROM Images WHERE IName NOT IN (SELECT IName FROM Labels)",
+    );
+    var unlabeledCount = unlabeledCountQuery ? unlabeledCountQuery.count : 0;
+
     sdb.close(function (err) {
         if (err) {
             global.logger.error(err);
@@ -164,6 +171,8 @@ async function getLabelingPage(req, res) {
         classes: Classes || [],
         IDX: IDX,
         lcounts: lcounts,
+        unlabeledCount: unlabeledCount,
+        unlabeledClass: UNLABELED_CLASS,
         activePage: "Label",
     });
 }
