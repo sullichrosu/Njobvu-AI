@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
 const queries = require("../../queries/queries");
-const fetch = require("fetch");
+const fetch = require("node-fetch");
 
 const NJOBVU_SYSTEM_PROMPT = `You are Njobvu AI, an intelligent assistant built into the Njobvu Computer Vision & Machine Learning Platform.
 Your primary role is to assist engineers, researchers, and project managers in managing computer vision workflows including image labeling, dataset imports/exports, model training (YOLO, Darknet, Inception), model inference, and run performance analytics.
@@ -187,9 +187,9 @@ function discoverRunDirectories(searchDir, visited = new Set(), maxDepth = 5, cu
                 if (fs.statSync(childPath).isDirectory()) {
                     discovered.push(...discoverRunDirectories(childPath, visited, maxDepth, currentDepth + 1));
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
-    } catch (e) {}
+    } catch (e) { }
 
     return discovered;
 }
@@ -275,7 +275,7 @@ async function verifyProjectAccess(username, projectName) {
     // 1. Check directory existence in public/projects/ (supporting exact, hyphenated, or underscore formats)
     try {
         exists = !!resolveProjectDirName(username, projectName);
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. Check Database if managedDbClient exists
     if (global.managedDbClient) {
@@ -371,7 +371,7 @@ function getLiveSystemContext(projectName = null, projectAuth = { hasAccess: tru
             let runSummaryGen = null;
             try {
                 runSummaryGen = require("../../utils/runSummaryGenerator");
-            } catch (e) {}
+            } catch (e) { }
 
             if (runSummaryGen && typeof runSummaryGen.listAvailableRuns === "function") {
                 const rawRuns = runSummaryGen.listAvailableRuns(projectName);
@@ -461,7 +461,7 @@ async function runSandboxedPython(code) {
         exec(`${pyCmd} "${tempFile}"`, { timeout: 15000, cwd: process.cwd() }, (err, stdout, stderr) => {
             if (err) {
                 exec(`python "${tempFile}"`, { timeout: 15000, cwd: process.cwd() }, (err2, stdout2, stderr2) => {
-                    try { fs.unlinkSync(tempFile); } catch (e) {}
+                    try { fs.unlinkSync(tempFile); } catch (e) { }
                     if (err2) {
                         resolve({
                             success: false,
@@ -478,7 +478,7 @@ async function runSandboxedPython(code) {
                     }
                 });
             } else {
-                try { fs.unlinkSync(tempFile); } catch (e) {}
+                try { fs.unlinkSync(tempFile); } catch (e) { }
                 resolve({
                     success: true,
                     stdout: stdout || "",
@@ -630,7 +630,7 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
         let runSummaryGen = null;
         try {
             runSummaryGen = require("../../utils/runSummaryGenerator");
-        } catch (e) {}
+        } catch (e) { }
 
         if (runSummaryGen && typeof runSummaryGen.listAvailableRuns === "function" && typeof runSummaryGen.generateRunSummary === "function") {
             // 1. Resolve the target run directory through the util's discovery (handles nested
@@ -718,7 +718,7 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
                             artifactNames = fs.readdirSync(resolvedRunDir).filter(f =>
                                 ["args.yaml", "config.json", "results.csv", "summary.json", "metrics.json", "train.log", "inference.log"].includes(f)
                             );
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     // Confirm where the generated summaries were actually written so callers can verify
@@ -887,7 +887,7 @@ async function generateRunSummary(runId = null, runType = "train", projectName =
         if (["args.yaml", "config.json", "results.csv", "summary.json", "metrics.json", "train.log", "inference.log"].includes(f)) {
             try {
                 artifacts[f] = fs.readFileSync(path.join(targetRunDir, f), "utf8").slice(0, 3000);
-            } catch (e) {}
+            } catch (e) { }
         }
     }
 
@@ -961,7 +961,7 @@ async function ollamaChat(req, res) {
         }
 
         const requiredRole = roleRequired || (global.configFile && global.configFile.chat_required_role) || "user";
-        
+
         let userRole = "user";
         let isProjectAdmin = false;
 
@@ -1067,7 +1067,7 @@ async function ollamaChat(req, res) {
                 augmentedMessages.push({
                     role: "system",
                     content: `[INGESTED RUN DOCUMENT ARTIFACTS CONTEXT]:\n${ingestedContext}\n\n` +
-                             buildSummaryInstruction()
+                        buildSummaryInstruction()
                 });
             } else if (toolResult.stdout !== undefined) {
                 augmentedMessages.push({
@@ -1120,7 +1120,7 @@ async function ollamaChat(req, res) {
                         {
                             role: "system",
                             content: `[INGESTED RUN DOCUMENT ARTIFACTS CONTEXT]:\n${serializeRunArtifacts([runArtifacts])}\n\n` +
-                                     buildSummaryInstruction()
+                                buildSummaryInstruction()
                         },
                         {
                             role: "user",
@@ -1137,7 +1137,7 @@ async function ollamaChat(req, res) {
                             rawModelOutput: String(narrative || "(no response)").slice(0, 1000)
                         });
                     }
-                } catch (authErr) {}
+                } catch (authErr) { }
             }
             toolResult.llmAuthoredRunCount = llmAuthoredCount;
             toolResult.attemptedRunCount = attemptedCount;
@@ -1246,7 +1246,7 @@ async function ollamaChat(req, res) {
                     if (targetDir && fs.existsSync(targetDir)) {
                         try {
                             fs.writeFileSync(path.join(targetDir, "run_summary.md"), fallbackContent, "utf8");
-                        } catch (wErr) {}
+                        } catch (wErr) { }
                     }
 
                     // The LLM never got a chance to respond at all here (Ollama itself errored), which is
@@ -1374,7 +1374,7 @@ async function ollamaChat(req, res) {
                 if (targetDir && fs.existsSync(targetDir)) {
                     try {
                         fs.writeFileSync(path.join(targetDir, "run_summary.md"), fallbackContent, "utf8");
-                    } catch (wErr) {}
+                    } catch (wErr) { }
                 }
 
                 const chatContent = isSummaryReport

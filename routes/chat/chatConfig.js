@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const fetch = require("fetch");
+const fetch = require("node-fetch");
 
 const configFilePath = path.join(__dirname, "../../config.json");
 
