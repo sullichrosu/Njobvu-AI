@@ -1,7 +1,16 @@
 import sys
 from unittest.mock import MagicMock, mock_open, patch
 
-# Mock third-party libraries that might not be installed
+# Mock third-party libraries that might not be installed, only for the
+# duration of the `import_options`/`importNJ` imports below. Those modules
+# bind `from ultralytics import YOLO` / `from PIL import Image` at import
+# time, so the mocks only need to be in sys.modules while that happens; the
+# real modules (if installed) are restored right after so this file doesn't
+# leave other test modules seeing a mocked PIL/ultralytics when the whole
+# tests/ directory is collected together (e.g. `pytest tests/`).
+_real_ultralytics = sys.modules.get('ultralytics')
+_real_pil = sys.modules.get('PIL')
+
 mock_ultralytics = MagicMock()
 mock_yolo = MagicMock()
 mock_ultralytics.YOLO = mock_yolo
@@ -23,6 +32,16 @@ import yaml
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'controllers', 'imports')))
 import import_options
 import importNJ
+
+if _real_ultralytics is not None:
+    sys.modules['ultralytics'] = _real_ultralytics
+else:
+    del sys.modules['ultralytics']
+
+if _real_pil is not None:
+    sys.modules['PIL'] = _real_pil
+else:
+    del sys.modules['PIL']
 
 class TestImportSpaceReplacement(unittest.TestCase):
     def setUp(self):
