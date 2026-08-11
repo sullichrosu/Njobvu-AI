@@ -39,42 +39,7 @@ import csv
 import zipfile
 import yaml
 from pathlib import Path
-
-parser = argparse.ArgumentParser(
-    description="Run YOLO predictions with Ultralytics"
-)
-parser.add_argument("-d", "--data_path",    required=True,
-                    help="Path to data folder")
-parser.add_argument("-i", "--image_path",
-                    required=True, help="Path to images")
-parser.add_argument("-n", "--name_path",    required=True,
-                    help="Path to classes file")
-parser.add_argument("-l", "--log",          required=True,
-                    help="Log file path")
-parser.add_argument("-f", "--darknet_folder", required=True,
-                    help="Darknet/Ultralytics path")
-parser.add_argument("-w", "--weight_path",  required=True,
-                    help="Model weights file")
-parser.add_argument("-D", "--device",       default="cpu",
-                    help="Device (cpu, cuda:0, mps, etc.)")
-parser.add_argument("-o", "--adv_options",  default="",
-                    help="Advanced YOLO options")
-parser.add_argument("-t", "--task",         required=True, choices=["detect", "segment", "classify", "pose", "obb"],
-                    help="YOLO task to run")
-parser.add_argument("-m", "--mode", default="predict", choices=["predict", "track"],
-                    help="YOLO mode to run")
-args = parser.parse_args()
-
-data_path = args.data_path
-image_path = args.image_path
-name_path = args.name_path
-log_file = args.log
-darknet_path = args.darknet_folder
-weight_path = args.weight_path
-device = args.device
-adv_options = args.adv_options
-yolo_task = args.task
-yolo_mode = args.mode
+from PIL import Image
 
 #########################################################
 # Call command function to run the code			#
@@ -154,12 +119,12 @@ def parse_yolo_labels(label_path: str, class_names: list[str], task: str = 'dete
                     coords = coords[:-1]
                 else:
                     confidence = None
-                
+
                 x_pts = coords[0::2]
                 y_pts = coords[1::2]
-                
+
                 if not x_pts: continue
-                
+
                 # calculate bbox
                 try:
                     fx = [float(x) for x in x_pts]
@@ -168,12 +133,12 @@ def parse_yolo_labels(label_path: str, class_names: list[str], task: str = 'dete
                     max_x = max(fx)
                     min_y = min(fy)
                     max_y = max(fy)
-                    
+
                     width = max_x - min_x
                     height = max_y - min_y
                     x_center = min_x + width / 2
                     y_center = min_y + height / 2
-                    
+
                     bbox = [f"{x_center:.6f}", f"{y_center:.6f}", f"{width:.6f}", f"{height:.6f}"]
                 except ValueError:
                     continue
@@ -215,187 +180,266 @@ def load_class_names(name_path):
 
     return class_names
 
+
 #########################################################
-# Main body of program with checks for options		#
+# Resolve/copy the pre-inference (raw) source image	#
 #########################################################
-if data_path == "":
-    err = "You need more options to run the tool"
-    print(err)
+def resolve_original_src(image_path: str, file_name: str):
+    """Find the pre-inference source file that produced an Ultralytics output file.
 
-if image_path == "":
-    err = "You need more options to run the tool"
-    print(err)
+    Ultralytics always saves predicted images with a `.jpg` extension (via
+    `cv2.imwrite(save_path.with_suffix(".jpg"), im)`), even when the source
+    file had a different extension such as `.png`, `.bmp`, or `.tif`. An
+    exact filename match is tried first (covers `.jpg`/`.jpeg` sources, whose
+    extension is unchanged), then a match by filename stem is used as a
+    fallback so raw images with other extensions still resolve.
+    """
+    file_stem = os.path.splitext(file_name)[0]
 
-print("Ultralytics Version of YOLO Requested:")
+    if os.path.isdir(image_path):
+        exact_src = os.path.join(image_path, file_name)
+        if os.path.exists(exact_src):
+            return exact_src
 
-# Command to start running ultralytics using the training files
-# cmd = darknet_path + " detect predict data=" + name_path + " project=" + data_path + " epochs=" + epochs + " imgsz=" + imgsz + " device=" + device + " model=" + weight_path + " " + adv_options + " 2>&1 > " + log_file
-# yolo predict model=/Users/sullichr/Njobvu-AI/Njobvu-AI-tankit03/Njobvu-AI/public/projects/bennyb-ZebFish/training/logs/1735510402147/train/weights/best.pt source='https://speakingofresearch.com/wp-content/uploads/2011/02/zebrafish.jpg' device=mps
-cmd = (
-    darknet_path
-    + f" {yolo_task}"
-    + f" {yolo_mode}"
-    + " predict model="
-    + weight_path
-    + " source="
-    + image_path
-    + " project="
-    + data_path
-    + " name=output device="
-    + device
-    + " save_txt=True save_conf=True"
-    + " "
-    + adv_options
-    + " 2>&1 > "
-    + log_file
-)
+        for candidate in os.listdir(image_path):
+            candidate_path = os.path.join(image_path, candidate)
+            if os.path.isfile(candidate_path) and os.path.splitext(candidate)[0] == file_stem:
+                return candidate_path
+    elif os.path.isfile(image_path):
+        base_name = os.path.basename(image_path)
+        if base_name == file_name or os.path.splitext(base_name)[0] == file_stem:
+            return image_path
 
-print(cmd)
+    return None
 
-# process_code,process_output,process_err,process_mix = call_command(cmd)
-call_command(cmd)
 
-destination_dir = data_path
-source_dir = data_path + "/output"
+def copy_raw_image(original_src: str, dest_path: str):
+    """Copy the raw source image to dest_path.
 
-# create a directory for original images
-raw_images_dir = os.path.join(destination_dir, "raw")
-os.makedirs(raw_images_dir, exist_ok=True)
+    If the destination extension differs from the source's (because
+    Ultralytics renamed the output to `.jpg`), the image is re-encoded so the
+    file's content actually matches its extension instead of copying
+    mismatched bytes under the wrong name.
+    """
+    src_ext = os.path.splitext(original_src)[1].lower()
+    dest_ext = os.path.splitext(dest_path)[1].lower()
 
-files = os.listdir(source_dir)
-for file_name in files:
-    source_path = os.path.join(source_dir, file_name)
-    destination_path = os.path.join(destination_dir, file_name)
+    if src_ext == dest_ext:
+        shutil.copy2(original_src, dest_path)
+    else:
+        with Image.open(original_src) as im:
+            im.convert("RGB").save(dest_path, "JPEG")
 
-    shutil.move(source_path, destination_path)
 
-    if file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
-        original_src = None
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Run YOLO predictions with Ultralytics"
+    )
+    parser.add_argument("-d", "--data_path",    required=True,
+                        help="Path to data folder")
+    parser.add_argument("-i", "--image_path",
+                        required=True, help="Path to images")
+    parser.add_argument("-n", "--name_path",    required=True,
+                        help="Path to classes file")
+    parser.add_argument("-l", "--log",          required=True,
+                        help="Log file path")
+    parser.add_argument("-f", "--darknet_folder", required=True,
+                        help="Darknet/Ultralytics path")
+    parser.add_argument("-w", "--weight_path",  required=True,
+                        help="Model weights file")
+    parser.add_argument("-D", "--device",       default="cpu",
+                        help="Device (cpu, cuda:0, mps, etc.)")
+    parser.add_argument("-o", "--adv_options",  default="",
+                        help="Advanced YOLO options")
+    parser.add_argument("-t", "--task",         required=True, choices=["detect", "segment", "classify", "pose", "obb"],
+                        help="YOLO task to run")
+    parser.add_argument("-m", "--mode", default="predict", choices=["predict", "track"],
+                        help="YOLO mode to run")
+    args = parser.parse_args()
 
-        if os.path.isdir(image_path):
-            potential_src = os.path.join(image_path, file_name)
+    data_path = args.data_path
+    image_path = args.image_path
+    name_path = args.name_path
+    log_file = args.log
+    darknet_path = args.darknet_folder
+    weight_path = args.weight_path
+    device = args.device
+    adv_options = args.adv_options
+    yolo_task = args.task
+    yolo_mode = args.mode
 
-            if os.path.exists(potential_src):
-                original_src = potential_src
-        elif os.path.isfile(image_path):
-            if os.path.basename(image_path) == file_name:
-                original_src = image_path
+    #########################################################
+    # Main body of program with checks for options		#
+    #########################################################
+    if data_path == "":
+        err = "You need more options to run the tool"
+        print(err)
 
-        if original_src:
-            try:
-                shutil.copy2(original_src, os.path.join(raw_images_dir, file_name))
-            except Exception as e:
-                print(f"Warning: could not copy raw image {file_name}: {e}")
+    if image_path == "":
+        err = "You need more options to run the tool"
+        print(err)
 
-class_names = load_class_names(name_path)
+    print("Ultralytics Version of YOLO Requested:")
 
-print(class_names)
+    # Command to start running ultralytics using the training files
+    # cmd = darknet_path + " detect predict data=" + name_path + " project=" + data_path + " epochs=" + epochs + " imgsz=" + imgsz + " device=" + device + " model=" + weight_path + " " + adv_options + " 2>&1 > " + log_file
+    # yolo predict model=/Users/sullichr/Njobvu-AI/Njobvu-AI-tankit03/Njobvu-AI/public/projects/bennyb-ZebFish/training/logs/1735510402147/train/weights/best.pt source='https://speakingofresearch.com/wp-content/uploads/2011/02/zebrafish.jpg' device=mps
+    cmd = (
+        darknet_path
+        + f" {yolo_task}"
+        + f" {yolo_mode}"
+        + " predict model="
+        + weight_path
+        + " source="
+        + image_path
+        + " project="
+        + data_path
+        + " name=output device="
+        + device
+        + " save_txt=True save_conf=True"
+        + " "
+        + adv_options
+        + " 2>&1 > "
+        + log_file
+    )
 
-image_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+    print(cmd)
 
-csv_path = os.path.join(destination_dir, 'inference_stats.csv')
-detailed_csv_path = os.path.join(destination_dir, 'inference_detections.csv')
+    # process_code,process_output,process_err,process_mix = call_command(cmd)
+    call_command(cmd)
 
-with open(csv_path, 'w', newline='') as csvfile:
-    writer = csv.writer(csvfile)
-    writer.writerow(['Image Name', 'File Size (KB)', 'Detection Count', 'Avg Confidence', 'Max Confidence', 'Min Confidence'])
+    destination_dir = data_path
+    source_dir = data_path + "/output"
 
-    with open(detailed_csv_path, 'w', newline='') as detail_csvfile:
-        detail_writer = csv.writer(detail_csvfile)
-        detail_writer.writerow(['Image Name', 'Detection #', 'Class', 'Class ID', 'Confidence', 'X Center', 'Y Center', 'Width', 'Height', 'X Points', 'Y Points'])
+    # create a directory for original images
+    raw_images_dir = os.path.join(destination_dir, "raw")
+    os.makedirs(raw_images_dir, exist_ok=True)
 
-        for img_file in image_files:
-            img_path = os.path.join(destination_dir, img_file)
+    files = os.listdir(source_dir)
+    for file_name in files:
+        source_path = os.path.join(source_dir, file_name)
+        destination_path = os.path.join(destination_dir, file_name)
 
-            if not os.path.exists(img_path):
-                continue
+        shutil.move(source_path, destination_path)
 
-            file_size = os.path.getsize(img_path) / 1024 # KB
+        if file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+            original_src = resolve_original_src(image_path, file_name)
 
-            label_file = os.path.splitext(img_file)[0] + '.txt'
-            label_path = os.path.join(destination_dir, 'labels', label_file)
+            if original_src:
+                try:
+                    copy_raw_image(original_src, os.path.join(raw_images_dir, file_name))
+                except Exception as e:
+                    print(f"Warning: could not copy raw image {file_name}: {e}")
 
-            detections = parse_yolo_labels(label_path, class_names, yolo_task)
-            detection_count = len(detections)
+    class_names = load_class_names(name_path)
 
-            confidences = [d['confidence'] for d in detections if d['confidence'] is not None]
+    print(class_names)
 
-            avg_conf = sum(confidences) / len(confidences) if confidences else 0
-            max_conf = max(confidences) if confidences else 0
-            min_conf = min(confidences) if confidences else 0
+    image_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
 
-            writer.writerow([
-                img_file, 
-                f'{file_size:.2f}',
-                detection_count,
-                f'{avg_conf:.4f}' if avg_conf > 0 else 'N/A',
-                f'{max_conf:.4f}' if max_conf > 0 else 'N/A',
-                f'{min_conf:.4f}' if min_conf > 0 else 'N/A'
-            ])
+    csv_path = os.path.join(destination_dir, 'inference_stats.csv')
+    detailed_csv_path = os.path.join(destination_dir, 'inference_detections.csv')
 
-            for idx, det in enumerate(detections, 1):
-                detail_writer.writerow([
+    with open(csv_path, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['Image Name', 'File Size (KB)', 'Detection Count', 'Avg Confidence', 'Max Confidence', 'Min Confidence'])
+
+        with open(detailed_csv_path, 'w', newline='') as detail_csvfile:
+            detail_writer = csv.writer(detail_csvfile)
+            detail_writer.writerow(['Image Name', 'Detection #', 'Class', 'Class ID', 'Confidence', 'X Center', 'Y Center', 'Width', 'Height', 'X Points', 'Y Points'])
+
+            for img_file in image_files:
+                img_path = os.path.join(destination_dir, img_file)
+
+                if not os.path.exists(img_path):
+                    continue
+
+                file_size = os.path.getsize(img_path) / 1024 # KB
+
+                label_file = os.path.splitext(img_file)[0] + '.txt'
+                label_path = os.path.join(destination_dir, 'labels', label_file)
+
+                detections = parse_yolo_labels(label_path, class_names, yolo_task)
+                detection_count = len(detections)
+
+                confidences = [d['confidence'] for d in detections if d['confidence'] is not None]
+
+                avg_conf = sum(confidences) / len(confidences) if confidences else 0
+                max_conf = max(confidences) if confidences else 0
+                min_conf = min(confidences) if confidences else 0
+
+                writer.writerow([
                     img_file,
-                    idx,
-                    det['class'],
-                    det['class_id'],
-                    f"{det['confidence']:.4f}" if det['confidence'] else 'N/A',
-                    det['bbox'][0],
-                    det['bbox'][1],
-                    det['bbox'][2],
-                    det['bbox'][3],
-                    ",".join(det['x_pts']),
-                    ",".join(det['y_pts'])
+                    f'{file_size:.2f}',
+                    detection_count,
+                    f'{avg_conf:.4f}' if avg_conf > 0 else 'N/A',
+                    f'{max_conf:.4f}' if max_conf > 0 else 'N/A',
+                    f'{min_conf:.4f}' if min_conf > 0 else 'N/A'
                 ])
 
-zip_path = os.path.join(destination_dir, 'inference_images.zip')
-with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-    for file_name in image_files:
-        file_path = os.path.join(destination_dir, file_name)
+                for idx, det in enumerate(detections, 1):
+                    detail_writer.writerow([
+                        img_file,
+                        idx,
+                        det['class'],
+                        det['class_id'],
+                        f"{det['confidence']:.4f}" if det['confidence'] else 'N/A',
+                        det['bbox'][0],
+                        det['bbox'][1],
+                        det['bbox'][2],
+                        det['bbox'][3],
+                        ",".join(det['x_pts']),
+                        ",".join(det['y_pts'])
+                    ])
 
-        if os.path.isfile(file_path):
-            zipf.write(file_path, arcname=file_name)
+    zip_path = os.path.join(destination_dir, 'inference_images.zip')
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file_name in image_files:
+            file_path = os.path.join(destination_dir, file_name)
 
-    zipf.write(csv_path, arcname="inference_stats.csv")
-    zipf.write(detailed_csv_path, arcname="inference_detections.csv")
+            if os.path.isfile(file_path):
+                zipf.write(file_path, arcname=file_name)
 
-print(f"Created zip archive: {zip_path}")
-print(f"Created statistics CSV: {csv_path}")
-print(f"Created detailed detections CSV: {detailed_csv_path}")
+        zipf.write(csv_path, arcname="inference_stats.csv")
+        zipf.write(detailed_csv_path, arcname="inference_detections.csv")
 
-print("Cleaning up...")
-moved_count = 0
+    print(f"Created zip archive: {zip_path}")
+    print(f"Created statistics CSV: {csv_path}")
+    print(f"Created detailed detections CSV: {detailed_csv_path}")
 
-images_path = os.path.join(destination_dir, "images")
+    print("Cleaning up...")
+    moved_count = 0
 
-try:
-    os.mkdir(images_path)
-except FileExistsError:
-    print("Could not create the output directory because it already exists.")
-except FileNotFoundError:
-    print("Parent directory does not exist.")
-except OSError as e:
-    print(f"An OS error occurred: {e}")
-
-for img_file in image_files:
-    img_path = os.path.join(destination_dir, img_file)
-
-    if not os.path.isfile(img_path):
-        continue
+    images_path = os.path.join(destination_dir, "images")
 
     try:
-        os.rename(img_path, os.path.join(images_path, img_path.split("/")[-1]))
-        moved_count += 1
-    except Exception as e:
-        print(f"Warning: could not delete {img_file}: {e}")
+        os.mkdir(images_path)
+    except FileExistsError:
+        print("Could not create the output directory because it already exists.")
+    except FileNotFoundError:
+        print("Parent directory does not exist.")
+    except OSError as e:
+        print(f"An OS error occurred: {e}")
 
-print(f"Moved {moved_count} image files from output directory into a clean directory")
+    for img_file in image_files:
+        img_path = os.path.join(destination_dir, img_file)
 
-labels_dir = os.path.join(destination_dir, 'labels')
+        if not os.path.isfile(img_path):
+            continue
 
-if os.path.exists(labels_dir) and os.path.isdir(labels_dir):
-    try:
-        shutil.rmtree(labels_dir)
-        print("Deleted labels directory")
-    except Exception as e:
-        print(f"Warning: Could not delete labels directory: {e}")
+        try:
+            os.rename(img_path, os.path.join(images_path, img_path.split("/")[-1]))
+            moved_count += 1
+        except Exception as e:
+            print(f"Warning: could not delete {img_file}: {e}")
+
+    print(f"Moved {moved_count} image files from output directory into a clean directory")
+
+    labels_dir = os.path.join(destination_dir, 'labels')
+
+    if os.path.exists(labels_dir) and os.path.isdir(labels_dir):
+        try:
+            shutil.rmtree(labels_dir)
+            print("Deleted labels directory")
+        except Exception as e:
+            print(f"Warning: Could not delete labels directory: {e}")
