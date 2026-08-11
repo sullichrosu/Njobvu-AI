@@ -1,5 +1,6 @@
 const queries = require("../../queries/queries");
 const path = require("path");
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 async function switchLabels(req, res) {
     try {
@@ -46,6 +47,37 @@ async function switchLabels(req, res) {
         if (!selectedClass || !currentClass) {
             return res.status(400).json({
                 message: "Missing class information"
+            });
+        }
+
+        if (currentClass === UNLABELED_CLASS) {
+            // Unlabeled images have no existing Labels row (no LID) to UPDATE,
+            // so assigning them a class is an INSERT keyed by image name instead.
+            let changes = 0;
+            for (const imageName of labelsArray) {
+                const insertSql =
+                    "INSERT INTO Labels (LID, CName, X, Y, W, H, IName) VALUES (NULL, ?, '0', '0', 0, 0, ?)";
+                const insertResult = await queries.project.sql(
+                    projectPath,
+                    insertSql,
+                    [selectedClass, imageName],
+                );
+
+                if (insertResult.error) {
+                    global.logger.error("SQL Error:", insertResult.error);
+                    return res.status(500).json({
+                        message: "Database error occurred",
+                        error: insertResult.error,
+                    });
+                }
+
+                changes += insertResult.changes || 0;
+            }
+
+            return res.json({
+                message: "Images assigned to class successfully",
+                labelsAffected: changes,
+                body: req.body,
             });
         }
 
