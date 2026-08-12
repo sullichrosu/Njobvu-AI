@@ -163,8 +163,8 @@
 												<button type="button" class="btn btn-sm btn-outline-primary" id="selectAllClasses">Select All</button>
 												<button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllClasses">Deselect All</button>
 												<span class="d-inline-block ml-3">
-													<label for="minClassImages" class="mr-1 mb-0">Minimum Images per Class:</label>
-													<input type="number" id="minClassImages" name="min_class_images" min="0" placeholder="0" class="form-control form-control-sm d-inline-block" style="width: 100px;">
+													<label for="minClassLabels" class="mr-1 mb-0">Minimum Labels per Class:</label>
+													<input type="number" id="minClassLabels" name="min_class_labels" min="0" placeholder="0" class="form-control form-control-sm d-inline-block" style="width: 100px;">
 												</span>
 											</div>
 											<div class="class-selection-container" style="max-height: 150px; overflow-y: auto;">
@@ -329,15 +329,16 @@
 					// Class selection helper buttons
 					var selectAllBtn = document.getElementById("selectAllClasses");
 					var deselectAllBtn = document.getElementById("deselectAllClasses");
-					var minClassImagesInput = document.getElementById("minClassImages");
+					var minClassLabelsInput = document.getElementById("minClassLabels");
 
 					// Unchecks any class checkbox whose image count is below the configured minimum,
 					// so Select All (or manually re-checking a box) can't bypass the clamp.
-					function applyMinClassImagesClamp() {
-						var threshold = parseInt(minClassImagesInput && minClassImagesInput.value, 10) || 0;
+					function applyMinClassLabelsClamp() {
+						var threshold = parseInt(minClassLabelsInput && minClassLabelsInput.value, 10) || 0;
 						if (threshold <= 0) {
 							return;
 						}
+
 						document.querySelectorAll(".class-checkbox").forEach(function(cb) {
 							var count = parseInt(cb.getAttribute("data-image-count"), 10) || 0;
 							if (count < threshold) {
@@ -349,7 +350,7 @@
 					if (selectAllBtn) {
 						selectAllBtn.addEventListener("click", function() {
 							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = true; });
-							applyMinClassImagesClamp();
+							applyMinClassLabelsClamp();
 						});
 					}
 					if (deselectAllBtn) {
@@ -357,8 +358,8 @@
 							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = false; });
 						});
 					}
-					if (minClassImagesInput) {
-						minClassImagesInput.addEventListener("input", applyMinClassImagesClamp);
+					if (minClassLabelsInput) {
+						minClassLabelsInput.addEventListener("input", applyMinClassLabelsClamp);
 					}
 
 					// Split ratio summary update
