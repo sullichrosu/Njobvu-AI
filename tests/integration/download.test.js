@@ -9,6 +9,9 @@ jest.mock('unzipper', () => jest.fn());
 jest.mock('child_process', () => ({
   exec: jest.fn(),
 }));
+// node-fetch@3 is ESM-only, which Jest in this repo isn't configured to transform;
+// requiring app.js pulls it in via routes/chat/ollamaChat.js.
+jest.mock('node-fetch', () => jest.fn());
 jest.mock('sqlite3', () => {
   const mock = {
     OPEN_CREATE: 1,
@@ -152,5 +155,90 @@ describe('Download Dataset Route', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.text).toContain('downloaded:');
+  });
+});
+
+describe('Download Classes Route', () => {
+  beforeAll(() => {
+    global.db = {
+      runAsync: jest.fn().mockResolvedValue(undefined),
+      allAsync: jest.fn().mockResolvedValue([]),
+      getAsync: jest.fn().mockResolvedValue({ row: { THING: 0 } }),
+    };
+    global.currentPath = '/test/path/';
+    global.projectDbClients = {};
+    global.logger = { error: jest.fn(), debug: jest.fn(), info: jest.fn() };
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should successfully download the project class list as a text file', async () => {
+    const res = await request(app)
+      .post('/downloadClasses')
+      .send({
+        PName: 'test-project',
+        Admin: 'testuser',
+        IDX: 1,
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain('downloaded:');
+    expect(res.text).toContain('test-project_ClassList.txt');
+
+    const queries = require('../../queries/queries');
+    expect(queries.project.getAllClasses).toHaveBeenCalledWith(
+      '/test/path/public/projects/testuser-test-project',
+    );
+
+    const fs = require('fs');
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      '/test/path/public/projects/testuser_Downloads/test-project_ClassList.txt',
+      'class1\nclass2\n',
+    );
+  });
+
+  it('should return a JSON error when the project has no classes', async () => {
+    const queries = require('../../queries/queries');
+    queries.project.getAllClasses.mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app)
+      .post('/downloadClasses')
+      .send({
+        PName: 'empty-project',
+        Admin: 'testuser',
+        IDX: 1,
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'No classes found for this project',
+    });
+  });
+
+  it('should return a 500 JSON error when fetching classes fails', async () => {
+    const queries = require('../../queries/queries');
+    queries.project.getAllClasses.mockRejectedValueOnce(new Error('db error'));
+
+    const res = await request(app)
+      .post('/downloadClasses')
+      .send({
+        PName: 'broken-project',
+        Admin: 'testuser',
+        IDX: 1,
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'Error fetching classes',
+    });
   });
 });

@@ -75,6 +75,7 @@ const downloadProject = require("./downloads/downloadProject");
 const downloadScript = require("./downloads/downloadScript");
 const downloadWeights = require("./downloads/downloadWeights");
 const downloadRun = require("./downloads/downloadRun");
+const downloadClasses = require("./downloads/downloadClasses");
 
 const test = require("./tests/test");
 const mergeTest = require("./tests/mergeTest");
@@ -182,6 +183,7 @@ api.post("/downloadProject", downloadProject);
 api.post("/downloadScript", downloadScript);
 api.post("/downloadWeights", downloadWeights);
 api.post("/downloadRun", downloadRun);
+api.post("/downloadClasses", downloadClasses);
 
 // VALIDATION ROUTES
 api.post("/changeValidation", changeValidation);
