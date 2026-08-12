@@ -17,6 +17,13 @@ module.exports = {
 
             return result;
         },
+        getClassImageCounts: async function (projectPath) {
+            const db = getDbClient(projectPath);
+            const query = "SELECT CName, COUNT(DISTINCT IName) as imageCount FROM Labels GROUP BY CName";
+            const result = await db.all(query);
+
+            return result;
+        },
         createClass: async function (projectPath, value) {
             const db = getDbClient(projectPath);
             const query = "INSERT INTO Classes (CName) VALUES (?)";

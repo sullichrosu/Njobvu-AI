@@ -1,3 +1,5 @@
+const queries = require("../../queries/queries");
+
 async function getYoloXInferencePage(req, res) {
     global.logger.debug("get yolo (ultralytics) X training Setting Page");
     const readdir = util.promisify(fs.readdir);
@@ -140,6 +142,25 @@ async function getYoloXInferencePage(req, res) {
         "'",
     );
     var results2 = await tdb.allAsync("SELECT * FROM `Classes`");
+
+    // Attach per-class image counts so the training page can show them next to each checkbox
+    // and clamp selection to classes with enough images.
+    var classImageCounts = {};
+    try {
+        var countsResult = await queries.project.getClassImageCounts(project_path);
+        if (countsResult && countsResult.rows) {
+            countsResult.rows.forEach(function (row) {
+                classImageCounts[row.CName] = row.imageCount;
+            });
+        }
+    } catch (err) {
+        global.logger.error(err);
+    }
+    results2 = results2.map(function (cls) {
+        return Object.assign({}, cls, {
+            imageCount: classImageCounts[cls.CName] || 0,
+        });
+    });
 
     var acc = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName = '" +
