@@ -360,7 +360,7 @@ if yolo_version == 3:
     objCfg = data_path + '/obj.cfg'
 
     cmd = "cd " + darknet_path + "; ./darknet detector train " + objData + \
-        " " + objCfg + " " + weight_path + " -dont_show 2>&1 > " + log_file
+        " " + objCfg + " " + weight_path + " -dont_show 2>&1 >> " + log_file
 
     print("Darknet Command: ", cmd)
     # process_code,process_output,process_err,process_mix = call_command(cmd)
@@ -389,28 +389,28 @@ elif yolo_version == 5:
         # Command to start running ultralytics using the training files
         cmd = darknet_path + " detect train data=" + name_path + " project=" + data_path + " epochs=" + str(epochs) + \
             " imgsz=" + str(imgsz) + " device=" + str(device) + " model=" + \
-            weight_path + " " + adv_options + (" 2>&1 > " + log_file if log_file else "")
+            weight_path + " " + adv_options + (" 2>&1 >> " + log_file if log_file else "")
 
     elif yolo_task == "classify":
         cmd = darknet_path + " classify train data=" + data_path + " project=" + data_path + " epochs=" + str(epochs) + \
             " imgsz=" + str(imgsz) + " device=" + str(device) + " model=" + \
-            weight_path + " " + adv_options + (" 2>&1 > " + log_file if log_file else "")
+            weight_path + " " + adv_options + (" 2>&1 >> " + log_file if log_file else "")
         print(f"Classify command constructed: {cmd}")
 
     elif yolo_task == "pose":
         cmd = darknet_path + " pose train data=" + name_path + " project=" + data_path + " epochs=" + epochs + \
             " imgsz=" + imgsz + " device=" + device + " model=" + \
-            weight_path + " " + adv_options + " 2>&1 > " + log_file
+            weight_path + " " + adv_options + " 2>&1 >> " + log_file
 
     elif yolo_task == "segment":
         cmd = darknet_path + " segment train data=" + name_path + " project=" + data_path + " epochs=" + epochs + \
             " imgsz=" + imgsz + " device=" + device + " model=" + \
-            weight_path + " " + adv_options + " 2>&1 > " + log_file
+            weight_path + " " + adv_options + " 2>&1 >> " + log_file
 
     elif yolo_task == "obb":
         cmd = darknet_path + " obb train data=" + name_path + " project=" + data_path + " epochs=" + epochs + \
             " imgsz=" + imgsz + " device=" + device + " model=" + \
-            weight_path + " " + adv_options + " 2>&1 > " + log_file
+            weight_path + " " + adv_options + " 2>&1 >> " + log_file
 
     print("YOLO Command: ", cmd)
     print("Running YOLO Task: ", yolo_task)

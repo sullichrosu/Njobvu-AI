@@ -1,5 +1,6 @@
 const fsPath = require("path");
 const fs = require("fs");
+const { isReservedInferenceFile } = require("../../utils/isRunArtifactFile");
 
 async function getProcessingPage(req, res) {
     const readdir = util.promisify(fs.readdir);
@@ -390,10 +391,7 @@ async function getProcessingPage(req, res) {
                 if (j == err_idx_inf) {
                     continue;
                 }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
@@ -410,10 +408,7 @@ async function getProcessingPage(req, res) {
                 if (j == done_idx_inf) {
                     continue;
                 }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
@@ -431,10 +426,7 @@ async function getProcessingPage(req, res) {
                 // {
                 // 	continue;
                 // }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
