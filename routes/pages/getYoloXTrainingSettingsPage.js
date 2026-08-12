@@ -143,22 +143,22 @@ async function getYoloXInferencePage(req, res) {
     );
     var results2 = await tdb.allAsync("SELECT * FROM `Classes`");
 
-    // Attach per-class image counts so the training page can show them next to each checkbox
-    // and clamp selection to classes with enough images.
-    var classImageCounts = {};
+    var classLabelCounts = {};
+
     try {
-        var countsResult = await queries.project.getClassImageCounts(project_path);
+        var countsResult = await queries.project.getClassLabelCounts(project_path);
         if (countsResult && countsResult.rows) {
             countsResult.rows.forEach(function (row) {
-                classImageCounts[row.CName] = row.imageCount;
+                classLabelCounts[row.CName] = row.labelCount;
             });
         }
     } catch (err) {
         global.logger.error(err);
     }
+
     results2 = results2.map(function (cls) {
         return Object.assign({}, cls, {
-            imageCount: classImageCounts[cls.CName] || 0,
+            labelCount: classLabelCounts[cls.CName] || 0,
         });
     });
 
