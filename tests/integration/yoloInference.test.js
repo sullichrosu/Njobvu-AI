@@ -124,12 +124,12 @@ describe('POST /yolo-inf - run options log header', () => {
     const [, contents] = logWriteCall;
 
     // Header must appear before the reproducing command, and must capture what the user chose
-    expect(contents.indexOf('# ===== Run options')).toBe(0);
-    expect(contents).toContain('# task: detect');
-    expect(contents).toContain('# device: cpu');
-    expect(contents).toContain('# options: --conf 0.25');
-    expect(contents).toContain('# weights: best.pt');
+    expect(contents.indexOf('# =====')).toBe(0);
+    expect(contents).toMatch(/# Task\s+: detect/);
+    expect(contents).toMatch(/# Device\s+: cpu/);
+    expect(contents).toMatch(/# Options\s+: --conf 0\.25/);
+    expect(contents).toMatch(/# Weights\s+: best\.pt/);
     expect(contents).toContain('python3');
-    expect(contents.indexOf('# task: detect')).toBeLessThan(contents.indexOf('python3'));
+    expect(contents.indexOf('Task')).toBeLessThan(contents.indexOf('python3'));
   });
 });

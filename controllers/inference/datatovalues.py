@@ -246,7 +246,7 @@ cmd = (
     + " save_txt=True save_conf=True"
     + " "
     + adv_options
-    + " 2>&1 > "
+    + " 2>&1 >> "
     + log_file
 )
 

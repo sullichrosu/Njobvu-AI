@@ -1,17 +1,17 @@
 const formatRunOptionsHeader = require('../utils/formatRunOptionsHeader');
 
 describe('formatRunOptionsHeader Utility Unit Tests', () => {
-    it('renders every option as a labeled line inside a header block', () => {
+    it('renders every option as a labeled, aligned line inside a header block', () => {
         const header = formatRunOptionsHeader({
             task: 'detect',
             epochs: 50,
             device: 'cuda:0',
         });
 
-        expect(header).toContain('# task: detect');
-        expect(header).toContain('# epochs: 50');
-        expect(header).toContain('# device: cuda:0');
-        expect(header.indexOf('# task: detect')).toBeLessThan(header.indexOf('# epochs: 50'));
+        expect(header).toMatch(/# Task\s+: detect/);
+        expect(header).toMatch(/# Epochs\s+: 50/);
+        expect(header).toMatch(/# Device\s+: cuda:0/);
+        expect(header.indexOf('Task')).toBeLessThan(header.indexOf('Epochs'));
     });
 
     it('renders missing/empty values as (none) instead of dropping the key', () => {
@@ -21,9 +21,21 @@ describe('formatRunOptionsHeader Utility Unit Tests', () => {
             weights: '',
         });
 
-        expect(header).toContain('# options: (none)');
-        expect(header).toContain('# device: (none)');
-        expect(header).toContain('# weights: (none)');
+        expect(header).toMatch(/# Options\s+: \(none\)/);
+        expect(header).toMatch(/# Device\s+: \(none\)/);
+        expect(header).toMatch(/# Weights\s+: \(none\)/);
+    });
+
+    it('humanizes snake_case keys and known abbreviations into readable labels', () => {
+        const header = formatRunOptionsHeader({
+            yolovx_path: '/opt/ultralytics',
+            training_percent: 80,
+            imgsz: 640,
+        });
+
+        expect(header).toContain('YOLO Path');
+        expect(header).toContain('Train Split (%)');
+        expect(header).toContain('Image Size');
     });
 
     it('produces a header that can be safely prepended before the run command', () => {
@@ -31,7 +43,8 @@ describe('formatRunOptionsHeader Utility Unit Tests', () => {
         const cmd = 'python3 script.py -t train';
         const logContents = `${header}${cmd}`;
 
-        expect(logContents.startsWith('# ===== Run options')).toBe(true);
+        expect(logContents.startsWith('# =====')).toBe(true);
+        expect(logContents).toContain('Run Options (for reproducing this run)');
         expect(logContents.endsWith(cmd)).toBe(true);
     });
 });
