@@ -5,6 +5,7 @@ const fs = require("fs");
 const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
+const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -877,7 +878,29 @@ async function yoloRun(req, res) {
 
     global.logger.debug("=== STARTING PYTHON SCRIPT ===");
 
-    fs.writeFileSync(`${absDarknetProjectRun}/${log}`, cmd);
+    const runOptionsHeader = formatRunOptionsHeader({
+        project: PName,
+        task: yoloTask,
+        mode: yoloMode,
+        yolo_version: yoloVersion,
+        yolovx_path: yolovxPath,
+        training_percent: trainDataPer,
+        val_percent: valPct,
+        test_percent: testPct,
+        selected_classes: selectedClassesList ? selectedClassesList.join(", ") : null,
+        max_images: Number.isFinite(maxImages) ? maxImages : null,
+        batch,
+        subdiv,
+        width,
+        height,
+        epochs,
+        imgsz,
+        device: requestedDevice,
+        options,
+        weights: weightName,
+    });
+
+    fs.writeFileSync(`${absDarknetProjectRun}/${log}`, `${runOptionsHeader}${cmd}`);
 
     const bufferSizeMult = (global.configFile && global.configFile.training_max_buffer_size) || (typeof configFile !== "undefined" && configFile.training_max_buffer_size) || 1;
     exec(cmd, { maxBuffer: 1024 * 1024 * 1024 * bufferSizeMult }, (err, stdout, stderr) => {
