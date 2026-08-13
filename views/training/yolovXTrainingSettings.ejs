@@ -171,8 +171,8 @@
 												<% if (typeof classes !== 'undefined' && classes.length > 0) { %>
 													<% for (var i = 0; i < classes.length; i++) { %>
 														<div class="form-check form-check-inline mr-3 my-1">
-															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].imageCount || 0 %>" checked>
-															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
+															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].labelCount || 0 %>" checked>
+															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].labelCount || 0 %> labels)</span></label>
 														</div>
 													<% } %>
 												<% } else { %>

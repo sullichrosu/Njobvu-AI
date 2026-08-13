@@ -131,7 +131,7 @@ async function getYoloXSettingsPage(req, res) {
 
     results2 = results2.map(function (cls) {
         return Object.assign({}, cls, {
-            imageCount: classLabelCounts[cls.CName] || 0,
+            labelCount: classLabelCounts[cls.CName] || 0,
         });
     });
 
