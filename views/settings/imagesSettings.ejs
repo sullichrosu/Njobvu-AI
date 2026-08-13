@@ -51,6 +51,10 @@
                             <input id="s3_prefix" class="form-control" type="text" placeholder="images/">
                         </div>
                         <div class="form-group col-md-4">
+                            <label for="s3_endpoint">S3 Endpoint</label>
+                            <input id="s3_endpoint" name="endpoint" aria-label="S3 Endpoint URL" type="text" class="form-control" autocomplete="off">
+                        </div>
+                        <div class="form-group col-md-4">
                             <label for="s3_access_key_id">Access Key ID</label>
                             <input id="s3_access_key_id" class="form-control" type="text" autocomplete="off">
                         </div>
@@ -131,6 +135,7 @@
 		const prefix = document.getElementById('s3_prefix').value;
 		const accessKeyId = document.getElementById('s3_access_key_id').value;
 		const secretAccessKey = document.getElementById('s3_secret_access_key').value;
+        const endpoint = document.getElementById("s3_endpoint").value;
 
 		if (!bucketName || !region) {
 			alert("Bucket Name and Region are required.");
@@ -153,6 +158,7 @@
 					Prefix: prefix,
 					AccessKeyId: accessKeyId,
 					SecretAccessKey: secretAccessKey,
+                    Endpoint: endpoint,
 				}),
 			});
 

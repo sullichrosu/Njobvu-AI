@@ -33,6 +33,7 @@ async function attachS3Bucket(req, res) {
         Prefix,
         AccessKeyId,
         SecretAccessKey,
+        Endpoint,
     } = req.body || {};
 
     if (!isOwner(req, admin)) {
@@ -53,6 +54,7 @@ async function attachS3Bucket(req, res) {
             region: Region,
             accessKeyId: AccessKeyId,
             secretAccessKey: SecretAccessKey,
+            endpoint: Endpoint,
         });
 
         await verifyBucketAccess(s3Client, BucketName);
@@ -65,6 +67,7 @@ async function attachS3Bucket(req, res) {
             Prefix || "",
             AccessKeyId,
             SecretAccessKey,
+            Endpoint,
         );
 
         return res.status(200).json({ success: true });
@@ -98,6 +101,7 @@ async function getS3Bucket(req, res) {
                 BucketName: row.BucketName,
                 Region: row.Region,
                 Prefix: row.Prefix,
+                Endpoint: row.Endpoint,
                 LastSyncedAt: row.LastSyncedAt,
                 hasCredentials: !!row.AccessKeyId,
             },
@@ -146,10 +150,13 @@ async function syncS3Bucket(req, res) {
             return res.status(404).json({ success: false, error: "No S3 bucket attached to this project" });
         }
 
+        console.log(bucket);
+
         const s3Client = buildS3Client({
             region: bucket.Region,
             accessKeyId: bucket.AccessKeyId,
             secretAccessKey: bucket.SecretAccessKey,
+            endpoint: bucket.Endpoint,
         });
 
         const objectKeys = await listImageObjects(s3Client, bucket.BucketName, bucket.Prefix);

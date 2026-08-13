@@ -18,12 +18,19 @@ const IMAGE_EXTENSIONS = new Set([
     ".webp",
 ]);
 
-function buildS3Client({ region, accessKeyId, secretAccessKey }) {
+function buildS3Client({ region, accessKeyId, secretAccessKey, endpoint }) {
     const config = { region: region || "us-east-1" };
 
     if (accessKeyId && secretAccessKey) {
         config.credentials = { accessKeyId, secretAccessKey };
     }
+
+    if (endpoint) {
+        config["forcePathStyle"] = true;
+        config["endpoint"] = endpoint;
+    }
+
+    console.log(config);
 
     return new S3Client(config);
 }

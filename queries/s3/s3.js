@@ -8,13 +8,15 @@ module.exports = {
             prefix,
             accessKeyId,
             secretAccessKey,
+            endpoint
         ) {
             const query =
-                "INSERT INTO S3Buckets (PName, Admin, BucketName, Region, Prefix, AccessKeyId, SecretAccessKey) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?) " +
+                "INSERT INTO S3Buckets (PName, Admin, BucketName, Region, Prefix, AccessKeyId, SecretAccessKey, Endpoint) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
                 "ON CONFLICT(PName, Admin) DO UPDATE SET " +
                 "BucketName = excluded.BucketName, Region = excluded.Region, Prefix = excluded.Prefix, " +
-                "AccessKeyId = excluded.AccessKeyId, SecretAccessKey = excluded.SecretAccessKey";
+                "AccessKeyId = excluded.AccessKeyId, SecretAccessKey = excluded.SecretAccessKey, Endpoint = excluded.Endpoint";
+
             const result = await global.managedDbClient.run(query, [
                 projectName,
                 admin,
@@ -23,6 +25,7 @@ module.exports = {
                 prefix || "",
                 accessKeyId || null,
                 secretAccessKey || null,
+                endpoint || "",
             ]);
 
             return result;
@@ -30,6 +33,7 @@ module.exports = {
         getBucket: async function(projectName, admin) {
             const query =
                 "SELECT * FROM S3Buckets WHERE PName = ? AND Admin = ?";
+
             const result = await global.managedDbClient.get(query, [
                 projectName,
                 admin,
