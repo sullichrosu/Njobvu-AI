@@ -1,4 +1,5 @@
 const queries = require("../../queries/queries");
+const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 
 async function run(req, res) {
     const { exec } = require("child_process");
@@ -45,7 +46,16 @@ async function run(req, res) {
         fs.mkdirSync(runPath);
     }
 
-    fs.writeFile(`${runPath}/${log}`, "", (err) => {
+    const runOptionsHeader = formatRunOptionsHeader({
+        project: PName,
+        python_path: pythonPath,
+        script,
+        training_percent: TrainingPercent,
+        weights,
+        options,
+    });
+
+    fs.writeFile(`${runPath}/${log}`, runOptionsHeader, (err) => {
         if (err) throw err;
     });
 

@@ -17,6 +17,20 @@ module.exports = {
 
             return result;
         },
+        getClassLabelCounts: async function (projectPath) {
+            const db = getDbClient(projectPath);
+            const query = "SELECT CName, COUNT(DISTINCT LID) as labelCount FROM Labels GROUP BY CName";
+            const result = await db.all(query);
+
+            return result;
+        },
+        getClassImageCounts: async function (projectPath) {
+            const db = getDbClient(projectPath);
+            const query = "SELECT CName, COUNT(DISTINCT IName) as imageCount FROM Labels GROUP BY CName";
+            const result = await db.all(query);
+
+            return result;
+        },
         createClass: async function (projectPath, value) {
             const db = getDbClient(projectPath);
             const query = "INSERT INTO Classes (CName) VALUES (?)";

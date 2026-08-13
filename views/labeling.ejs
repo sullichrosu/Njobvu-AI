@@ -13,6 +13,15 @@
                         </tr>
                     </thead>
                     <tbody>
+                        <tr class="unlabeled-row">
+                            <!-- Unlabeled bucket: images with zero rows in Labels, not a Classes row -->
+                            <td scope="row">
+                                <a href="/review?class=<%= encodeURIComponent(unlabeledClass) %>&IDX=<%= IDX %>">
+                                    Unlabeled
+                                </a>
+                            </td>
+                            <td class="text-center" style="text-align: center;"><%= unlabeledCount %></td>
+                        </tr>
                         <% for (var i = 0; i < classes.length; i++) { %>
                         <tr>
                             <!-- Class Name as clickable link -->

@@ -1,5 +1,6 @@
 const queries = require("../../queries/queries");
 const path = require("path");
+const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 
 async function yoloInference(req, res) {
     try {
@@ -159,7 +160,17 @@ async function yoloInference(req, res) {
         var success = "";
         var error = "";
 
-        fs.writeFileSync(`${absUltralyticsProjectRun}/${log}`, `${cmd}\n\n`);
+        const runOptionsHeader = formatRunOptionsHeader({
+            project: PName,
+            task: yoloTask,
+            yolovx_path: yolovxPath,
+            inference_file: inferenceFile,
+            device,
+            options,
+            weights: weightName,
+        });
+
+        fs.writeFileSync(`${absUltralyticsProjectRun}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {
