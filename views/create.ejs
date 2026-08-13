@@ -29,6 +29,9 @@
                     <li class="nav-item">
                         <a id="tab-bootstrap" class="nav-link" href="#" onclick="switchFlow('bootstrap')" style="border-radius: 0">Bootstrap With Model(s)</a>
                     </li>
+                    <li class="nav-item">
+                        <a id="tab-s3" class="nav-link" href="#" onclick="switchFlow('s3')" style="border-radius: 0">S3 Bucket</a>
+                    </li>
                 </ul>
             </div>
 
@@ -180,6 +183,49 @@
                 </div>
             </form>
 
+            <form class="add-project-form flow-content s3-flow" id="s3Form" onsubmit="return false;">
+                <h3>Add Project From S3 Bucket <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create a project backed by an S3 bucket instead of an uploaded archive. Njobvu downloads a local working copy of the bucket's images, so existing labeling, training, and inference tools work unchanged">?</span></h3>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="s3_project_name">Project Name</label>
+                        <input id="s3_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="s3_input_classes">Input classes (separated with commas)</label>
+                        <input id="s3_input_classes" name="input_classes" aria-label="Input classes. Separated by commas." type="text" class="form-control" placeholder="cat,dog,large mouse" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="s3_bucket_name">Bucket Name <span style="color: red;">*</span></label>
+                        <input id="s3_bucket_name" name="bucket_name" aria-label="S3 Bucket Name" type="text" class="form-control" placeholder="my-image-bucket" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="s3_region">Region <span style="color: red;">*</span></label>
+                        <input id="s3_region" name="region" aria-label="S3 Region" type="text" class="form-control" placeholder="us-east-1" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label for="s3_prefix">Prefix (Optional)</label>
+                        <input id="s3_prefix" name="prefix" aria-label="S3 Key Prefix" type="text" class="form-control" placeholder="images/">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="s3_access_key_id">Access Key ID</label>
+                        <input id="s3_access_key_id" name="access_key_id" aria-label="S3 Access Key ID" type="text" class="form-control" autocomplete="off">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="s3_secret_access_key">Secret Access Key</label>
+                        <input id="s3_secret_access_key" name="secret_access_key" aria-label="S3 Secret Access Key" type="password" class="form-control" autocomplete="off">
+                    </div>
+                </div>
+                <p>Leave the Access Key fields blank to use the server's default AWS credentials/role.</p>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <button type="button" id="s3SubmitBtn" aria-label="submit" class="btn btn-primary btn-lg" style="border-radius: 0" onclick="submitS3Form()">submit</button>
+                </div>
+            </form>
+
             <div class="col text-center" style="margin-top: 15px;">
                 <label for="progress" id="progress" aria-live="polite" aria-atomic="true" style="font-weight: bold; color: #1569AE;"></label>
             </div>
@@ -189,6 +235,7 @@
 
 <script>
     const PNames = "<%= PNames %>".split(",");
+    const currentUsername = "<%= user %>";
 
     function switchFlow(flow) {
         document.getElementById('tab-blank').classList.remove('active');
@@ -196,6 +243,7 @@
         document.getElementById('tab-kwcoco').classList.remove('active');
         document.getElementById('tab-ifcb').classList.remove('active');
         document.getElementById('tab-bootstrap').classList.remove('active');
+        document.getElementById('tab-s3').classList.remove('active');
 
         document.getElementById('tab-' + flow).classList.add('active');
 
@@ -224,7 +272,85 @@
         return true;
     }
 
-    document.querySelectorAll('.flow-content').forEach(form => {
+    async function submitS3Form() {
+        const projectName = document.getElementById('s3_project_name').value;
+        if (!validateProjectName(projectName)) {
+            return;
+        }
+
+        const inputClasses = document.getElementById('s3_input_classes').value;
+        const bucketName = document.getElementById('s3_bucket_name').value;
+        const region = document.getElementById('s3_region').value;
+        const prefix = document.getElementById('s3_prefix').value;
+        const accessKeyId = document.getElementById('s3_access_key_id').value;
+        const secretAccessKey = document.getElementById('s3_secret_access_key').value;
+
+        if (!bucketName || !region) {
+            alert("Bucket Name and Region are required.");
+            return;
+        }
+
+        const submitBtn = document.getElementById('s3SubmitBtn');
+        const progress = document.getElementById('progress');
+        submitBtn.style.display = "none";
+
+        try {
+            progress.textContent = "Creating project...";
+
+            const createFormData = new FormData();
+            createFormData.append('project_name', projectName);
+            createFormData.append('input_classes', inputClasses);
+
+            const createRes = await fetch('/createP', {
+                method: 'POST',
+                body: createFormData,
+            });
+
+            if (!createRes.ok) {
+                throw new Error(await createRes.text() || "Could not create project");
+            }
+
+            progress.textContent = "Attaching S3 bucket...";
+
+            const attachRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    BucketName: bucketName,
+                    Region: region,
+                    Prefix: prefix,
+                    AccessKeyId: accessKeyId,
+                    SecretAccessKey: secretAccessKey,
+                }),
+            });
+
+            const attachBody = await attachRes.json();
+            if (!attachRes.ok || !attachBody.success) {
+                throw new Error(attachBody.error || "Could not attach S3 bucket");
+            }
+
+            progress.textContent = "Syncing images from S3...";
+
+            const syncRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket/sync`, {
+                method: 'POST',
+            });
+
+            const syncBody = await syncRes.json();
+            if (!syncRes.ok || !syncBody.success) {
+                throw new Error(syncBody.error || "Could not sync images from S3 bucket");
+            }
+
+            progress.textContent = "";
+            alert(`Project creation successful. Synced ${syncBody.syncedCount} image(s) from S3.`);
+            window.location.replace('/home');
+        } catch (err) {
+            progress.textContent = "";
+            submitBtn.style.display = "inline-block";
+            alert("Something went wrong setting up the S3-backed project.\nReason: " + err.message);
+        }
+    }
+
+    document.querySelectorAll('.flow-content:not(.s3-flow)').forEach(form => {
         form.addEventListener('submit', function(event) {
             event.preventDefault();
 

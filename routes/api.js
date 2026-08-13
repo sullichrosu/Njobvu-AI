@@ -65,6 +65,12 @@ const transferAdmin = require("./projects/transferAdmin");
 const script = require("./projects/script");
 const deleteImagesWithoutLabel = require("./projects/deleteImagesWithoutLabel");
 const { getFilteredProjectsApi, getFilteredImagesApi } = require("./api/projectsFilter");
+const {
+    attachS3Bucket,
+    getS3Bucket,
+    deleteS3Bucket,
+    syncS3Bucket,
+} = require("./api/v2/s3Buckets");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -171,6 +177,12 @@ api.get("/api/v2/projects", getFilteredProjectsApi);
 api.get("/api/v2/projects/:IDX/images", getFilteredImagesApi);
 api.get("/api/projects/filter", getFilteredProjectsApi);
 api.get("/api/projects/filter-images", getFilteredImagesApi);
+
+// S3 BUCKET ROUTES (strangler-fig v2, mounts an S3 bucket as a project's image volume)
+api.post("/api/v2/projects/:admin/:projectName/s3-bucket", attachS3Bucket);
+api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
+api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
+api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);
