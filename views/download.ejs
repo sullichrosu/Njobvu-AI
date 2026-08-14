@@ -33,6 +33,21 @@
 		<div class="col-md-12">
 			<div class="card">
 				<div class="card-header">
+					Download Class List
+				</div>
+				<div class="card-body">
+					<form class="download-classes-form" action ="/downloadClasses" method="POST" enctype="multipart/form-data" id="downloadClassesForm" style="text-align: center;">
+						<input id = "ClassesPName" type="hidden" name="PName" value="<%= PName %>">
+						<input id = "ClassesAdmin" type="hidden" name="Admin" value="<%= Admin %>">
+						<input id = "ClassesIDX" type="hidden" name="IDX" value="<%= IDX %>">
+						<button id = "downloadclassesbtn" name="form_action" value="download" class="btn btn-primary" style="text-align: center;">Download Class List</button>
+					</form>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-header">
 					Download Dataset
 				</div>
 				<div class="card-body">
@@ -54,6 +69,9 @@
 								</div>
 								<div class="radio">
 									<label><input name="download_format" type="radio" value="2"> KW COCO Format (JSON + images)</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="7"> KitWare COCO Format (JSON + images)</label>
 								</div>
 								<div class="radio">
 									<label><input name="download_format" type="radio" value="3"> Pascal VOC Format (xml + images)</label>

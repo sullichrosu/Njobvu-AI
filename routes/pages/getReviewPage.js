@@ -1,7 +1,10 @@
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
+
 async function getReviewPage(req, res) {
     var username = req.cookies.Username;
     var CName = req.query.class;
     var IDX = req.query.IDX;
+    var isUnlabeledMode = CName === UNLABELED_CLASS;
 
     var page = parseInt(req.query.page) || 1;
     var pageSize = 100;
@@ -54,26 +57,50 @@ async function getReviewPage(req, res) {
         });
     };
 
-    var totalImages = await pdb.allAsync(
-        `
-			SELECT COUNT(*) as count 
-			FROM Images
-			INNER JOIN Labels ON Images.IName = Labels.IName
-			WHERE Labels.CName = ?
-		`,
-        [CName],
-    );
+    var totalImages;
+    var images;
 
-    var images = await pdb.allAsync(
-        `
-			SELECT Images.IName
-			FROM Images
-			INNER JOIN Labels ON Images.IName = Labels.IName
-			WHERE Labels.CName = ?
-			LIMIT ? OFFSET ?
-		`,
-        [CName, pageSize, offset],
-    );
+    if (isUnlabeledMode) {
+        // Unlabeled bucket: images with zero rows in Labels at all.
+        totalImages = await pdb.allAsync(
+            `
+				SELECT COUNT(*) as count
+				FROM Images
+				WHERE Images.IName NOT IN (SELECT IName FROM Labels)
+			`,
+        );
+
+        images = await pdb.allAsync(
+            `
+				SELECT Images.IName
+				FROM Images
+				WHERE Images.IName NOT IN (SELECT IName FROM Labels)
+				LIMIT ? OFFSET ?
+			`,
+            [pageSize, offset],
+        );
+    } else {
+        totalImages = await pdb.allAsync(
+            `
+				SELECT COUNT(*) as count
+				FROM Images
+				INNER JOIN Labels ON Images.IName = Labels.IName
+				WHERE Labels.CName = ?
+			`,
+            [CName],
+        );
+
+        images = await pdb.allAsync(
+            `
+				SELECT Images.IName
+				FROM Images
+				INNER JOIN Labels ON Images.IName = Labels.IName
+				WHERE Labels.CName = ?
+				LIMIT ? OFFSET ?
+			`,
+            [CName, pageSize, offset],
+        );
+    }
 
     let uniqueImages = images.filter(
         (image, index, self) =>
@@ -108,6 +135,9 @@ async function getReviewPage(req, res) {
     res.render("review", {
         user: username,
         CName: CName,
+        displayClassName: isUnlabeledMode ? "Unlabeled" : CName,
+        isUnlabeledMode: isUnlabeledMode,
+        unlabeledClass: UNLABELED_CLASS,
         images: uniqueImages,
         imageLabels: imageLabels,
         PName: PName, // Added PName to the render call
@@ -117,7 +147,7 @@ async function getReviewPage(req, res) {
         selectedClass: req.query.class,
         IDX: IDX,
         admin: admin,
-        activePage: "Annotate",
+        activePage: "Label",
     });
 }
 

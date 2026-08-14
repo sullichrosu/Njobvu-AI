@@ -62,6 +62,7 @@ def classification_plus_import(db_name, input_dir, output):
                 dir_path = os.path.join(dir_to_process, directory)
 
                 if os.path.isdir(dir_path):
+                    class_name = directory.replace(' ', '_')
                     for img in os.listdir(dir_path):
                         input_image_path = os.path.join(dir_path, img)
 
@@ -70,8 +71,8 @@ def classification_plus_import(db_name, input_dir, output):
                             width, height = img_to_open.size
                             x = 0
                             y = 0
-                            new_img_name = f"{directory}_{img}"
-                            f.write(f"{directory} {x} {y} {width} {height} {new_img_name}\n")
+                            new_img_name = f"{class_name}_{img}"
+                            f.write(f"{class_name} {x} {y} {width} {height} {new_img_name}\n")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     import_nj_script = os.path.join(script_dir, "importNJ.py")
@@ -156,7 +157,7 @@ def inference_into_classification(db_name, input_dir, output, weights_file, clas
                     y2 = y2 - y1
                     class_id = int(box.cls.item())
 
-                    class_name = class_names.get(class_id, "unknown_class")
+                    class_name = class_names.get(class_id, "unknown_class").replace(' ', '_')
                     print(f"  - Detection! Class: '{class_name}'. Saving cropped image.")
 
                     img_obj = Image.open(img_path)
@@ -268,12 +269,12 @@ def yolo_archive_import(db_name, input_dir, output, weights_file=None):
                         names = data['names']
 
                         if isinstance(names, dict):
-                            class_names = {int(k): str(v) for k, v in names.items()}
+                            class_names = {int(k): str(v).replace(' ', '_') for k, v in names.items()}
                             print(f"Parsed class names from {yf}: {class_names}")
 
                             break
                         elif isinstance(names, list):
-                            class_names = {i: str(v) for i, v in enumerate(names)}
+                            class_names = {i: str(v).replace(' ', '_') for i, v in enumerate(names)}
                             print(f"Parsed class names from {yf}: {class_names}")
 
                             break
@@ -287,7 +288,7 @@ def yolo_archive_import(db_name, input_dir, output, weights_file=None):
                 if file.lower() == 'classes.txt':
                     try:
                         with open(os.path.join(root, file), 'r') as f:
-                            lines = [line.strip() for line in f if line.strip()]
+                            lines = [line.strip().replace(' ', '_') for line in f if line.strip()]
                             class_names = {i: name for i, name in enumerate(lines)}
                             print(f"Parsed class names from classes.txt: {class_names}")
                             break
@@ -385,7 +386,7 @@ def yolo_archive_import(db_name, input_dir, output, weights_file=None):
                                     top_y = int(round((y_center - h / 2.0) * img_h))
                                     box_w = int(round(w * img_w))
                                     box_h = int(round(h * img_h))
-                                    cname = class_names.get(class_id, f"class_{class_id}")
+                                    cname = class_names.get(class_id, f"class_{class_id}").replace(' ', '_')
 
                                     if cname not in inserted_classes:
                                         cursor.execute("INSERT OR IGNORE INTO Classes (CName) VALUES (?)", (cname,))
@@ -472,7 +473,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     for cat in categories:
         cat_id = cat.get('id')
-        cat_name = cat.get('name', f"class_{cat_id}")
+        cat_name = cat.get('name', f"class_{cat_id}").replace(' ', '_')
         category_map[cat_id] = cat_name
 
         cursor.execute("INSERT OR IGNORE INTO Classes (CName) VALUES (?)", (cat_name,))
@@ -548,6 +549,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
         cname = category_map.get(cat_id)
 
         if new_image_name and cname and bbox and len(bbox) == 4:
+            cname = cname.replace(' ', '_')
             left_x = int(round(bbox[0]))
             top_y = int(round(bbox[1]))
             box_w = int(round(bbox[2]))
@@ -562,9 +564,9 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     print(f"COCO Archive Import completed successfully. Inserted {label_id - 1} labels.")
 
-# Main argument parsing and execution logic
+# main argument parsing and execution logic
 if __name__ == '__main__':
-    # Parse all arguments first
+    # parse all arguments first
     for i in range(1, len(sys.argv)):
         if sys.argv[i] == '-i':
             input_dir = sys.argv[i+1]
@@ -582,7 +584,7 @@ if __name__ == '__main__':
             help()
             sys.exit()
 
-    # Then, after the loop, decide what to run
+    # then, after the loop, decide what to run
     if runs == 'class':
         classification_plus_import(db_name, input_dir, output)
     elif runs == 'inf':

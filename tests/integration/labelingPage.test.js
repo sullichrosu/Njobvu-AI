@@ -132,10 +132,23 @@ describe('getLabelingPage Route Test', () => {
   it('should render labeling page successfully', async () => {
     const res = await request(app)
       .get('/labeling')
+      .query({ IDX: 0 })
+      .set('Cookie', ['Username=testuser']);
+
+    console.log('LABELING STATUS:', res.statusCode);
+    if (res.statusCode !== 200) {
+      console.log('ERROR TEXT:', res.text);
+    }
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('should render annotate page successfully', async () => {
+    const res = await request(app)
+      .get('/annotate')
       .query({ IDX: 0, IName: 'image1.jpg', curr_class: 'class1' })
       .set('Cookie', ['Username=testuser']);
 
-    console.log('STATUS:', res.statusCode);
+    console.log('ANNOTATE STATUS:', res.statusCode);
     if (res.statusCode !== 200) {
       console.log('ERROR TEXT:', res.text);
     }

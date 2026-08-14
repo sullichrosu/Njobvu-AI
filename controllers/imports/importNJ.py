@@ -45,13 +45,14 @@ def read_file_and_store_in_db(project_path, db_name, txt_file, class_label):
                     if len(parts_from_file) != 5:
                         print(f"WARNING: Malformed line (expected 5 parts), skipping: {line}", file=sys.stderr)
                         continue
-                    parts = [class_label] + parts_from_file
+                    parts = [class_label.replace(' ', '_')] + parts_from_file
                 else:
                     # Format is: CName X Y W H IName. We expect 6 parts.
                     parts = line.split(' ', 5)
                     if len(parts) != 6:
                         print(f"WARNING: Malformed line (expected 6 parts), skipping: {line}", file=sys.stderr)
                         continue
+                    parts[0] = parts[0].replace(' ', '_')
                 
                 insert_data(conn, parts)
 
@@ -96,9 +97,9 @@ def create_project(db_name, txt_file, nj_path, class_label, img_dir, classificat
         with open(txt_file, 'r') as file:
             for line in file:
                 data = line.strip().split(' ')
-                unique_classes.add(data[0])
+                unique_classes.add(data[0].replace(' ', '_'))
     else:
-        unique_classes.add(class_label)
+        unique_classes.add(class_label.replace(' ', '_'))
 
     os.makedirs(os.path.join(project_path, 'images'), exist_ok=True)
     os.makedirs(os.path.join(project_path, 'bootstrap'), exist_ok=True)
@@ -134,10 +135,11 @@ def create_project(db_name, txt_file, nj_path, class_label, img_dir, classificat
             class_path = os.path.join(img_dir, dir_name)
             if os.path.isdir(class_path):
                 print(f"Processing class directory: {class_path}")
+                class_name = dir_name.replace(' ', '_')
                 for img in os.listdir(class_path):
                     src = os.path.join(class_path, img)
                     if os.path.isfile(src):
-                        new_img_name = f"{dir_name}_{img}"
+                        new_img_name = f"{class_name}_{img}"
                         dst = os.path.join(project_path, 'images', new_img_name)
                         shutil.copy(src,dst)
                         print(f"Copied: {src} -> {dst}")

@@ -9,6 +9,33 @@
 	<div class="col-md-12">
 		<h1 style="text-align: center;"><%= PName %></h1>
 	</div>
+	<div class="col-md-12 mb-3" style="padding-left: 15px; padding-right: 15px; margin-bottom: 15px;">
+		<div class="form-row align-items-center">
+			<div class="col-md-4">
+				<input class="form-control" type="text" id="image-search" placeholder="Search image name..." aria-label="Search Images" value="<%= typeof search !== 'undefined' ? search : '' %>">
+			</div>
+			<div class="col-md-3">
+				<select class="form-control" id="image-sort-by" onchange="applyImageFilters()">
+					<option value="name" <%= (typeof sortBy !== 'undefined' && sortBy === 'name') ? 'selected' : '' %>>Sort by Image Name</option>
+					<option value="review" <%= (typeof sortBy !== 'undefined' && sortBy === 'review') ? 'selected' : '' %>>Sort by Review Status</option>
+					<option value="numLabels" <%= (typeof sortBy !== 'undefined' && sortBy === 'numLabels') ? 'selected' : '' %>>Sort by # Labels</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<select class="form-control" id="image-sort-order" onchange="applyImageFilters()">
+					<option value="asc" <%= (typeof sortOrder !== 'undefined' && sortOrder === 'asc') ? 'selected' : '' %>>Ascending</option>
+					<option value="desc" <%= (typeof sortOrder !== 'undefined' && sortOrder === 'desc') ? 'selected' : '' %>>Descending</option>
+				</select>
+			</div>
+			<div class="col-md-3">
+				<select class="form-control" id="image-review-filter" onchange="applyImageFilters()">
+					<option value="all" <%= (typeof reviewFilter !== 'undefined' && reviewFilter === 'all') ? 'selected' : '' %>>All Review Statuses</option>
+					<option value="true" <%= (typeof reviewFilter !== 'undefined' && (reviewFilter === 'true' || reviewFilter === '1')) ? 'selected' : '' %>>Needs Review Only</option>
+					<option value="false" <%= (typeof reviewFilter !== 'undefined' && (reviewFilter === 'false' || reviewFilter === '0')) ? 'selected' : '' %>>No Review Needed</option>
+				</select>
+			</div>
+		</div>
+	</div>
 	<div class="form-group col-md-2">
 		<label for="page">Page:</label>
 		<input type="number" id="page" name="page" min="1" max="<%=pages%>" value="<%=Number(current)%>" style="width: 25%;">
@@ -31,7 +58,7 @@
 			<tbody>
 				<% for(var i=0; i<images.length; i++) {%>
 				<tr>
-					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/labeling?IDX=<%= IDX %>&IName=<%= images[i].IName %>"><%= images[i].IName %></a></td>
+					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/annotate?IDX=<%= IDX %>&IName=<%= images[i].IName %>"><%= images[i].IName %></a></td>
 					<!-- input checkbox for review here -->
 					<td class="text-left"> 
 					    <% if(images[i].reviewImage != 0) {%>
@@ -39,7 +66,7 @@
 						<%}%>
 					</td>
 					<td class="text-right"><%= list_counter[i] %></td>
-					<td class="text-right"><a class="btn btn-primary" href="/labeling?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0">Label</a>
+					<td class="text-right"><a class="btn btn-primary" href="/annotate?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0">Annotate</a>
 					<td class="text-right"> <button type="button" class="button btn-danger" style="border-radius: 0" 
 					    onclick="deleteImage('<%= String(images[i].IName) %>')" aria-label="Delete image <%= images[i].IName %>">X</a></td>
 				</tr>
@@ -103,8 +130,8 @@
 
 
 <script>
-    function annotatePage(IDX){
-        window.location.href = `/annotate?IDX=${IDX}`;
+    function labelingPage(IDX){
+        window.location.href = `/labeling?IDX=${IDX}`;
     }
 </script>
 
@@ -148,8 +175,28 @@
 	perpage.oninput = function(){
 		if(perpage.value > 0)
 		{
-			window.location.href = `/project?IDX=<%= IDX %>&page=<%=pages%>&perPage=${perpage.value}`;
+			window.location.href = `/project?IDX=<%= IDX %>&page=1&perPage=${perpage.value}`;
 		}
+	}
+</script>
+
+<script>
+	function applyImageFilters() {
+		var search = document.getElementById("image-search").value;
+		var sortBy = document.getElementById("image-sort-by").value;
+		var sortOrder = document.getElementById("image-sort-order").value;
+		var reviewFilter = document.getElementById("image-review-filter").value;
+		var perPage = document.getElementById("perpage").value || 10;
+		window.location.href = `/project?IDX=<%= IDX %>&page=1&perPage=${perPage}&search=${encodeURIComponent(search)}&sortBy=${sortBy}&sortOrder=${sortOrder}&reviewFilter=${reviewFilter}`;
+	}
+
+	var imgSearchInput = document.getElementById("image-search");
+	if (imgSearchInput) {
+		imgSearchInput.addEventListener("keypress", function(e) {
+			if (e.key === "Enter") {
+				applyImageFilters();
+			}
+		});
 	}
 </script>
 

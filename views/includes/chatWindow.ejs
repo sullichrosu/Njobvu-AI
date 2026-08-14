@@ -1,0 +1,88 @@
+<!-- Njobvu AI Floating Chat Component -->
+<link rel="stylesheet" href="/css/chat.css">
+
+<!-- Floating Launcher Button -->
+<button id="njobvu-chat-launcher" aria-label="Open Njobvu AI Assistant" title="Njobvu AI Assistant">
+    <i class="fas fa-robot"></i>
+    <span class="badge-dot"></span>
+</button>
+
+<!-- Floating Chat Panel Window -->
+<div id="njobvu-chat-window" class="shadow-lg">
+    <!-- Header -->
+    <div class="njobvu-chat-header">
+        <div class="njobvu-chat-header-info">
+            <div class="njobvu-chat-avatar">
+                <i class="fas fa-brain"></i>
+            </div>
+            <div class="njobvu-chat-title-container">
+                <h6 class="njobvu-chat-title">Njobvu AI Assistant</h6>
+                <div class="njobvu-chat-status">
+                    <span id="njobvu-chat-status-dot" class="njobvu-chat-status-dot offline"></span>
+                    <span id="njobvu-chat-status-text">Ollama Assistant</span>
+                </div>
+            </div>
+        </div>
+        <div class="njobvu-chat-header-actions">
+            <button id="njobvu-chat-config-toggle" class="njobvu-chat-icon-btn" title="Configuration Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button id="njobvu-chat-close-btn" class="njobvu-chat-icon-btn" title="Close Chat Window">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Config Drawer -->
+    <div id="njobvu-chat-config-drawer" class="njobvu-chat-config-drawer">
+        <div class="njobvu-config-group">
+            <label for="njobvu-config-url">Ollama Host Endpoint:</label>
+            <input type="text" id="njobvu-config-url" class="njobvu-config-input" value="http://localhost:11434" placeholder="http://localhost:11434">
+        </div>
+        <div class="njobvu-config-group">
+            <label for="njobvu-config-model">Active Model:</label>
+            <select id="njobvu-config-model" class="njobvu-config-select">
+                <option value="llama3">llama3</option>
+                <option value="llama2">llama2</option>
+                <option value="mistral">mistral</option>
+            </select>
+        </div>
+        <div class="njobvu-config-group">
+            <label for="njobvu-config-role">Role Gating Minimum:</label>
+            <select id="njobvu-config-role" class="njobvu-config-select">
+                <option value="user">User Role Required</option>
+                <option value="admin">Admin Role Required</option>
+                <option value="all">Unrestricted (All Roles)</option>
+            </select>
+        </div>
+        <button id="njobvu-config-save-btn" class="njobvu-config-save-btn">Save Settings</button>
+    </div>
+
+    <!-- Messages List -->
+    <div id="njobvu-chat-messages" class="njobvu-chat-messages">
+        <div class="njobvu-msg assistant">
+            <div class="njobvu-msg-bubble">
+                Hello! I am your <strong>Njobvu AI Assistant</strong> powered by Ollama.<br>
+                How can I assist you with your CV projects, model training, or data labeling today?
+                <div class="njobvu-quick-actions">
+                    <span class="njobvu-quick-chip" data-intent="generate_summary" data-prompt="Summarize my active training runs">📊 Summarize runs</span>
+                    <span class="njobvu-quick-chip" data-intent="list_runs" data-prompt="List all available runs">📁 List available runs</span>
+                    <span class="njobvu-quick-chip" data-intent="run_python" data-prompt="Run python sandbox status check">⚡ Python Sandbox</span>
+                    <span class="njobvu-quick-chip" data-prompt="Check project labeling status">🏷️ Labeling status</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Input -->
+    <div class="njobvu-chat-footer">
+        <div class="njobvu-chat-input-wrapper">
+            <textarea id="njobvu-chat-input" class="njobvu-chat-input" placeholder="Type a message or command..." rows="1"></textarea>
+        </div>
+        <button id="njobvu-chat-send-btn" class="njobvu-chat-send-btn" title="Send message" disabled>
+            <i class="fas fa-paper-plane"></i>
+        </button>
+    </div>
+</div>
+
+<script src="/js/chat.js"></script>
