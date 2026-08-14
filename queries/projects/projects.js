@@ -3,15 +3,37 @@ const client = require("../client");
 module.exports = {
     managed: {
         updateProjectName: async function (newName, projectName, admin) {
-            const query =
-                "UPDATE Projects SET PName = ? WHERE PName = ? AND Admin = ?";
-            const result = await global.managedDbClient.run(query, [
-                newName,
-                projectName,
-                admin,
-            ]);
+            await global.managedDbClient.run("BEGIN TRANSACTION", []);
 
-            return result;
+            try {
+                const projectsQuery =
+                    "UPDATE Projects SET PName = ? WHERE PName = ? AND Admin = ?";
+                const result = await global.managedDbClient.run(projectsQuery, [
+                    newName,
+                    projectName,
+                    admin,
+                ]);
+
+                // Access has its own PName column (see db/migrations.sql) that must
+                // stay in sync with Projects, or settings pages joining through
+                // Access keep resolving the stale (pre-rename) name.
+                const accessQuery =
+                    "UPDATE Access SET PName = ? WHERE PName = ? AND Admin = ?";
+                await global.managedDbClient.run(accessQuery, [
+                    newName,
+                    projectName,
+                    admin,
+                ]);
+
+                await global.managedDbClient.run("COMMIT", []);
+
+                return result;
+            } catch (err) {
+                await global.managedDbClient
+                    .run("ROLLBACK", [])
+                    .catch(() => {});
+                throw err;
+            }
         },
         deleteProject: async function (projectName, username) {
             const query = "DELETE FROM Projects WHERE PName = ? AND Admin = ?";
