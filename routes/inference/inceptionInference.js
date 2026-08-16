@@ -1,5 +1,6 @@
 const queries = require("../../queries/queries");
 const { exec } = require("child_process");
+const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 
 async function inceptionInference(req, res) {
     try {
@@ -67,7 +68,17 @@ async function inceptionInference(req, res) {
         let success = "";
         let error = "";
 
-        fs.writeFileSync(`${runPath}/${log}`, `${cmd}\n\n`);
+        const runOptionsHeader = formatRunOptionsHeader({
+            project: PName,
+            inference_file: inferenceFile,
+            device,
+            options,
+            weights: weightName,
+            top_k: topK,
+            using_imagenet_classes: usingImageNetClasses,
+        });
+
+        fs.writeFileSync(`${runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {

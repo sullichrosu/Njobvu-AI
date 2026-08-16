@@ -1,59 +1,87 @@
+const path = require("path");
 const cleanDirectory = require("./cleanDirectory");
-const StreamZip = require("node-stream-zip");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const rimraf = require("../public/libraries/rimraf");
+const configFile = require("../config.json");
+const StreamZip = require("node-stream-zip");
+const logger = global.logger || require("./logger");
 
 async function unzipFile(zipFilePath, outputDir) {
-    try {
-        const zip = new StreamZip.async({ file: zipFilePath });
+    return new Promise(async (resolve, reject) => {
+        try {
+            if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir, { recursive: true });
+            }
 
-        // node-stream-zip's extract() only creates directories it finds
-        // referenced in entry paths; a fully flat archive (no subfolders,
-        // e.g. the KW Coco export) has none, so it never creates outputDir
-        // itself and the first file write fails with ENOENT.
-        fs.mkdirSync(outputDir, { recursive: true });
+            const extension = zipFilePath.split(".").at(-1).toLowerCase();
 
-        await zip.extract(null, outputDir);
+            switch (extension) {
+                case "zip": {
+                    const zip = new StreamZip.async({ file: zipFilePath });
+                    await zip.extract(null, outputDir);
+                    await zip.close();
 
-        await zip.close();
+                    await finalizeExtraction();
+                    resolve();
+                    break;
+                }
 
-        const macosxPath = `${outputDir}/__MACOSX`;
-        if (fs.existsSync(macosxPath)) {
-            console.log("Removing __MACOSX folder");
-            await new Promise((resolve, reject) => {
-                rimraf(macosxPath, (err) => {
-                    if (err) {
-                        console.error("Error removing __MACOSX folder:", err);
-                        reject(err);
-                    } else {
-                        console.log("__MACOSX folder removed successfully");
-                        resolve();
+                case "7z": {
+                    const absoluteOutputDir = path.resolve(outputDir);
+
+                    (global.logger || logger).debug(`Extracting ${zipFilePath} to ${absoluteOutputDir}`);
+
+                    if (!fs.existsSync(absoluteOutputDir)) {
+                        fs.mkdirSync(absoluteOutputDir, { recursive: true });
                     }
-                });
-            });
+
+                    const args = ['x', zipFilePath, `-o${absoluteOutputDir}`, '-y'];
+                    const child = spawn(configFile["default_7z_path"] || "/usr/bin/7z", args);
+
+                    let stderr = '';
+                    child.stderr.on('data', (data) => { stderr += data; });
+
+                    child.on('close', async (code) => {
+                        try {
+                            if (code === 0) {
+                                (global.logger || logger).debug("7zip archive successfully extracted");
+                                await finalizeExtraction();
+                                resolve();
+                            } else {
+                                (global.logger || logger).debug(`7z process failed with code: ${code}`);
+                                (global.logger || logger).debug(`Stderr: ${stderr}`);
+                                reject(new Error("There was an error extracting the 7zip archive"));
+                            }
+                        } catch (err) {
+                            reject(err);
+                        }
+                    });
+                    break;
+                }
+
+                default:
+                    reject(new Error("There was a problem processing the archive: unsupported file extension"));
+                    break;
+            }
+        } catch (err) {
+            reject(err);
         }
 
-        await cleanDirectory(outputDir);
+        async function finalizeExtraction() {
+            const macosxPath = path.join(outputDir, "__MACOSX");
+            if (fs.existsSync(macosxPath)) {
+                await new Promise((res) => rimraf(macosxPath, res));
+            }
 
-        console.log("Deleting original zip file:", zipFilePath);
-        // Convert fs.unlink to a promise and await it
-        await new Promise((resolve, reject) => {
-            fs.unlink(zipFilePath, (err) => {
-                if (err) {
-                    console.error("Error deleting zip file:", err);
-                    reject(err);
-                } else {
-                    console.log("Zip file deleted successfully");
-                    resolve();
-                }
-            });
-        });
+            await cleanDirectory(outputDir);
 
-        console.log("All unzip operations completed successfully");
-    } catch (error) {
-        console.error("Error in unzipFile:", error);
-        throw error;
-    }
+            if (fs.existsSync(zipFilePath)) {
+                fs.unlinkSync(zipFilePath);
+                (global.logger || logger).debug("Zip file deleted successfully");
+            }
+        }
+    });
 }
 
 module.exports = unzipFile;

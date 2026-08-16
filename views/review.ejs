@@ -9,10 +9,14 @@
                     <table class="table table-striped">
                         <thead class="thead-dark">
                             <h3 class="justify-content-start">
-                                Review Images for Class: <%= CName %>
+                                Review Images for Class: <%= displayClassName %>
                             </h3>
                             <select class="form-select justify-content-start" aria-label="Default select example"
                                 onchange="window.location.href=this.value;">
+                                <option value="/review?class=<%= encodeURIComponent(unlabeledClass) %>&IDX=<%= IDX %>"
+                                    <%=(selectedClass===unlabeledClass) ? 'selected' : '' %>>
+                                    Unlabeled
+                                </option>
                                 <% classes.forEach(function(classItem) { %>
                                     <option value="/review?class=<%= classItem.CName %>&IDX=<%= IDX %>"
                                         <%=(selectedClass===classItem.CName) ? 'selected' : '' %>>
@@ -41,10 +45,13 @@
                                             </select>
                                         </div>
                                         <div>
-                                            <button id="submitSwitch" type="button" class="btn btn-primary">Switch
-                                                Labels</button>
-                                            <button id="deleteLabels" type="submit" class="btn btn-danger">Delete
-                                                Labels</button>
+                                            <button id="submitSwitch" type="button" class="btn btn-primary">
+                                                <%= isUnlabeledMode ? 'Assign Class' : 'Switch Labels' %>
+                                            </button>
+                                            <% if (!isUnlabeledMode) { %>
+                                                <button id="deleteLabels" type="submit" class="btn btn-danger">Delete
+                                                    Labels</button>
+                                                <% } %>
                                         </div>
                                     </div>
                                 </div>
@@ -59,58 +66,95 @@
             </tr>
             </thead>
             <tbody>
-                <% images.forEach(function(image) { %>
-                    <% let imageName=image.IName; %>
-                        <% let labels=imageLabels[imageName]; %>
-                            <% if (labels) { %>
-                                <% labels.forEach(function(label) { %>
-                                    <% if (label.CName===CName) { %>
-                                        <tr>
-                                            <td>
-                                                <input type="checkbox" 
-                                                    aria-label="<%= label.IName%> label <%= label.LID %>"
-                                                    class="badCheckbox" name="bad_<%= label.LID %>"
-                                                    value="<%= label.LID %>">
-                                            </td>
-                                            <td><a href="/labeling?IDX=<%=IDX%>&IName=<%= label.IName %>" />
-                                                <%= label.IName %>
-                                            </td>
-                                            <td>
-                                                <img class="Image"
-                                                    src="/projects/<%= admin %>-<%= PName %>/images/<%= label.IName %>"
-                                                    aria-label="<%=PName %> <%= label.IName%> label <%= label.LID%>"
-                                                    style="display: none;">
-                                                <input type="hidden" class="LabelX" value="<%= label.X %>">
-                                                <input type="hidden" class="LabelY" value="<%= label.Y %>">
-                                                <input type="hidden" class="LabelWidth" value="<%= label.W %>">
-                                                <input type="hidden" class="LabelHeight" value="<%= label.H %>">
-                                                <canvas id="cropCanvas"
-                                                    style="max-width: 100%; height: 100%; display: block; cursor: pointer;"
-                                                    data-toggle="modal" data-target="#myModal"></canvas>
-                                            </td>
-                                            <td>
-                                                <button type="button" class="btn btn-danger delete-button"
-                                                    data-admin="<%= admin %>" data-pname="<%= PName %>"
-                                                    data-lid="<%= label.LID %>"> Delete</button>
-                                                <form class="SwitchForm" action="/api/switchLabels" method="PUT">
-                                                    <label for="switchClasses_<%= label.LID %>">Switch to:</label>
-                                                    <select name="switchClasses_<%= label.LID %>" class="switchClasses"
-                                                        data-label-id="<%= label.LID %>">
-                                                        <% classes.forEach(function(classItem){ %>
-                                                            <option value="<%= classItem.CName %>">
-                                                                <%= classItem.CName %>
-                                                            </option>
-                                                            <% }); %>
-                                                    </select>
-                                                    <button type="button" class="btn btn-secondary"
-                                                        onclick="handleSwitch(event, '<%= label.LID %>')">Switch</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                        <% } %>
+                <% if (isUnlabeledMode) { %>
+                    <% images.forEach(function(image) { %>
+                        <tr>
+                            <td>
+                                <input type="checkbox"
+                                    aria-label="<%= image.IName %> unlabeled"
+                                    class="badCheckbox" name="bad_<%= image.IName %>"
+                                    value="<%= image.IName %>">
+                            </td>
+                            <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= image.IName %>" />
+                                <%= image.IName %>
+                            </td>
+                            <td>
+                                <img class="UnlabeledImage"
+                                    src="/projects/<%= admin %>-<%= PName %>/images/<%= image.IName %>"
+                                    aria-label="<%=PName %> <%= image.IName%>"
+                                    style="max-width: 200px; max-height: 200px;">
+                            </td>
+                            <td>
+                                <form class="SwitchForm" action="/api/switchLabels" method="PUT">
+                                    <label for="switchClasses_<%= image.IName %>">Assign to:</label>
+                                    <select name="switchClasses_<%= image.IName %>" class="switchClasses"
+                                        data-label-id="<%= image.IName %>">
+                                        <% classes.forEach(function(classItem){ %>
+                                            <option value="<%= classItem.CName %>">
+                                                <%= classItem.CName %>
+                                            </option>
                                             <% }); %>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary"
+                                        onclick="handleSwitch(event, '<%= image.IName %>')">Assign</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <% }); %>
+                    <% } else { %>
+                        <% images.forEach(function(image) { %>
+                            <% let imageName=image.IName; %>
+                                <% let labels=imageLabels[imageName]; %>
+                                    <% if (labels) { %>
+                                        <% labels.forEach(function(label) { %>
+                                            <% if (label.CName===CName) { %>
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox"
+                                                            aria-label="<%= label.IName%> label <%= label.LID %>"
+                                                            class="badCheckbox" name="bad_<%= label.LID %>"
+                                                            value="<%= label.LID %>">
+                                                    </td>
+                                                    <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= label.IName %>" />
+                                                        <%= label.IName %>
+                                                    </td>
+                                                    <td>
+                                                        <img class="Image"
+                                                            src="/projects/<%= admin %>-<%= PName %>/images/<%= label.IName %>"
+                                                            aria-label="<%=PName %> <%= label.IName%> label <%= label.LID%>"
+                                                            style="display: none;">
+                                                        <input type="hidden" class="LabelX" value="<%= label.X %>">
+                                                        <input type="hidden" class="LabelY" value="<%= label.Y %>">
+                                                        <input type="hidden" class="LabelWidth" value="<%= label.W %>">
+                                                        <input type="hidden" class="LabelHeight" value="<%= label.H %>">
+                                                        <canvas id="cropCanvas"
+                                                            style="max-width: 100%; height: 100%; display: block; cursor: pointer;"
+                                                            data-toggle="modal" data-target="#myModal"></canvas>
+                                                    </td>
+                                                    <td>
+                                                        <button type="button" class="btn btn-danger delete-button"
+                                                            data-admin="<%= admin %>" data-pname="<%= PName %>"
+                                                            data-lid="<%= label.LID %>"> Delete</button>
+                                                        <form class="SwitchForm" action="/api/switchLabels" method="PUT">
+                                                            <label for="switchClasses_<%= label.LID %>">Switch to:</label>
+                                                            <select name="switchClasses_<%= label.LID %>" class="switchClasses"
+                                                                data-label-id="<%= label.LID %>">
+                                                                <% classes.forEach(function(classItem){ %>
+                                                                    <option value="<%= classItem.CName %>">
+                                                                        <%= classItem.CName %>
+                                                                    </option>
+                                                                    <% }); %>
+                                                            </select>
+                                                            <button type="button" class="btn btn-secondary"
+                                                                onclick="handleSwitch(event, '<%= label.LID %>')">Switch</button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
                                                 <% } %>
                                                     <% }); %>
+                                                        <% } %>
+                                                            <% }); %>
+                                                                <% } %>
             </tbody>
             </table>
         </div>
@@ -261,7 +305,7 @@
             }
         });
 
-        document.getElementById("deleteLabels").addEventListener("click", async function () {
+        document.getElementById("deleteLabels")?.addEventListener("click", async function () {
             event.preventDefault();
 
             let selectedLabels = [];

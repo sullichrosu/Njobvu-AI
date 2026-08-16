@@ -1,3 +1,5 @@
+const { isReservedInferenceFile } = require("../../utils/isRunArtifactFile");
+
 async function getProcessingPage(req, res) {
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
@@ -148,6 +150,15 @@ async function getProcessingPage(req, res) {
 
     // get training runs
     var runs = await readdirAsync(log_path);
+    // Non-directory entries (e.g. summary.json / run_summary.md written by the chat run-summary
+    // feature directly into this folder) are not run folders and must be skipped, not scandir'd.
+    runs = runs.filter((r) => {
+        try {
+            return fs.statSync(`${log_path}${r}`).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    });
     runs = runs.reverse();
 
     // get training logfiles
@@ -173,6 +184,13 @@ async function getProcessingPage(req, res) {
 
     // get inference runs
     var inf_runs = await readdirAsync(inf_log_path);
+    inf_runs = inf_runs.filter((r) => {
+        try {
+            return fs.statSync(`${inf_log_path}${r}`).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    });
     inf_runs = inf_runs.reverse();
 
     // get inference logfiles
@@ -333,10 +351,7 @@ async function getProcessingPage(req, res) {
                 if (j == err_idx_inf) {
                     continue;
                 }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
@@ -353,10 +368,7 @@ async function getProcessingPage(req, res) {
                 if (j == done_idx_inf) {
                     continue;
                 }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
@@ -375,10 +387,7 @@ async function getProcessingPage(req, res) {
                 // {
                 // 	continue;
                 // }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);

@@ -36,7 +36,7 @@
             <tbody>
                 <% for(var i=((page-1)*perPage); i<(Math.min(projects.length,(((page-1)*perPage)+Number(perPage)))); i++) {%>
 					<tr>
-						<td scope="row"><a href="/projectV?IDX=<%= projects[i][1] %>%>&page=1&perPage=<%= perPage %>&sort=null&class=null"><%= projects[i][0].PName %></a></td>
+						<td scope="row"><a href="/projectV?IDX=<%= projects[i][1] %>&page=1&perPage=<%= perPage %>&sort=null&class=null"><%= projects[i][0].PName %></a></td>
 						<td class="text-center" scope="row"><%= projects[i][0].Admin %></td>
 						<% if (projects[i][2] != 0) {%>
 							<td class="text-center" style="color: red;">Needs Review</td>

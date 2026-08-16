@@ -46,7 +46,9 @@ class Logger {
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
 
-            if (line.includes('utils/logger.js') || line.includes('node:internal') || line.includes('(node:')) {
+            // Path separator is platform-dependent (Windows stack frames use backslashes), so match
+            // both to actually skip logger.js's own wrapper frames instead of always falling through.
+            if (/utils[\\/]logger\.js/.test(line) || line.includes('node:internal') || line.includes('(node:')) {
                 continue;
             }
 
@@ -57,23 +59,29 @@ class Logger {
             }
 
             const location = match[1] || match[2];
-            const parts = location.split(':');
+            const lastColonIndex = location.lastIndexOf(':');
+            if (lastColonIndex === -1) continue;
 
-            if (parts.length >= 2) {
-                const filePath = parts[0];
-                const lineNo = parts[1];
-
-                if (filePath.includes('node_modules')) {
-                    continue;
-                }
-
-                const relativePath = path.relative(process.cwd(), filePath);
-
-                return {
-                    file: relativePath,
-                    line: parseInt(lineNo, 10)
-                };
+            const secondLastColonIndex = location.lastIndexOf(':', lastColonIndex - 1);
+            let filePath, lineNo;
+            if (secondLastColonIndex !== -1 && !isNaN(location.substring(secondLastColonIndex + 1, lastColonIndex))) {
+                filePath = location.substring(0, secondLastColonIndex);
+                lineNo = location.substring(secondLastColonIndex + 1, lastColonIndex);
+            } else {
+                filePath = location.substring(0, lastColonIndex);
+                lineNo = location.substring(lastColonIndex + 1);
             }
+
+            if (filePath.includes('node_modules')) {
+                continue;
+            }
+
+            const relativePath = path.relative(process.cwd(), filePath);
+
+            return {
+                file: relativePath,
+                line: parseInt(lineNo, 10)
+            };
         }
         return null;
     }
