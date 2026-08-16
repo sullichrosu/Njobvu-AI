@@ -1,3 +1,7 @@
+// node-fetch@3 is ESM-only, which Jest in this repo isn't configured to transform;
+// requiring app.js pulls it in via routes/chat/ollamaChat.js.
+jest.mock('node-fetch', () => jest.fn());
+
 const request = require("supertest");
 const path = require("path");
 const fs = require("fs");
@@ -154,6 +158,64 @@ describe("Project & Image Sorting / Filtering API & Page Integration Tests", () 
 
             expect(res.statusCode).toBe(200);
             expect(res.headers["content-type"]).toMatch(/html/);
+        }, 15000);
+    });
+
+    describe("GET /homeV only lists projects switched to validation mode (regression)", () => {
+        const validatedProject = "validated_project";
+        const nonValidatedProject = "unvalidated_project";
+
+        beforeEach(() => {
+            // Simulates the real managedDbClient wrapper: `get()` resolves
+            // { success: true, row: undefined } when the SQL WHERE clause
+            // (including "Validate = 1") finds no matching row, exactly like
+            // sqlite3's callback receiving `undefined` for a no-match SELECT.
+            global.managedDbClient = {
+                all: jest.fn().mockImplementation((sql) => {
+                    if (sql && sql.includes("Access")) {
+                        return Promise.resolve({
+                            success: true,
+                            rows: [
+                                { Username: testUsername, PName: validatedProject, Admin: testAdmin },
+                                { Username: testUsername, PName: nonValidatedProject, Admin: testAdmin },
+                            ],
+                        });
+                    }
+                    return Promise.resolve({ success: true, rows: [] });
+                }),
+                get: jest.fn().mockImplementation((sql, params) => {
+                    if (sql && sql.includes("Projects")) {
+                        const [pName] = params;
+                        if (pName === validatedProject) {
+                            return Promise.resolve({
+                                success: true,
+                                row: { PName: validatedProject, Admin: testAdmin, AutoSave: 0, Validate: 1 },
+                            });
+                        }
+                        // Not in validation mode: SQL "Validate = 1" filter excludes it, no row found.
+                        return Promise.resolve({ success: true, row: undefined });
+                    }
+                    return Promise.resolve({ success: true, row: undefined });
+                }),
+                run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
+            };
+        });
+
+        it("excludes projects that are not switched to validation mode, instead of listing them blank", async () => {
+            const res = await request(app)
+                .get("/homeV")
+                .set("Cookie", [`Username=${testUsername}`]);
+
+            expect(res.statusCode).toBe(200);
+
+            // Exactly one project row should render (the validated one) — the
+            // regression rendered a second, blank row for the non-validated
+            // project instead of excluding it.
+            const rowButtons = res.text.match(/id="changeValidbtn\d+"/g) || [];
+            expect(rowButtons.length).toBe(1);
+
+            expect(res.text).toContain(validatedProject);
+            expect(res.text).not.toContain(nonValidatedProject);
         }, 15000);
     });
 

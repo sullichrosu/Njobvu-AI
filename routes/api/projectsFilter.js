@@ -43,13 +43,13 @@ async function getFilteredProjectsApi(req, res) {
                         "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND Validate = ?",
                         [accessRows[i].PName, accessRows[i].Admin, validateMode]
                     );
-                    Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
+                    Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : null;
                 } else {
                     const dbRes = await global.managedDbClient.get(
                         "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
                         [accessRows[i].PName, accessRows[i].Admin]
                     );
-                    Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
+                    Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : null;
                 }
             } else if (global.db && global.db.getAsync) {
                 let query = "SELECT * FROM `Projects` WHERE PName = '" + accessRows[i].PName + "' AND Admin = '" + accessRows[i].Admin + "'";

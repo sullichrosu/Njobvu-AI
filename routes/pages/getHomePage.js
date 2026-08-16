@@ -43,7 +43,7 @@ async function getHomePage(req, res) {
                     "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND (Validate = ? OR Validate = ? OR Validate IS NULL)",
                     [projects[i].PName, projects[i].Admin, 0, '0']
                 );
-                Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
+                Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : null;
             } else if (global.db && global.db.getAsync) {
                 Proj = await global.db.getAsync(
                     "SELECT * FROM `Projects` WHERE PName = '" +
