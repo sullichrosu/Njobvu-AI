@@ -8,6 +8,14 @@ jest.mock('sharp', () => jest.fn());
 jest.mock('unzipper', () => jest.fn());
 jest.mock('node-fetch', () => jest.fn());
 
+// Regression test for a real-world failure: an admin-configured relative,
+// forward-slash venv path (as commonly written in config.json on Windows)
+// must not be handed to child_process.exec() unresolved, since cmd.exe
+// can't parse a leading "./" and fails with "'.' is not recognized...".
+jest.mock('../../config.json', () => ({
+  default_python_path: './.venv/Scripts/python',
+}));
+
 jest.mock('child_process', () => ({
   exec: jest.fn(),
 }));
@@ -137,6 +145,35 @@ describe('MegaDetector inference routes', () => {
   });
 
   describe('POST /megadetector-inf', () => {
+    it('resolves a relative, forward-slash default_python_path to an absolute path before exec (Windows cmd.exe regression)', async () => {
+      const path = require('path');
+      const childProcess = require('child_process');
+      let capturedCmd = '';
+      childProcess.exec.mockImplementation((cmd, callback) => {
+        capturedCmd = cmd;
+        if (typeof callback === 'function') callback(null, '', '');
+        return { on: jest.fn() };
+      });
+
+      const res = await request(app)
+        .post('/megadetector-inf')
+        .send({
+          PName: 'test-project',
+          Admin: 'testuser',
+          inference_file: '/test/path/uploads/img.jpg',
+        })
+        .set('Cookie', ['Username=testuser']);
+
+      expect(res.statusCode).toBe(200);
+
+      // The raw, unresolved config value must never reach exec() directly.
+      expect(capturedCmd).not.toContain('./.venv');
+
+      const quotedPythonPath = capturedCmd.match(/^"([^"]+)"/)[1];
+      expect(path.isAbsolute(quotedPythonPath)).toBe(true);
+      expect(quotedPythonPath.replace(/\\/g, '/')).toContain('.venv/Scripts/python');
+    });
+
     it('runs the default built-in model with default threshold/fps when none are given', async () => {
       const childProcess = require('child_process');
       let capturedCmd = '';

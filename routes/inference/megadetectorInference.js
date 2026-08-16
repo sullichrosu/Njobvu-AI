@@ -52,7 +52,14 @@ async function megadetectorInference(req, res) {
             }
         }
 
-        var cmd = `${config["default_python_path"]} ${megadetectorScript} -i ${inferenceFilePath} -m ${model} -o ${runPath} -t ${threshold} -f ${fps}`;
+        // config["default_python_path"] is admin-configured and may be a relative,
+        // forward-slash path (e.g. a local venv: "./.venv/Scripts/python"). That's fine
+        // for POSIX shells, but Windows' cmd.exe (what child_process.exec spawns into)
+        // can't resolve a leading "./" and fails with "'.' is not recognized...". Resolve
+        // it to an absolute, platform-native path relative to the app root before use.
+        var pythonPath = path.resolve(currentPath, config["default_python_path"]);
+
+        var cmd = `"${pythonPath}" ${megadetectorScript} -i ${inferenceFilePath} -m ${model} -o ${runPath} -t ${threshold} -f ${fps}`;
 
         var success = "";
 
