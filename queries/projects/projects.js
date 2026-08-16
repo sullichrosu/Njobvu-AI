@@ -23,6 +23,14 @@ module.exports = {
                     admin,
                 ]);
 
+                const s3Query =
+                    "UPDATE S3Buckets SET PName = ? WHERE PName = ? AND Admin = ?";
+                await global.managedDbClient.run(s3Query, [
+                    newName,
+                    projectName,
+                    admin,
+                ]);
+
                 await global.managedDbClient.run("COMMIT", []);
 
                 return result;
