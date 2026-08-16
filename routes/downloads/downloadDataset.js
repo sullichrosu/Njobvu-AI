@@ -10,13 +10,13 @@ async function downloadDataset(req, res) {
         user = req.cookies.Username;
 
     var publicPath = currentPath,
-        mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
-        projectPath = mainPath + admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
-        mergePath = projectPath + "/merge/",
-        mergeImages = mergePath + "images/",
-        imagesPath = projectPath + "/images", // $LABELING_TOOL_PATH/public/projects/project_name/images
-        downloadsPath = mainPath + user + "_Downloads";
-    bootstrapPath = projectPath + "/bootstrap";
+        mainPath = path.join(publicPath, "public", "projects"), // $LABELING_TOOL_PATH/public/projects/
+        projectPath = path.join(mainPath, admin + "-" + PName), // $LABELING_TOOL_PATH/public/projects/project_name
+        mergePath = path.join(projectPath, "merge"),
+        mergeImages = path.join(mergePath, "images"),
+        imagesPath = path.join(projectPath, "images"), // $LABELING_TOOL_PATH/public/projects/project_name/images
+        downloadsPath = path.join(mainPath, user + "_Downloads");
+    bootstrapPath = path.join(projectPath, "bootstrap");
 
     if (!fs.existsSync(downloadsPath)) {
         fs.mkdirSync(downloadsPath);

@@ -7,6 +7,12 @@ async function unzipFile(zipFilePath, outputDir) {
     try {
         const zip = new StreamZip.async({ file: zipFilePath });
 
+        // node-stream-zip's extract() only creates directories it finds
+        // referenced in entry paths; a fully flat archive (no subfolders,
+        // e.g. the KW Coco export) has none, so it never creates outputDir
+        // itself and the first file write fails with ENOENT.
+        fs.mkdirSync(outputDir, { recursive: true });
+
         await zip.extract(null, outputDir);
 
         await zip.close();

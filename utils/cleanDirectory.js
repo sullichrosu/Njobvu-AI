@@ -17,10 +17,9 @@ async function cleanDirectory(directory) {
                 if (
                     file !== file.trim() ||
                     file.includes(" ") ||
-                    file.includes("0") ||
                     file.includes("+")
                 ) {
-                    const newDirName = file.trim().replace(/[ 0+]/g, "_");
+                    const newDirName = file.trim().replace(/[ +]/g, "_");
                     const newDirPath = path.join(directory, newDirName);
                     await fs.promises.rename(filePath, newDirPath);
                     await cleanDirectory(newDirPath);
@@ -42,14 +41,13 @@ async function cleanDirectory(directory) {
                 continue;
             }
 
-            // Clean filename: Remove trailing/leading spaces and replace spaces, 0s and + with _
+            // Clean filename: Remove trailing/leading spaces and replace spaces and + with _
             if (
                 file !== file.trim() ||
                 file.includes(" ") ||
-                file.includes("0") ||
                 file.includes("+")
             ) {
-                const newFileName = file.trim().replace(/[ 0+]/g, "_");
+                const newFileName = file.trim().replace(/[ +]/g, "_");
                 const newFilePath = path.join(directory, newFileName);
 
                 await fs.promises.rename(filePath, newFilePath);

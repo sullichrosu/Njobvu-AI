@@ -509,7 +509,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
             continue
 
         for file in files:
-            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')):
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif')):
                 full_path = os.path.join(root, file)
                 files_by_name[file] = full_path
 
