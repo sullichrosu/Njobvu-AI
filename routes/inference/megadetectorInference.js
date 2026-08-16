@@ -73,13 +73,25 @@ async function megadetectorInference(req, res) {
 
         fs.writeFileSync(`${runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
-        exec(cmd, (err, stdout, stderr) => {
+        // megadetector.py reports its real failure reason (missing deps, a failed
+        // model download, the inner `megadetector` subprocess's own stderr, etc.)
+        // via print() -- i.e. on its OWN stdout, not stderr -- before calling
+        // sys.exit(1). child_process's `err.message` only ever includes the
+        // command line plus *stderr*, so on failure it looked empty/useless even
+        // though the actual cause was captured. Log stdout alongside it. Also
+        // raise exec's default 1MB maxBuffer: MegaDetector's batch runner and
+        // ffmpeg frame extraction can both be chatty on longer videos.
+        exec(cmd, { maxBuffer: 1024 * 1024 * 20 }, (err, stdout, stderr) => {
             if (err) {
                 global.logger.error(err);
                 global.logger.debug(`This is the error: ${err.message}`);
 
                 if (err.message != "stdout maxBuffer length exceeded") {
-                    success = err.message;
+                    success = [
+                        err.message,
+                        stdout ? `\n--- stdout ---\n${stdout}` : "",
+                        stderr ? `\n--- stderr ---\n${stderr}` : "",
+                    ].join("");
 
                     fs.writeFile(`${runPath}/${errFile}`, success, (err) => {
                         if (err) throw err;

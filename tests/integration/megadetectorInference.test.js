@@ -149,8 +149,9 @@ describe('MegaDetector inference routes', () => {
       const path = require('path');
       const childProcess = require('child_process');
       let capturedCmd = '';
-      childProcess.exec.mockImplementation((cmd, callback) => {
+      childProcess.exec.mockImplementation((cmd, optionsOrCallback, maybeCallback) => {
         capturedCmd = cmd;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
         if (typeof callback === 'function') callback(null, '', '');
         return { on: jest.fn() };
       });
@@ -177,8 +178,9 @@ describe('MegaDetector inference routes', () => {
     it('runs the default built-in model with default threshold/fps when none are given', async () => {
       const childProcess = require('child_process');
       let capturedCmd = '';
-      childProcess.exec.mockImplementation((cmd, callback) => {
+      childProcess.exec.mockImplementation((cmd, optionsOrCallback, maybeCallback) => {
         capturedCmd = cmd;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
         if (typeof callback === 'function') callback(null, '', '');
         return { on: jest.fn() };
       });
@@ -213,8 +215,9 @@ describe('MegaDetector inference routes', () => {
     it('passes through a user-selected built-in model, threshold, and fps', async () => {
       const childProcess = require('child_process');
       let capturedCmd = '';
-      childProcess.exec.mockImplementation((cmd, callback) => {
+      childProcess.exec.mockImplementation((cmd, optionsOrCallback, maybeCallback) => {
         capturedCmd = cmd;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
         if (typeof callback === 'function') callback(null, '', '');
         return { on: jest.fn() };
       });
@@ -250,8 +253,9 @@ describe('MegaDetector inference routes', () => {
 
       const childProcess = require('child_process');
       let capturedCmd = '';
-      childProcess.exec.mockImplementation((cmd, callback) => {
+      childProcess.exec.mockImplementation((cmd, optionsOrCallback, maybeCallback) => {
         capturedCmd = cmd;
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
         if (typeof callback === 'function') callback(null, '', '');
         return { on: jest.fn() };
       });
@@ -269,6 +273,51 @@ describe('MegaDetector inference routes', () => {
       expect(capturedCmd.replace(/\\/g, '/')).toContain('/inference/uploads/animal.jpg');
 
       fs.existsSync = originalExistsSync;
+    });
+
+    it('captures megadetector.py stdout (not just stderr) into the run error log on failure', async () => {
+      // megadetector.py prints its real failure reason (missing deps, a failed
+      // model download, the inner detector subprocess's own stderr) via print()
+      // before calling sys.exit(1) -- i.e. onto ITS stdout, not stderr. A run
+      // that only logged err.message + stderr (as this route used to) showed
+      // nothing useful on failure; this reproduces that exact shape.
+      const fs = require('fs');
+      const childProcess = require('child_process');
+
+      const fakeStdout = 'MegaDetector failed with the following error:\nModuleNotFoundError: No module named \'megadetector\'\n';
+      let capturedMaxBuffer;
+      childProcess.exec.mockImplementation((cmd, optionsOrCallback, maybeCallback) => {
+        const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+        if (typeof optionsOrCallback === 'object' && optionsOrCallback) {
+          capturedMaxBuffer = optionsOrCallback.maxBuffer;
+        }
+        if (typeof callback === 'function') {
+          callback(new Error(`Command failed: ${cmd}\n`), fakeStdout, '');
+        }
+        return { on: jest.fn() };
+      });
+
+      const res = await request(app)
+        .post('/megadetector-inf')
+        .send({
+          PName: 'test-project',
+          Admin: 'testuser',
+          inference_file: '/test/path/uploads/img.jpg',
+        })
+        .set('Cookie', ['Username=testuser']);
+
+      expect(res.statusCode).toBe(200);
+
+      // A generous maxBuffer so verbose video-processing runs don't get killed
+      // before they can report the reason.
+      expect(capturedMaxBuffer).toBeGreaterThan(1024 * 1024);
+
+      const errorLogCall = fs.writeFile.mock.calls.find(
+        ([filePath]) => typeof filePath === 'string' && filePath.endsWith('-error.log'),
+      );
+      expect(errorLogCall).toBeDefined();
+      const [, errorLogContents] = errorLogCall;
+      expect(errorLogContents).toContain('ModuleNotFoundError');
     });
   });
 
