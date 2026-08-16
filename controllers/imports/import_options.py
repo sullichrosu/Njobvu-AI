@@ -1,7 +1,6 @@
 import sys
 print("Python executable:", sys.executable);
 import os
-from ultralytics import YOLO
 from PIL import Image
 import subprocess
 import shutil
@@ -106,6 +105,8 @@ def classification_plus_import(db_name, input_dir, output):
 
 
 def inference_into_classification(db_name, input_dir, output, weights_file, classification_dir):
+    from ultralytics import YOLO
+
     print("\n--- Starting Inference into Classification ---")
     print(f"Input directory: {input_dir}")
     print(f"Weights file: {weights_file}")
@@ -204,6 +205,8 @@ def inference_into_classification(db_name, input_dir, output, weights_file, clas
     classification_plus_import(db_name, import_source_dir, output)
 
 def inference_plus_import(input_dir, output, weights_file):
+    from ultralytics import YOLO
+
     model = YOLO(weights_file)
 
     with open('labels.txt', "w") as f:
@@ -489,40 +492,50 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     import re
 
-    # helper function to extract trailing digits from a filename stem
+    # helper function to extract trailing digits from a filename stem, used only
+    # as a fallback when no file on disk has the exact name the JSON expects
     def get_digits_suffix(filename):
         stem = os.path.splitext(os.path.basename(filename))[0]
         match = re.search(r'(\d+)\s*$', stem)
 
         return int(match.group(1)) if match else None
 
-    # map the isolated integer frame number to its actual disk path
-    all_files_in_archive = {}
+    # index files on disk both by exact basename (matches what the KW COCO
+    # exporter writes as `file_name`) and by trailing frame number (fallback
+    # for archives from other tools that renamed files but kept the JSON in sync)
+    files_by_name = {}
+    files_by_frame_num = {}
     for root, dirs, files in os.walk(input_dir):
         if '__MACOSX' in root or '.pytest_cache' in root:
             continue
 
         for file in files:
-            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')):
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif')):
+                full_path = os.path.join(root, file)
+                files_by_name[file] = full_path
+
                 frame_num = get_digits_suffix(file)
-
                 if frame_num is not None:
-                    all_files_in_archive[frame_num] = os.path.join(root, file)
+                    files_by_frame_num[frame_num] = full_path
 
-    print(f"Indexed {len(all_files_in_archive)} physical image stems via numeric frame matching.")
+    print(f"Indexed {len(files_by_name)} physical image files on disk.")
 
     for img_entry in coco_images:
         img_id = img_entry.get('id')
         file_name = img_entry.get('file_name')
 
         base_filename = os.path.basename(file_name)
-        target_frame_num = get_digits_suffix(base_filename)
+        found_path = files_by_name.get(base_filename)
 
-        print(f"Attempting to match JSON target '{base_filename}' using frame number ID: {target_frame_num}")
+        if found_path is None:
+            # fall back to matching on the trailing numeric frame number
+            target_frame_num = get_digits_suffix(base_filename)
+            found_path = files_by_frame_num.get(target_frame_num) if target_frame_num is not None else None
 
-        if target_frame_num in all_files_in_archive:
-            found_path = all_files_in_archive[target_frame_num]
+            if found_path is not None:
+                print(f"No exact filename match for '{base_filename}'; matched via frame number {target_frame_num} instead.")
 
+        if found_path is not None:
             # use the actual filename from the JSON so the bounding boxes stay consistent
             new_image_name = base_filename
 
@@ -532,7 +545,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
             cursor.execute("INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", (new_image_name,))
             image_id_to_new_name[img_id] = new_image_name
         else:
-            print(f"FATAL ERROR: Frame ID '{target_frame_num}' from JSON entry '{base_filename}' cannot be matched to any file on disk.", file=sys.stderr)
+            print(f"FATAL ERROR: JSON entry '{base_filename}' cannot be matched to any file on disk.", file=sys.stderr)
             sys.exit(1)
 
     # 5. populate labels

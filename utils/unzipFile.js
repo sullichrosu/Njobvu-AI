@@ -14,51 +14,54 @@ async function unzipFile(zipFilePath, outputDir) {
                 fs.mkdirSync(outputDir, { recursive: true });
             }
 
-            switch (zipFilePath.split(".").at(-1)) {
-                case "zip":
+            const extension = zipFilePath.split(".").at(-1).toLowerCase();
+
+            switch (extension) {
+                case "zip": {
                     const zip = new StreamZip.async({ file: zipFilePath });
                     await zip.extract(null, outputDir);
                     await zip.close();
 
                     await finalizeExtraction();
                     resolve();
-
                     break;
+                }
 
-                case "7z":
+                case "7z": {
                     const absoluteOutputDir = path.resolve(outputDir);
 
                     (global.logger || logger).debug(`Extracting ${zipFilePath} to ${absoluteOutputDir}`);
 
                     if (!fs.existsSync(absoluteOutputDir)) {
-                        (global.logger || logger).error("DEBUG: Directory still does not exist before spawn!");
+                        fs.mkdirSync(absoluteOutputDir, { recursive: true });
                     }
 
                     const args = ['x', zipFilePath, `-o${absoluteOutputDir}`, '-y'];
-
                     const child = spawn(configFile["default_7z_path"] || "/usr/bin/7z", args);
 
                     let stderr = '';
-                    child.stderr.on('data', (data) => { stderr += data });
+                    child.stderr.on('data', (data) => { stderr += data; });
 
                     child.on('close', async (code) => {
-                        if (code == 0) {
-                            (global.logger || logger).debug("7zip archive successfully extracted");
-                            await finalizeExtraction();
-                            resolve();
-                        } else {
-                            (global.logger || logger).debug(`7z process failed with code: ${code}`);
-                            (global.logger || logger).debug(`Stderr: ${stderr}`);
-
-                            reject("There was an error extracting the 7zip archive");
+                        try {
+                            if (code === 0) {
+                                (global.logger || logger).debug("7zip archive successfully extracted");
+                                await finalizeExtraction();
+                                resolve();
+                            } else {
+                                (global.logger || logger).debug(`7z process failed with code: ${code}`);
+                                (global.logger || logger).debug(`Stderr: ${stderr}`);
+                                reject(new Error("There was an error extracting the 7zip archive"));
+                            }
+                        } catch (err) {
+                            reject(err);
                         }
                     });
-
                     break;
+                }
 
                 default:
-                    reject("There was a problem processing the archive");
-
+                    reject(new Error("There was a problem processing the archive: unsupported file extension"));
                     break;
             }
         } catch (err) {
@@ -82,4 +85,3 @@ async function unzipFile(zipFilePath, outputDir) {
 }
 
 module.exports = unzipFile;
-
