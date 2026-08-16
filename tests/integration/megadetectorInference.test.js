@@ -134,15 +134,10 @@ describe('MegaDetector inference routes', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    global.configFile = {};
   });
 
   describe('POST /megadetector-inf', () => {
-    it('runs a prebuilt model when it is configured in config.json', async () => {
-      global.configFile = {
-        megadetector_models: { MDv5a: '/opt/models/md_v5a.0.0.pt' },
-      };
-
+    it('runs the default built-in model with default threshold/fps when none are given', async () => {
       const childProcess = require('child_process');
       let capturedCmd = '';
       childProcess.exec.mockImplementation((cmd, callback) => {
@@ -156,18 +151,20 @@ describe('MegaDetector inference routes', () => {
         .send({
           PName: 'test-project',
           Admin: 'testuser',
-          yolovx_path: '/usr/local/bin/yolo',
-          model_source: 'prebuilt',
-          prebuilt_model: 'MDv5a',
           inference_file: '/test/path/uploads/img.jpg',
-          mode: 'predict',
         })
         .set('Cookie', ['Username=testuser']);
 
       expect(res.statusCode).toBe(200);
       expect(res.body.Success).toBe('MegaDetector Inference Started');
-      expect(capturedCmd).toContain('/opt/models/md_v5a.0.0.pt');
       expect(capturedCmd).toContain('megadetector.py');
+      expect(capturedCmd).toContain('-i /test/path/uploads/img.jpg');
+      expect(capturedCmd).toContain('-m MDV5A');
+      expect(capturedCmd).toContain('-t 0.2');
+      expect(capturedCmd).toContain('-f 1.0');
+      // No YOLO CLI path / custom weights concepts should leak into the command.
+      expect(capturedCmd).not.toContain('yolovx');
+      expect(capturedCmd).not.toContain('weights');
 
       const fs = require('fs');
       expect(fs.writeFileSync).toHaveBeenCalledWith(
@@ -176,28 +173,43 @@ describe('MegaDetector inference routes', () => {
       );
     });
 
-    it('rejects a prebuilt model that has not been configured', async () => {
-      global.configFile = { megadetector_models: {} };
+    it('passes through a user-selected built-in model, threshold, and fps', async () => {
+      const childProcess = require('child_process');
+      let capturedCmd = '';
+      childProcess.exec.mockImplementation((cmd, callback) => {
+        capturedCmd = cmd;
+        if (typeof callback === 'function') callback(null, '', '');
+        return { on: jest.fn() };
+      });
 
       const res = await request(app)
         .post('/megadetector-inf')
         .send({
           PName: 'test-project',
           Admin: 'testuser',
-          yolovx_path: '/usr/local/bin/yolo',
-          model_source: 'prebuilt',
-          prebuilt_model: 'MDv6-unknown',
-          inference_file: '/test/path/uploads/img.jpg',
-          mode: 'predict',
+          inference_file: '/test/path/uploads/trail_cam.mp4',
+          model: 'MDv1000-redwood',
+          threshold: '0.5',
+          fps: '2.0',
         })
         .set('Cookie', ['Username=testuser']);
 
-      expect(res.statusCode).toBe(400);
-      expect(res.text).toContain('MDv6-unknown');
+      expect(res.statusCode).toBe(200);
+      expect(capturedCmd).toContain('-m MDv1000-redwood');
+      expect(capturedCmd).toContain('-t 0.5');
+      expect(capturedCmd).toContain('-f 2.0');
     });
 
-    it('runs a custom fine-tuned model from the project weights folder', async () => {
-      global.configFile = {};
+    it('falls back to the project inference-uploads path when the given file is not an absolute existing path', async () => {
+      const fs = require('fs');
+      const originalExistsSync = fs.existsSync;
+      fs.existsSync.mockImplementation((p) => {
+        const normalized = typeof p === 'string' ? p.replace(/\\/g, '/') : p;
+        if (typeof normalized === 'string' && normalized.endsWith('animal.jpg') && !normalized.includes('/inference/uploads/')) {
+          return false;
+        }
+        return true;
+      });
 
       const childProcess = require('child_process');
       let capturedCmd = '';
@@ -212,27 +224,19 @@ describe('MegaDetector inference routes', () => {
         .send({
           PName: 'test-project',
           Admin: 'testuser',
-          yolovx_path: '/usr/local/bin/yolo',
-          model_source: 'custom',
-          weights: 'my_finetuned_md.pt',
-          inference_file: '/test/path/uploads/img.jpg',
-          mode: 'track',
+          inference_file: 'animal.jpg',
         })
         .set('Cookie', ['Username=testuser']);
 
       expect(res.statusCode).toBe(200);
-      expect(capturedCmd).toContain('training/weights/my_finetuned_md.pt');
-      expect(capturedCmd).toContain('-m track');
+      expect(capturedCmd.replace(/\\/g, '/')).toContain('/inference/uploads/animal.jpg');
+
+      fs.existsSync = originalExistsSync;
     });
   });
 
   describe('GET /megadetector/settings', () => {
     it('renders the MegaDetector settings page for an authenticated user', async () => {
-      global.configFile = {
-        default_yolo_path: '/usr/local/bin/yolo',
-        megadetector_models: { MDv5a: '/opt/models/md_v5a.0.0.pt' },
-      };
-
       const res = await request(app)
         .get('/megadetector/settings')
         .query({ IDX: 0 })

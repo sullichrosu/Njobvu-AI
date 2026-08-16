@@ -1,4 +1,4 @@
-const RESERVED_INFERENCE_FILES = new Set(["datatovalues.py", "output"]);
+const RESERVED_INFERENCE_FILES = new Set(["datatovalues.py", "megadetector.py", "output", "raw"]);
 const COCO_CLASSES_PATTERN = /coco[-_]?classes/i;
 
 function isCocoClassesFile(fileName) {

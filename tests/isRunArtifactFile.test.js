@@ -27,6 +27,11 @@ describe('isRunArtifactFile Utility Unit Tests', () => {
             expect(isReservedInferenceFile('output')).toBe(true);
         });
 
+        it('filters the MegaDetector script copy and its raw-image output dir', () => {
+            expect(isReservedInferenceFile('megadetector.py')).toBe(true);
+            expect(isReservedInferenceFile('raw')).toBe(true);
+        });
+
         it('filters coco-classes files out of inference run listings', () => {
             expect(isReservedInferenceFile('coco_classes.yaml')).toBe(true);
         });

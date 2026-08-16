@@ -1,3 +1,8 @@
+// MegaDetector ships these built-in model weights; the megadetector
+// package resolves/downloads them by name, so no local weight management
+// or admin configuration is needed.
+const MEGADETECTOR_MODELS = ["MDV5A", "MDV5B", "MDv1000-redwood"];
+
 async function getMegadetectorSettingsPage(req, res) {
     // get URL variables
     var IDX = parseInt(req.query.IDX),
@@ -26,36 +31,8 @@ async function getMegadetectorSettingsPage(req, res) {
     var public_path = currentPath,
         main_path = public_path + "public/projects/",
         project_path = main_path + admin + "-" + PName,
-        path = project_path + "/" + PName + ".db",
-        training_path = project_path + "/training",
-        weights_path = training_path + "/weights",
         inference_path = project_path + "/inference",
-        inference_upload_path = project_path + "/inference/uploads",
-        python_path_file = training_path + "/Paths.txt",
-        yolovx_path_file = training_path + "/yolovxPaths.txt";
-
-    if (!fs.existsSync(training_path)) {
-        fs.mkdirSync(training_path);
-        fs.mkdirSync(weights_path);
-        fs.writeFile(python_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-        fs.writeFile(yolovx_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-    } else if (!fs.existsSync(weights_path)) {
-        fs.mkdirSync(weights_path);
-    } else if (!fs.existsSync(yolovx_path_file)) {
-        fs.writeFile(yolovx_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-    }
+        inference_upload_path = project_path + "/inference/uploads";
 
     if (!fs.existsSync(inference_path)) {
         fs.mkdirSync(inference_path);
@@ -76,24 +53,8 @@ async function getMegadetectorSettingsPage(req, res) {
         access.push(acc[i].Username);
     }
 
-    var global_weights = await readdirAsync(weights_path);
     var global_inference_upload = await readdirAsync(inference_upload_path);
     global_inference_upload.push(project_path + "/images");
-
-    // get the ultralytics/yolo CLI paths already configured for this project
-    var paths = fs
-        .readFileSync(yolovx_path_file, "utf-8")
-        .split("\n")
-        .filter(Boolean);
-
-    var default_path = configFile.default_yolo_path;
-    if (!default_path) {
-        default_path = null;
-    }
-
-    // prebuilt MegaDetector models are admin-provisioned via config.json
-    // (megadetector_models: { "<label>": "<local weights path>" })
-    var megadetector_models = (configFile && configFile.megadetector_models) || {};
 
     res.render("training/megadetectorSettings", {
         title: "megadetectorSettings",
@@ -102,11 +63,8 @@ async function getMegadetectorSettingsPage(req, res) {
         PName: PName,
         Admin: admin,
         IDX: IDX,
-        default_path: default_path,
-        paths: paths,
-        global_weights: global_weights,
         global_inference_upload: global_inference_upload,
-        megadetector_models: megadetector_models,
+        megadetector_models: MEGADETECTOR_MODELS,
         activePage: "megadetectorSettings",
     });
 }

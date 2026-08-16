@@ -10,43 +10,23 @@ async function megadetectorInference(req, res) {
 
         var PName = req.body.PName,
             Admin = req.body.Admin,
-            yolovxPath = req.body.yolovx_path,
             log = `${date}.log`,
             inferenceFile = req.body.inference_file,
-            device = req.body.device,
-            options = req.body.options,
-            mode = req.body.mode || "predict",
-            modelSource = req.body.model_source,
-            prebuiltModel = req.body.prebuilt_model,
-            weightName = req.body.weights;
+            model = req.body.model || "MDV5A",
+            threshold = req.body.threshold || "0.2",
+            fps = req.body.fps || "1.0";
 
         var errFile = `${date}-error.log`;
 
         var publicPath = currentPath,
             mainPath = publicPath + "public/projects/",
             projectPath = mainPath + Admin + "-" + PName,
-            trainingPath = projectPath + "/training",
             inferencePath = projectPath + "/inference",
             inferenceUploadPath = projectPath + "/inference/uploads/",
             inferenceFilePath = inferenceFile,
             logsPath = inferencePath + "/logs",
             runPath = `${logsPath}/${date}`,
             megadetectorScript = publicPath + "controllers/inference/megadetector.py";
-
-        var weightPath;
-
-        if (modelSource === "prebuilt") {
-            var registry = (configFile && configFile.megadetector_models) || {};
-            weightPath = registry[prebuiltModel];
-
-            if (!weightPath) {
-                return res.status(400).send(
-                    `Unknown or unconfigured prebuilt MegaDetector model: ${prebuiltModel}. Ask an admin to set megadetector_models.${prebuiltModel} in config.json.`,
-                );
-            }
-        } else {
-            weightPath = trainingPath + "/weights/" + weightName;
-        }
 
         if (!fs.existsSync(logsPath)) {
             fs.mkdirSync(logsPath);
@@ -72,20 +52,16 @@ async function megadetectorInference(req, res) {
             }
         }
 
-        var cmd = `${config["default_python_path"]} ${megadetectorScript} -d ${runPath} -i ${inferenceFilePath} -l ${runPath}/${log} -f ${yolovxPath} -w ${weightPath} -D ${device || "cpu"} -o "${options || ""}" -m ${mode}`;
+        var cmd = `${config["default_python_path"]} ${megadetectorScript} -i ${inferenceFilePath} -m ${model} -o ${runPath} -t ${threshold} -f ${fps}`;
 
         var success = "";
 
         const runOptionsHeader = formatRunOptionsHeader({
             project: PName,
-            model_source: modelSource,
-            prebuilt_model: prebuiltModel,
-            weights: weightName,
-            yolovx_path: yolovxPath,
+            model,
             inference_file: inferenceFile,
-            device,
-            options,
-            mode,
+            threshold,
+            fps,
         });
 
         fs.writeFileSync(`${runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
