@@ -3,16 +3,43 @@ const getDbClient = require("../getDbClient");
 
 module.exports = {
     managed: {
-        updateProjectName: async function(newName, projectName, admin) {
-            const query =
-                "UPDATE Projects SET PName = ? WHERE PName = ? AND Admin = ?";
-            const result = await global.managedDbClient.run(query, [
-                newName,
-                projectName,
-                admin,
-            ]);
+        updateProjectName: async function (newName, projectName, admin) {
+            await global.managedDbClient.run("BEGIN TRANSACTION", []);
 
-            return result;
+            try {
+                const projectsQuery =
+                    "UPDATE Projects SET PName = ? WHERE PName = ? AND Admin = ?";
+                const result = await global.managedDbClient.run(projectsQuery, [
+                    newName,
+                    projectName,
+                    admin,
+                ]);
+
+                const accessQuery =
+                    "UPDATE Access SET PName = ? WHERE PName = ? AND Admin = ?";
+                await global.managedDbClient.run(accessQuery, [
+                    newName,
+                    projectName,
+                    admin,
+                ]);
+
+                const s3Query =
+                    "UPDATE S3Buckets SET PName = ? WHERE PName = ? AND Admin = ?";
+                await global.managedDbClient.run(s3Query, [
+                    newName,
+                    projectName,
+                    admin,
+                ]);
+
+                await global.managedDbClient.run("COMMIT", []);
+
+                return result;
+            } catch (err) {
+                await global.managedDbClient
+                    .run("ROLLBACK", [])
+                    .catch(() => {});
+                throw err;
+            }
         },
         deleteProject: async function(projectName, username) {
             const query = "DELETE FROM Projects WHERE PName = ? AND Admin = ?";

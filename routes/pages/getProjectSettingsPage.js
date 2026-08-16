@@ -3,11 +3,7 @@ async function getProjectSettingsPage(req, res) {
     var projects = await db.allAsync(
         "SELECT * FROM Access WHERE Username = '" + user + "'",
     );
-    var IDX = req.query.IDX;
-
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+    if (req.query.IDX == undefined) {
         return res.redirect("/home");
     }
 
@@ -15,9 +11,10 @@ async function getProjectSettingsPage(req, res) {
         return res.redirect("/");
     }
 
-    if (IDX >= projects.length) {
-        valid = 1;
-        return res.redirect("/home");
+    var IDX = parseInt(req.query.IDX, 10);
+
+    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
+        return res.redirect("/home?error=project_not_found");
     }
 
     var PName = projects[IDX].PName;
@@ -30,6 +27,10 @@ async function getProjectSettingsPage(req, res) {
             admin +
             "'",
     );
+
+    if (!results1) {
+        return res.redirect("/home?error=project_not_found");
+    }
 
     global.logger.debug("username: ", user);
     try {
