@@ -8,6 +8,10 @@
     "ollama_url": "http://localhost:11434",
     "ollama_default_model": "gemma4:14b",
     "default_7z_path": "/usr/bin/7z",
+    "megadetector_models": {
+        "MDv5a": "",
+        "MDv5b": ""
+    },
     "training_max_buffer_size": 5,
     "ssl_key_path": "",
     "ssl_cert_path": ""

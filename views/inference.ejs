@@ -133,7 +133,7 @@
                             </form>
 
                             <td class="text-center">
-                                <% if (run_types[i] === 'YOLO' && run_status_inf[i] !== 'RUNNING' && run_status_inf[i] !== 'FAILED') { %>
+                                <% if ((run_types[i] === 'YOLO' || run_types[i] === 'MegaDetector') && run_status_inf[i] !== 'RUNNING' && run_status_inf[i] !== 'FAILED') { %>
                                     <div class="input-group input-group-sm mb-2">
                                         <div class="input-group-prepend">
                                             <span class="input-group-text" data-toggle="tooltip" title="Minimum confidence score threshold (0.0 to 1.0) for active learning">Min Conf <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Filter bounding box detections by minimum score">?</span></span>

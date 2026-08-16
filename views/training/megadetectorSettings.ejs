@@ -1,0 +1,293 @@
+<%- include('../includes/header') %>
+    <%- include('../includes/inferenceNav', { activePage }) %>
+        <script>
+            if ("<%= access.includes(user)%>" == "false") {
+                window.location.replace("/home");
+            }
+        </script>
+        <h1 style="text-align: center;">
+            <%= PName %>
+        </h1>
+        <div id="training" style="width: 100%">
+            <div class="container">
+                <div class="col-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">
+                                    <h4>Upload Custom MegaDetector Weights</h4>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <form class="add-weights" action="/upload_pre_weights" enctype="multipart/form-data"
+                                        id="add-md-weights">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <h5><label for="upload-md-weights" style="width: 200%;">Upload a
+                                                        fine-tuned MegaDetector model (.pt)</label></h5>
+                                                <input id="upload-md-weights" name="upload-weights" type="file"
+                                                    class="form-control-file" required>
+                                            </div>
+                                        </div>
+                                        <div class="col text-left">
+                                            <button id="MdWeightsBtn" type="submit" class="btn btn-primary btn-lg"
+                                                value="submit" style="border-radius: 0">ADD FILE</button>
+                                        </div>
+                                    </form>
+                                    <br>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="training" style="width: 100%">
+            <div class="container">
+                <div class="col-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">
+                                    <h4>MegaDetector Inference</h4>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <form class="add-inference" action="/upload_inference_file"
+                                        enctype="multipart/form-data" id="add-md-inference">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <h5><label for="upload-md-inference" style="width: 200%;">Upload
+                                                        inference file (.jpg, .png, .gif, .tif, .mp4)</label></h5>
+                                                <input id="upload-md-inference" name="upload-inference" type="file"
+                                                    class="form-control-file" required>
+                                            </div>
+                                        </div>
+                                        <div class="col text-left">
+                                            <button id="MdInfUploadBtn" type="submit" class="btn btn-primary btn-lg"
+                                                value="submit" style="border-radius: 0">ADD FILE</button>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                    <form class="Configure Project For MegaDetector" action="/megadetector-inf"
+                                        enctype="multipart/form-data" id="megadetector-inf" method="post">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="model_source">Model Source:</label></h5>
+                                                <select id="model_source" name="model_source" style="width: 100%;">
+                                                    <option value="prebuilt">Prebuilt MegaDetector</option>
+                                                    <option value="custom">Custom / Fine-tuned</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row" id="prebuilt-model-row">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="prebuilt_model">Prebuilt Model:</label></h5>
+                                                <select name="prebuilt_model" id="prebuilt_model" style="width:100%">
+                                                    <% var mdKeys = Object.keys(megadetector_models || {}); %>
+                                                    <% if (mdKeys.length === 0) { %>
+                                                        <option value="" disabled selected>No prebuilt models configured</option>
+                                                    <% } %>
+                                                    <% for (var i = 0; i < mdKeys.length; i++) { %>
+                                                        <option value="<%= mdKeys[i] %>"><%= mdKeys[i] %></option>
+                                                    <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row" id="custom-model-row" style="display: none;">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="Weights_md">Custom Weights File:</label></h5>
+                                                <select name="Weights_md" id="Weights_md" style="width:100%">
+                                                    <% for(var i=0; i<global_weights.length; i++) {%>
+                                                        <option>
+                                                            <%= global_weights[i]%>
+                                                        </option>
+                                                        <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="YOLO_md">Ultralytics/YOLO CLI Path:</label></h5>
+                                                <select name="Yolo_md" id="Yolo_md" style="width:100%">
+                                                    <% if(default_path !=null){%>
+                                                        <option>
+                                                            <%= default_path %>
+                                                        </option>
+                                                        <%}%>
+                                                            <% for(var i=0; i<paths.length; i++) {%>
+                                                                <option>
+                                                                    <%= paths[i] %>
+                                                                </option>
+                                                                <% } %>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="md_mode">Mode:</label></h5>
+                                                <select id="md_mode" name="md_mode" style="width: 100%;">
+                                                    <option value="predict">Predict Data (predict)</option>
+                                                    <option value="track">Tracking (track)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="Inference_md">Inference Files:</label></h5>
+                                                <select name="Inference_md" id="Inference_md" style="width:100%">
+                                                    <% for(var i=0; i<global_inference_upload.length; i++) {%>
+                                                        <option>
+                                                            <%= global_inference_upload[i]%>
+                                                        </option>
+                                                        <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <br>
+                                        <div class="form-row">
+                                            <div class="col text-left">
+                                                <button id="MdInfBtn" type="submit" class="btn btn-primary btn-lg"
+                                                    value="submit" style="border-radius: 0">RUN MEGADETECTOR</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <script>
+            document.addEventListener("DOMContentLoaded", () => {
+                document.forms['add-md-inference'].addEventListener('submit', (event) => {
+                    event.preventDefault();
+
+                    var formData = new FormData();
+                    const upload_project = document.getElementById('upload-md-inference');
+                    const files = upload_project.files[0];
+
+                    if (!files || !(files.size > 0)) {
+                        alert("File must have a size > 0")
+                        return;
+                    }
+
+                    formData.append('upload_inference', files);
+                    formData.append("PName", "<%= PName %>");
+                    formData.append("Admin", "<%= Admin %>");
+
+                    fetch(event.target.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then((resp) => {
+                        return resp.json();
+                    }).then((body) => {
+                        alert(body.Success);
+                        window.location.replace("/megadetector/settings?IDX=<%= IDX %>");
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                });
+
+                document.forms['add-md-weights'].addEventListener('submit', (event) => {
+                    event.preventDefault();
+
+                    var formData = new FormData();
+                    const upload_project = document.getElementById('upload-md-weights');
+                    const files = upload_project.files[0];
+
+                    if (!files || !(files.size > 0)) {
+                        alert("File must have a size > 0")
+                        return;
+                    }
+
+                    formData.append('upload_weights', files);
+                    formData.append("PName", "<%= PName %>");
+                    formData.append("Admin", "<%= Admin %>");
+
+                    fetch(event.target.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then((resp) => {
+                        return resp.json();
+                    }).then((body) => {
+                        alert(body.Success);
+                        window.location.replace("/megadetector/settings?IDX=<%= IDX %>");
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                });
+
+                const modelSourceSelect = document.getElementById("model_source");
+                const prebuiltRow = document.getElementById("prebuilt-model-row");
+                const customRow = document.getElementById("custom-model-row");
+
+                function toggleModelSourceRows() {
+                    if (modelSourceSelect.value === "custom") {
+                        prebuiltRow.style.display = "none";
+                        customRow.style.display = "";
+                    } else {
+                        prebuiltRow.style.display = "";
+                        customRow.style.display = "none";
+                    }
+                }
+
+                modelSourceSelect.addEventListener("change", toggleModelSourceRows);
+                toggleModelSourceRows();
+
+                document.getElementById("megadetector-inf").addEventListener('submit', (event) => {
+                    event.preventDefault();
+
+                    var modelSource = document.getElementById("model_source").value;
+                    var prebuiltModel = document.getElementById("prebuilt_model").value;
+                    var customWeights = document.getElementById("Weights_md").value;
+                    var inferenceFile = document.getElementById("Inference_md").value;
+
+                    if (modelSource === "prebuilt" && !prebuiltModel) {
+                        alert("Must select a prebuilt model");
+                        return;
+                    }
+
+                    if (modelSource === "custom" && !customWeights) {
+                        alert("Must select a custom weights file");
+                        return;
+                    }
+
+                    if (!inferenceFile) {
+                        alert("Must select an inference file");
+                        return;
+                    }
+
+                    var formData = new FormData();
+                    formData.append("PName", "<%= PName %>");
+                    formData.append("Admin", "<%= Admin %>");
+                    formData.append("yolovx_path", document.getElementById("Yolo_md").value);
+                    formData.append("model_source", modelSource);
+                    formData.append("prebuilt_model", prebuiltModel);
+                    formData.append("weights", customWeights);
+                    formData.append("inference_file", inferenceFile);
+                    formData.append("mode", document.getElementById("md_mode").value);
+
+                    fetch(event.target.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then((resp) => {
+                        return resp.json();
+                    }).then((body) => {
+                        alert(body.Success);
+                        window.location.replace("/inference?IDX=<%= IDX %>");
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                });
+            });
+        </script>
+        <%- include('../includes/footer') %>

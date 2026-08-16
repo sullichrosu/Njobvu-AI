@@ -35,6 +35,7 @@ const getUserPage = require("./pages/getUserPage");
 const get404Page = require("./pages/get404Page");
 const getInceptionSettingsPage = require("./pages/getInceptionSettingsPage");
 const getHelpPage = require("./pages/getHelpPage");
+const getMegadetectorSettingsPage = require("./pages/getMegadetectorSettingsPage");
 
 module.exports = {
     getLoginPage: getLoginPage,
@@ -74,4 +75,5 @@ module.exports = {
     getTrainingPage: getTrainingPage,
     getInceptionSettingsPage: getInceptionSettingsPage,
     getHelpPage: getHelpPage,
+    getMegadetectorSettingsPage: getMegadetectorSettingsPage,
 };

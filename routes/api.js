@@ -101,6 +101,7 @@ const getRunImages = require("./inference/getRunImages");
 const uploadInferenceFile = require("./inference/uploadInferenceFile");
 const inceptionInference = require("./inference/inceptionInference");
 const addYoloInferenceToDataset = require("./inference/addYoloInferenceToDataset");
+const megadetectorInference = require("./inference/megadetectorInference");
 
 const { executePythonSandbox, handleRunSummary, handleListRuns, handleRunDocumentContext, handlePersistCustomSummary } = require("../controllers/sandboxController");
 
@@ -122,6 +123,7 @@ api.post("/api/runs/persist-summary", handlePersistCustomSummary);
 // INFERENCE ROUTES
 api.post("/yolo-inf", yoloInference);
 api.post("/inception-inf", inceptionInference);
+api.post("/megadetector-inf", megadetectorInference);
 api.post("/upload_inference_file", uploadInferenceFile);
 api.get("/runs/:runId/images", getRunImages);
 api.post("/inference/add-inference-run-to-dataset", addYoloInferenceToDataset);
