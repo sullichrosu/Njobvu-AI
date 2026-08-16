@@ -42,7 +42,7 @@ async function getValidationHomePage(req, res) {
                     "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND (Validate = ? OR Validate = ?)",
                     [projects[i].PName, projects[i].Admin, 1, '1']
                 );
-                Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : dbRes;
+                Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : null;
             } else if (global.db && global.db.getAsync) {
                 Proj = await global.db.getAsync(
                     "SELECT * FROM `Projects` WHERE PName = '" +
