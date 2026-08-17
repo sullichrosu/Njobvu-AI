@@ -55,7 +55,8 @@ async function mapKwCocoCsv(req, res) {
         await queries.project.migrateProjectDb(projectPath);
 
         // 1. Ensure all referenced classes exist in Classes table
-        const existingClassRows = await queries.project.getAllClasses(projectPath) || [];
+        const existingClassResult = await queries.project.getAllClasses(projectPath);
+        const existingClassRows = existingClassResult?.rows || [];
         const existingClassSet = new Set(existingClassRows.map(c => c.CName));
 
         const uniqueClasses = new Set(parsedAnnotations.map(a => a.className));
@@ -70,7 +71,8 @@ async function mapKwCocoCsv(req, res) {
         }
 
         // 2. Ensure referenced images exist in Images table
-        const existingImageRows = await queries.project.getAllImages(projectPath) || [];
+        const existingImageResult = await queries.project.getAllImages(projectPath);
+        const existingImageRows = existingImageResult?.rows || [];
         const existingImageSet = new Set(existingImageRows.map(i => i.IName));
 
         const uniqueImages = new Set(parsedAnnotations.map(a => a.filename));
@@ -86,9 +88,10 @@ async function mapKwCocoCsv(req, res) {
 
         // 3. Get current max LID in Labels table
         const maxLidResult = await queries.project.getMaxLabelId(projectPath);
+        const maxLidRows = maxLidResult?.rows || [];
         let nextLid = 1;
-        if (maxLidResult && maxLidResult.length > 0 && maxLidResult[0].LID) {
-            nextLid = maxLidResult[0].LID + 1;
+        if (maxLidRows.length > 0 && maxLidRows[0].LID) {
+            nextLid = maxLidRows[0].LID + 1;
         }
 
         // 4. Insert labels

@@ -19,13 +19,13 @@ describe('POST /api/projects/map-kwcoco-csv', () => {
         const mockClient = {
             open: jest.fn(),
             all: jest.fn().mockImplementation((sql) => {
-                if (sql.includes('Classes')) return Promise.resolve([]);
-                if (sql.includes('Images')) return Promise.resolve([]);
-                if (sql.includes('Labels')) return Promise.resolve([]);
-                return Promise.resolve([]);
+                if (sql.includes('Classes')) return Promise.resolve({ success: true, rows: [] });
+                if (sql.includes('Images')) return Promise.resolve({ success: true, rows: [] });
+                if (sql.includes('Labels')) return Promise.resolve({ success: true, rows: [] });
+                return Promise.resolve({ success: true, rows: [] });
             }),
-            get: jest.fn().mockResolvedValue(null),
-            run: jest.fn().mockResolvedValue({ changes: 1 }),
+            get: jest.fn().mockResolvedValue({ success: true, row: null }),
+            run: jest.fn().mockResolvedValue({ success: true, changes: 1, lastID: 1 }),
         };
 
         global.projectDbClients = {
