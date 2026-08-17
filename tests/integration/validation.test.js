@@ -9,6 +9,9 @@ jest.mock('unzipper', () => jest.fn());
 jest.mock('child_process', () => ({
   exec: jest.fn(),
 }));
+// node-fetch@3 is ESM-only, which Jest in this repo isn't configured to transform;
+// requiring app.js pulls it in via routes/chat/ollamaChat.js.
+jest.mock('node-fetch', () => jest.fn());
 jest.mock('sqlite3', () => {
   const mockDb = {
     run: jest.fn((...cbArgs) => {

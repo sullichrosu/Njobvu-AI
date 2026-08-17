@@ -1,7 +1,6 @@
 import sys
 print("Python executable:", sys.executable);
 import os
-from ultralytics import YOLO
 from PIL import Image
 import subprocess
 import shutil
@@ -62,6 +61,7 @@ def classification_plus_import(db_name, input_dir, output):
                 dir_path = os.path.join(dir_to_process, directory)
 
                 if os.path.isdir(dir_path):
+                    class_name = directory.replace(' ', '_')
                     for img in os.listdir(dir_path):
                         input_image_path = os.path.join(dir_path, img)
 
@@ -70,8 +70,8 @@ def classification_plus_import(db_name, input_dir, output):
                             width, height = img_to_open.size
                             x = 0
                             y = 0
-                            new_img_name = f"{directory}_{img}"
-                            f.write(f"{directory} {x} {y} {width} {height} {new_img_name}\n")
+                            new_img_name = f"{class_name}_{img}"
+                            f.write(f"{class_name} {x} {y} {width} {height} {new_img_name}\n")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     import_nj_script = os.path.join(script_dir, "importNJ.py")
@@ -105,6 +105,8 @@ def classification_plus_import(db_name, input_dir, output):
 
 
 def inference_into_classification(db_name, input_dir, output, weights_file, classification_dir):
+    from ultralytics import YOLO
+
     print("\n--- Starting Inference into Classification ---")
     print(f"Input directory: {input_dir}")
     print(f"Weights file: {weights_file}")
@@ -156,7 +158,7 @@ def inference_into_classification(db_name, input_dir, output, weights_file, clas
                     y2 = y2 - y1
                     class_id = int(box.cls.item())
 
-                    class_name = class_names.get(class_id, "unknown_class")
+                    class_name = class_names.get(class_id, "unknown_class").replace(' ', '_')
                     print(f"  - Detection! Class: '{class_name}'. Saving cropped image.")
 
                     img_obj = Image.open(img_path)
@@ -203,6 +205,8 @@ def inference_into_classification(db_name, input_dir, output, weights_file, clas
     classification_plus_import(db_name, import_source_dir, output)
 
 def inference_plus_import(input_dir, output, weights_file):
+    from ultralytics import YOLO
+
     model = YOLO(weights_file)
 
     with open('labels.txt', "w") as f:
@@ -268,12 +272,12 @@ def yolo_archive_import(db_name, input_dir, output, weights_file=None):
                         names = data['names']
 
                         if isinstance(names, dict):
-                            class_names = {int(k): str(v) for k, v in names.items()}
+                            class_names = {int(k): str(v).replace(' ', '_') for k, v in names.items()}
                             print(f"Parsed class names from {yf}: {class_names}")
 
                             break
                         elif isinstance(names, list):
-                            class_names = {i: str(v) for i, v in enumerate(names)}
+                            class_names = {i: str(v).replace(' ', '_') for i, v in enumerate(names)}
                             print(f"Parsed class names from {yf}: {class_names}")
 
                             break
@@ -287,7 +291,7 @@ def yolo_archive_import(db_name, input_dir, output, weights_file=None):
                 if file.lower() == 'classes.txt':
                     try:
                         with open(os.path.join(root, file), 'r') as f:
-                            lines = [line.strip() for line in f if line.strip()]
+                            lines = [line.strip().replace(' ', '_') for line in f if line.strip()]
                             class_names = {i: name for i, name in enumerate(lines)}
                             print(f"Parsed class names from classes.txt: {class_names}")
                             break
@@ -385,7 +389,7 @@ def yolo_archive_import(db_name, input_dir, output, weights_file=None):
                                     top_y = int(round((y_center - h / 2.0) * img_h))
                                     box_w = int(round(w * img_w))
                                     box_h = int(round(h * img_h))
-                                    cname = class_names.get(class_id, f"class_{class_id}")
+                                    cname = class_names.get(class_id, f"class_{class_id}").replace(' ', '_')
 
                                     if cname not in inserted_classes:
                                         cursor.execute("INSERT OR IGNORE INTO Classes (CName) VALUES (?)", (cname,))
@@ -472,7 +476,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     for cat in categories:
         cat_id = cat.get('id')
-        cat_name = cat.get('name', f"class_{cat_id}")
+        cat_name = cat.get('name', f"class_{cat_id}").replace(' ', '_')
         category_map[cat_id] = cat_name
 
         cursor.execute("INSERT OR IGNORE INTO Classes (CName) VALUES (?)", (cat_name,))
@@ -488,40 +492,50 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     import re
 
-    # helper function to extract trailing digits from a filename stem
+    # helper function to extract trailing digits from a filename stem, used only
+    # as a fallback when no file on disk has the exact name the JSON expects
     def get_digits_suffix(filename):
         stem = os.path.splitext(os.path.basename(filename))[0]
         match = re.search(r'(\d+)\s*$', stem)
 
         return int(match.group(1)) if match else None
 
-    # map the isolated integer frame number to its actual disk path
-    all_files_in_archive = {}
+    # index files on disk both by exact basename (matches what the KW COCO
+    # exporter writes as `file_name`) and by trailing frame number (fallback
+    # for archives from other tools that renamed files but kept the JSON in sync)
+    files_by_name = {}
+    files_by_frame_num = {}
     for root, dirs, files in os.walk(input_dir):
         if '__MACOSX' in root or '.pytest_cache' in root:
             continue
 
         for file in files:
-            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')):
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif')):
+                full_path = os.path.join(root, file)
+                files_by_name[file] = full_path
+
                 frame_num = get_digits_suffix(file)
-
                 if frame_num is not None:
-                    all_files_in_archive[frame_num] = os.path.join(root, file)
+                    files_by_frame_num[frame_num] = full_path
 
-    print(f"Indexed {len(all_files_in_archive)} physical image stems via numeric frame matching.")
+    print(f"Indexed {len(files_by_name)} physical image files on disk.")
 
     for img_entry in coco_images:
         img_id = img_entry.get('id')
         file_name = img_entry.get('file_name')
 
         base_filename = os.path.basename(file_name)
-        target_frame_num = get_digits_suffix(base_filename)
+        found_path = files_by_name.get(base_filename)
 
-        print(f"Attempting to match JSON target '{base_filename}' using frame number ID: {target_frame_num}")
+        if found_path is None:
+            # fall back to matching on the trailing numeric frame number
+            target_frame_num = get_digits_suffix(base_filename)
+            found_path = files_by_frame_num.get(target_frame_num) if target_frame_num is not None else None
 
-        if target_frame_num in all_files_in_archive:
-            found_path = all_files_in_archive[target_frame_num]
+            if found_path is not None:
+                print(f"No exact filename match for '{base_filename}'; matched via frame number {target_frame_num} instead.")
 
+        if found_path is not None:
             # use the actual filename from the JSON so the bounding boxes stay consistent
             new_image_name = base_filename
 
@@ -531,7 +545,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
             cursor.execute("INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", (new_image_name,))
             image_id_to_new_name[img_id] = new_image_name
         else:
-            print(f"FATAL ERROR: Frame ID '{target_frame_num}' from JSON entry '{base_filename}' cannot be matched to any file on disk.", file=sys.stderr)
+            print(f"FATAL ERROR: JSON entry '{base_filename}' cannot be matched to any file on disk.", file=sys.stderr)
             sys.exit(1)
 
     # 5. populate labels
@@ -548,6 +562,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
         cname = category_map.get(cat_id)
 
         if new_image_name and cname and bbox and len(bbox) == 4:
+            cname = cname.replace(' ', '_')
             left_x = int(round(bbox[0]))
             top_y = int(round(bbox[1]))
             box_w = int(round(bbox[2]))
@@ -562,9 +577,9 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     print(f"COCO Archive Import completed successfully. Inserted {label_id - 1} labels.")
 
-# Main argument parsing and execution logic
+# main argument parsing and execution logic
 if __name__ == '__main__':
-    # Parse all arguments first
+    # parse all arguments first
     for i in range(1, len(sys.argv)):
         if sys.argv[i] == '-i':
             input_dir = sys.argv[i+1]
@@ -582,7 +597,7 @@ if __name__ == '__main__':
             help()
             sys.exit()
 
-    # Then, after the loop, decide what to run
+    # then, after the loop, decide what to run
     if runs == 'class':
         classification_plus_import(db_name, input_dir, output)
     elif runs == 'inf':

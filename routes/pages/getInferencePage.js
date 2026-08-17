@@ -1,5 +1,6 @@
 const fsPath = require("path");
 const fs = require("fs");
+const { isReservedInferenceFile } = require("../../utils/isRunArtifactFile");
 
 async function getProcessingPage(req, res) {
     const readdir = util.promisify(fs.readdir);
@@ -359,6 +360,8 @@ async function getProcessingPage(req, res) {
 
             if (type.trim() === "inception") {
                 run_types.push("Inception");
+            } else if (type.trim() === "megadetector") {
+                run_types.push("MegaDetector");
             } else if (type.trim() === "yolo") {
                 run_types.push("YOLO");
             } else {
@@ -366,10 +369,13 @@ async function getProcessingPage(req, res) {
             }
         } else {
             const inceptionExists = fileExistsRecursive(run_path_inf, "inception.py");
+            const megadetectorExists = fileExistsRecursive(run_path_inf, "megadetector.py");
             const yoloExists = fileExistsRecursive(run_path_inf, "datatovalues.py");
 
             if (inceptionExists) {
                 run_types.push("Inception");
+            } else if (megadetectorExists) {
+                run_types.push("MegaDetector");
             } else if (yoloExists) {
                 run_types.push("YOLO");
             } else {
@@ -390,10 +396,7 @@ async function getProcessingPage(req, res) {
                 if (j == err_idx_inf) {
                     continue;
                 }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
@@ -410,10 +413,7 @@ async function getProcessingPage(req, res) {
                 if (j == done_idx_inf) {
                     continue;
                 }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);
@@ -431,10 +431,7 @@ async function getProcessingPage(req, res) {
                 // {
                 // 	continue;
                 // }
-                if (
-                    `${logs_inf[j]}` == "datatovalues.py" ||
-                    `${logs_inf[j]}` == "output"
-                ) {
+                if (isReservedInferenceFile(`${logs_inf[j]}`)) {
                     continue;
                 }
                 // weight_inf.push(`${run_path_inf}${logs_inf[j]}`);

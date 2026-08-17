@@ -1,3 +1,5 @@
+const queries = require("../../queries/queries");
+
 async function getYoloXSettingsPage(req, res) {
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
@@ -112,6 +114,26 @@ async function getYoloXSettingsPage(req, res) {
         "'",
     );
     var results2 = await tdb.allAsync("SELECT * FROM `Classes`");
+
+    var classLabelCounts = {};
+
+    try {
+        var countsResult = await queries.project.getClassLabelCounts(project_path);
+
+        if (countsResult && countsResult.rows) {
+            countsResult.rows.forEach(function (row) {
+                classLabelCounts[row.CName] = row.labelCount;
+            });
+        }
+    } catch (err) {
+        global.logger.error(err);
+    }
+
+    results2 = results2.map(function (cls) {
+        return Object.assign({}, cls, {
+            labelCount: classLabelCounts[cls.CName] || 0,
+        });
+    });
 
     var acc = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName = '" +

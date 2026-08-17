@@ -1,9 +1,33 @@
 <%- include('includes/header', { activePage }) %>
 <div id="home">
 	<link rel="stylesheet" href="/node_modules/@fortawesome/fontawesome-free/css/all.min.css">
-	<div class="col-md-12">
-		<div class="col-10">
-			<input class="form-control" type="text" placeholder="Search (currently disabled)" aria-label="Search" style="border-radius: 0" disabled>
+	<div class="col-md-12 mb-3" style="padding-left: 15px; padding-right: 15px; margin-bottom: 15px;">
+		<div class="form-row align-items-center">
+			<div class="col-md-4">
+				<input class="form-control" type="text" id="project-search" placeholder="Search projects by name or admin..." aria-label="Search" value="<%= typeof search !== 'undefined' ? search : '' %>">
+			</div>
+			<div class="col-md-3">
+				<select class="form-control" id="project-sort-by" onchange="applyFilters()">
+					<option value="name" <%= (typeof sortBy !== 'undefined' && sortBy === 'name') ? 'selected' : '' %>>Sort by Name</option>
+					<option value="admin" <%= (typeof sortBy !== 'undefined' && sortBy === 'admin') ? 'selected' : '' %>>Sort by Admin</option>
+					<option value="numImages" <%= (typeof sortBy !== 'undefined' && sortBy === 'numImages') ? 'selected' : '' %>>Sort by # Images</option>
+					<option value="numLabels" <%= (typeof sortBy !== 'undefined' && sortBy === 'numLabels') ? 'selected' : '' %>>Sort by # Labels</option>
+					<option value="percentLabeled" <%= (typeof sortBy !== 'undefined' && sortBy === 'percentLabeled') ? 'selected' : '' %>>Sort by % Labeled</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<select class="form-control" id="project-sort-order" onchange="applyFilters()">
+					<option value="asc" <%= (typeof sortOrder !== 'undefined' && sortOrder === 'asc') ? 'selected' : '' %>>Ascending</option>
+					<option value="desc" <%= (typeof sortOrder !== 'undefined' && sortOrder === 'desc') ? 'selected' : '' %>>Descending</option>
+				</select>
+			</div>
+			<div class="col-md-3">
+				<select class="form-control" id="project-review-filter" onchange="applyFilters()">
+					<option value="all" <%= (typeof needsReview !== 'undefined' && needsReview === 'all') ? 'selected' : '' %>>All Statuses</option>
+					<option value="true" <%= (typeof needsReview !== 'undefined' && (needsReview === 'true' || needsReview === '1')) ? 'selected' : '' %>>Needs Review Only</option>
+					<option value="false" <%= (typeof needsReview !== 'undefined' && (needsReview === 'false' || needsReview === '0')) ? 'selected' : '' %>>No Review Needed</option>
+				</select>
+			</div>
 		</div>
 	</div>
 	<div class="form-group col-md-12" style="padding: 0px; margin: 0px">
@@ -15,9 +39,9 @@
 		<input type="number" id="perpage" name="perpage" min="1" value="<%=perPage%>" style="width: 25%;">
 		</div>
 		<div class="col-6" style="float: right">
-			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="validationPage()">Switch to Validation</button>
-			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="createpage()">Create Project</button>
-			<button type="button" class="btn btn-primary" style="float:right" id="importbtn" data-toggle="modal" data-target="#import_modal" >Import Project</button>
+			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="validationPage()" data-toggle="tooltip" title="Switch between standard labeling and validation mode">Switch to Validation <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Toggle validation quality assurance mode">?</span></button>
+			<button type="button" class="btn btn-primary" style="float: right; margin-left: 15px" onclick="createpage()" data-toggle="tooltip" title="Create a new labeling or classification project">Create Project <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create project from scratch or import archives (YOLO/KW-COCO/IFCB)">?</span></button>
+			<button type="button" class="btn btn-primary" style="float:right" id="importbtn" data-toggle="modal" data-target="#import_modal" data-toggle="tooltip" title="Import existing project database archive">Import Project <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Import an exported project zip database">?</span></button>
 	   </div>
 	</div>
     <div class="col-12">
@@ -41,7 +65,7 @@
 				<tr>
 					<th scope="col">Project Name</th>
 					<th class="text-center" scope="col">Admin</th>
-					<th class="text-center" scope="col">Review Status</th>
+					<th class="text-center" scope="col">Review Status <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Shows if project images are flagged as Needs Review for expert audit">?</span></th>
 					<th class="text-center" scope="col">Number of Labels</th>
 					<th class="text-center" scope="col">Number of Images</th>
 					<th class="text-center" scope="col">% Labeled</th>
@@ -50,9 +74,10 @@
 				</tr>
 			</thead>
             <tbody>
+                <% var filterParams = "&search=" + encodeURIComponent(typeof search !== 'undefined' ? search : '') + "&sortBy=" + (typeof sortBy !== 'undefined' ? sortBy : 'name') + "&sortOrder=" + (typeof sortOrder !== 'undefined' ? sortOrder : 'asc') + "&needsReview=" + (typeof needsReview !== 'undefined' ? needsReview : 'all'); %>
                 <% for(var i=((page-1)*perPage); i<(Math.min(projects.length,(((page-1)*perPage)+Number(perPage)))); i++) {%>
 					<tr>
-						<td scope="row"><a href="/project?IDX=<%= projects[i][1] %>%>&page=1&perPage=<%= perPage %>"><%= projects[i][0].PName %></a></td>
+						<td scope="row"><a href="/project?IDX=<%= projects[i][1] %>&page=1&perPage=<%= perPage %>"><%= projects[i][0].PName %></a></td>
 						<td class="text-center" scope="row"><%= projects[i][0].Admin %></td>
 						<% if (projects[i][2] != 0) {%>
 							<td class="text-center" style="color: red;">Needs Review</td>
@@ -106,7 +131,7 @@
                 </li>
                 <% } else { %>
                 <li class="page-item">
-                  <a class="page-link" href="/home?page=1&perPage=<%= perPage %>" tabindex="-1">First</a>
+                  <a class="page-link" href="/home?page=1&perPage=<%= perPage %><%= filterParams %>" tabindex="-1">First</a>
                 </li>
                 <% } %>
                 <% var i = (Number(current) > 6 ? Number(current) - 5 : 1) %>
@@ -123,7 +148,7 @@
                         </li>
                     <% } else { %>
                         <li class="page-item">
-                            <a class="page-link" href="/home?page=<%= i %>&perPage=<%= perPage %>"><%= i %></a>
+                            <a class="page-link" href="/home?page=<%= i %>&perPage=<%= perPage %><%= filterParams %>"><%= i %></a>
                         </li>
                     <% } %>
                     <% if (i == j && i < pages) { %>
@@ -138,7 +163,7 @@
                     </li>
                 <% } else { %>
                     <li class="page-item">
-                        <a class="page-link" href="/home?page=<%= pages %>&perPage=<%= perPage %>">Last</a>
+                        <a class="page-link" href="/home?page=<%= pages %>&perPage=<%= perPage %><%= filterParams %>">Last</a>
                     </li>
                 <% } %>
             </ul>
@@ -264,22 +289,28 @@
 
 <script>
 	var pgnum = document.getElementById("page");
-	pgnum.oninput = function(){
-		console.log("pgnum oninput");
-		console.log("pgnum: ", pgnum.value)
-		if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
-		{
-
-			window.location.href = `/home?page=${pgnum.value}&perPage=<%=perPage%>`;
+	if (pgnum) {
+		pgnum.onchange = function(){
+			if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
+			{
+				var search = document.getElementById("project-search") ? document.getElementById("project-search").value : "";
+				var sortBy = document.getElementById("project-sort-by") ? document.getElementById("project-sort-by").value : "name";
+				var sortOrder = document.getElementById("project-sort-order") ? document.getElementById("project-sort-order").value : "asc";
+				var needsReview = document.getElementById("project-review-filter") ? document.getElementById("project-review-filter").value : "all";
+				var perPage = document.getElementById("perpage") ? document.getElementById("perpage").value : 10;
+				window.location.href = `/home?page=${pgnum.value}&perPage=${perPage}&search=${encodeURIComponent(search)}&sortBy=${sortBy}&sortOrder=${sortOrder}&needsReview=${needsReview}`;
+			}
 		}
 	}
 </script>
 <script>
 	var perpage = document.getElementById("perpage");
-	perpage.oninput = function(){
-		if(perpage.value > 0)
-		{
-			window.location.href = `/home?page=<%=page%>&perPage=${perpage.value}`;
+	if (perpage) {
+		perpage.onchange = function(){
+			if(perpage.value > 0)
+			{
+				applyFilters();
+			}
 		}
 	}
 </script>
@@ -336,6 +367,26 @@
 			alert("An error occured. Please try again");
 			window.location.replace("/home");
 		}
+	}
+</script>
+
+<script>
+	function applyFilters() {
+		var search = document.getElementById("project-search").value;
+		var sortBy = document.getElementById("project-sort-by").value;
+		var sortOrder = document.getElementById("project-sort-order").value;
+		var needsReview = document.getElementById("project-review-filter").value;
+		var perPage = document.getElementById("perpage").value || 10;
+		window.location.href = `/home?page=1&perPage=${perPage}&search=${encodeURIComponent(search)}&sortBy=${sortBy}&sortOrder=${sortOrder}&needsReview=${needsReview}`;
+	}
+
+	var searchInput = document.getElementById("project-search");
+	if (searchInput) {
+		searchInput.addEventListener("keypress", function(e) {
+			if (e.key === "Enter") {
+				applyFilters();
+			}
+		});
 	}
 </script>
 <%- include('includes/footer') %>

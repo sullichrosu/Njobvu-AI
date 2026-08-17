@@ -1,0 +1,78 @@
+{
+  "runName": "tmp_test_run_all_runs_summary",
+  "runDir": "/home/fc/multica_workspaces/09feba42-72e2-4319-888e-970a8e60ff21/b7408c23/workdir/Njobvu-AI/tests",
+  "runType": "aggregated",
+  "isAggregated": true,
+  "projectName": "tmp_test_run",
+  "generatedAt": "2026-08-04T21:51:19.848Z",
+  "totalRuns": 1,
+  "trainingRunCount": 1,
+  "inferenceRunCount": 0,
+  "aggregateMetrics": {
+    "totalEpochsTrained": 3,
+    "bestOverallMap50": 0.85,
+    "bestRunName": "tmp_test_run"
+  },
+  "findings": [
+    "Aggregated analysis for 1 run(s) in project 'tmp_test_run'.",
+    "Training runs: 1, Inference runs: 0.",
+    "Total epochs trained across all runs: 3.",
+    "Top performing training run: 'tmp_test_run' with peak mAP@50 of 85.00%."
+  ],
+  "recommendations": [
+    "Run 'tmp_test_run' demonstrated high detection performance (mAP@50 > 80%). Recommended for deployment."
+  ],
+  "runs": [
+    {
+      "runName": "tmp_test_run",
+      "runDir": "/home/fc/multica_workspaces/09feba42-72e2-4319-888e-970a8e60ff21/b7408c23/workdir/Njobvu-AI/tests/tmp_test_run",
+      "runType": "training",
+      "isAggregated": false,
+      "generatedAt": "2026-08-04T21:51:19.847Z",
+      "artifactCount": 4,
+      "imageCount": 1,
+      "config": {
+        "epochs": 10,
+        "batch": 16,
+        "model": "yolov8n.pt"
+      },
+      "metrics": {
+        "totalEpochs": 3,
+        "bestMap50": 0.85,
+        "bestMap50Epoch": 3,
+        "bestMap50_95": 0,
+        "epoch": 3,
+        "mAP50": 0.85
+      },
+      "performanceAnalysis": {
+        "initialLoss": null,
+        "finalLoss": null,
+        "lossReductionPercent": "N/A",
+        "lossTrend": "stable",
+        "bestPerformanceEpoch": 3
+      },
+      "logDiagnostics": {
+        "detectedHardware": "N/A",
+        "durationSeconds": null,
+        "warnings": [],
+        "errors": [],
+        "completionStatus": "Unknown"
+      },
+      "weightsInfo": [],
+      "visualPlots": [
+        "test_img.jpg"
+      ],
+      "findings": [
+        "Completed 3 epochs of training.",
+        "Achieved peak mAP@50 of 85.00% (Epoch 3)."
+      ],
+      "recommendations": [
+        "Model achieved strong detection accuracy (mAP@50 > 80%). Ready for validation and deployment."
+      ],
+      "markdownSummary": "# Run Summary: tmp_test_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-04T21:51:19.847Z\n- **Artifact Count**: 4 files (1 images)\n\n## Executive Summary & Findings\n- Completed 3 epochs of training.\n- Achieved peak mAP@50 of 85.00% (Epoch 3).\n\n## Performance & Metrics Analysis\n- **Loss Reduction**: N/A (Initial: null, Final: null)\n- **Loss Trajectory**: stable\n```json\n{\n  \"totalEpochs\": 3,\n  \"bestMap50\": 0.85,\n  \"bestMap50Epoch\": 3,\n  \"bestMap50_95\": 0,\n  \"epoch\": 3,\n  \"mAP50\": 0.85\n}\n```\n\n## AI Recommendations & Next Steps\n- 💡 Model achieved strong detection accuracy (mAP@50 > 80%). Ready for validation and deployment.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"epochs\": 10,\n  \"batch\": 16,\n  \"model\": \"yolov8n.pt\"\n}\n```\n",
+      "summaryMd": "# Run Summary: tmp_test_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-04T21:51:19.847Z\n- **Artifact Count**: 4 files (1 images)\n\n## Executive Summary & Findings\n- Completed 3 epochs of training.\n- Achieved peak mAP@50 of 85.00% (Epoch 3).\n\n## Performance & Metrics Analysis\n- **Loss Reduction**: N/A (Initial: null, Final: null)\n- **Loss Trajectory**: stable\n```json\n{\n  \"totalEpochs\": 3,\n  \"bestMap50\": 0.85,\n  \"bestMap50Epoch\": 3,\n  \"bestMap50_95\": 0,\n  \"epoch\": 3,\n  \"mAP50\": 0.85\n}\n```\n\n## AI Recommendations & Next Steps\n- 💡 Model achieved strong detection accuracy (mAP@50 > 80%). Ready for validation and deployment.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"epochs\": 10,\n  \"batch\": 16,\n  \"model\": \"yolov8n.pt\"\n}\n```\n"
+    }
+  ],
+  "markdownSummary": "# Run Summary: tmp_test_run_all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: tmp_test_run\n- **Generated At**: 2026-08-04T21:51:19.848Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s) in project 'tmp_test_run'.\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 3.\n- Top performing training run: 'tmp_test_run' with peak mAP@50 of 85.00%.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 3\n- **Best Overall mAP@50**: 85.00%\n- **Top Performing Run**: `tmp_test_run`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `tmp_test_run` | training | 1 | 85.00% | 3 |\n\n## AI Recommendations & Next Steps\n- 💡 Run 'tmp_test_run' demonstrated high detection performance (mAP@50 > 80%). Recommended for deployment.\n",
+  "summaryMd": "# Run Summary: tmp_test_run_all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: tmp_test_run\n- **Generated At**: 2026-08-04T21:51:19.848Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s) in project 'tmp_test_run'.\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 3.\n- Top performing training run: 'tmp_test_run' with peak mAP@50 of 85.00%.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 3\n- **Best Overall mAP@50**: 85.00%\n- **Top Performing Run**: `tmp_test_run`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `tmp_test_run` | training | 1 | 85.00% | 3 |\n\n## AI Recommendations & Next Steps\n- 💡 Run 'tmp_test_run' demonstrated high detection performance (mAP@50 > 80%). Recommended for deployment.\n"
+}

@@ -1,5 +1,7 @@
 const queries = require("../../queries/queries");
 const path = require("path");
+const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const config = require("../../config.json");
 
 async function yoloInference(req, res) {
     try {
@@ -154,12 +156,22 @@ async function yoloInference(req, res) {
             }
         }
 
-        var cmd = `python3 ${yoloScript} -d ${runPath} -i ${inferenceFilePath} -n ${classesPath} -l ${absUltralyticsProjectRun}/${log} -f ${ultralyticsPath} -w ${weightPath} -t ${yoloTask}`;
+        var cmd = `${config["default_python_path"]} ${yoloScript} -d ${runPath} -i ${inferenceFilePath} -n ${classesPath} -l ${absUltralyticsProjectRun}/${log} -f ${ultralyticsPath} -w ${weightPath} -t ${yoloTask}`;
 
         var success = "";
         var error = "";
 
-        fs.writeFileSync(`${absUltralyticsProjectRun}/${log}`, `${cmd}\n\n`);
+        const runOptionsHeader = formatRunOptionsHeader({
+            project: PName,
+            task: yoloTask,
+            yolovx_path: yolovxPath,
+            inference_file: inferenceFile,
+            device,
+            options,
+            weights: weightName,
+        });
+
+        fs.writeFileSync(`${absUltralyticsProjectRun}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
         exec(cmd, (err, stdout, stderr) => {
             if (err) {

@@ -10,13 +10,13 @@ async function downloadDataset(req, res) {
         user = req.cookies.Username;
 
     var publicPath = currentPath,
-        mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
-        projectPath = mainPath + admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
-        mergePath = projectPath + "/merge/",
-        mergeImages = mergePath + "images/",
-        imagesPath = projectPath + "/images", // $LABELING_TOOL_PATH/public/projects/project_name/images
-        downloadsPath = mainPath + user + "_Downloads";
-    bootstrapPath = projectPath + "/bootstrap";
+        mainPath = path.join(publicPath, "public", "projects"), // $LABELING_TOOL_PATH/public/projects/
+        projectPath = path.join(mainPath, admin + "-" + PName), // $LABELING_TOOL_PATH/public/projects/project_name
+        mergePath = path.join(projectPath, "merge"),
+        mergeImages = path.join(mergePath, "images"),
+        imagesPath = path.join(projectPath, "images"), // $LABELING_TOOL_PATH/public/projects/project_name/images
+        downloadsPath = path.join(mainPath, user + "_Downloads");
+    bootstrapPath = path.join(projectPath, "bootstrap");
 
     if (!fs.existsSync(downloadsPath)) {
         fs.mkdirSync(downloadsPath);
@@ -497,6 +497,153 @@ async function downloadDataset(req, res) {
             images = await queries.project.getAllImages(projectPath);
         } catch (err) {
             global.logger.error(err);
+            return res.status(500).send("Error fetching images.");
+        }
+
+        images = images.rows;
+
+        for (var i = 0; i < images.length; i++) {
+            archive.file(
+                publicPath +
+                    "/public/projects/" +
+                    admin +
+                    "-" +
+                    PName +
+                    "/images/" +
+                    images[i].IName,
+                { name: images[i].IName },
+            );
+        }
+
+        archive.finalize();
+    }
+    // KitWare COCO
+    else if (downloadFormat == 7) {
+        let labels;
+        try {
+            labels = await queries.project.getAllLabels(projectPath);
+        } catch (err) {
+            console.error(err);
+            return res.status(500).send("Could not fetch labels");
+        }
+
+        labels = labels.rows;
+
+        let images = [];
+
+        var xmin = 0;
+        var xmax = 0;
+        var ymin = 0;
+        var ymax = 0;
+        var rows = [];
+        var imageNames = [];
+
+        for (var i = 0; i < labels.length; i++) {
+            data = [];
+            xmin = parseFloat(labels[i].X);
+            xmax = xmin + parseFloat(labels[i].W);
+            ymin = parseFloat(labels[i].Y);
+            ymax = ymin + parseFloat(labels[i].H);
+
+            data.push(labels[i].IName);
+            data.push(labels[i].CName);
+            data.push(parseFloat(labels[i].W));
+            data.push(parseFloat(labels[i].H));
+            data.push(xmin);
+            data.push(xmax);
+            data.push(ymin);
+            data.push(ymax);
+            data.push(labels[i].LID);
+
+            rows.push(data);
+        }
+        var coco = {};
+        var categories = [];
+        var annotations = [];
+
+        function im(pic, id) {
+            var image = {};
+            var relImagePath = imagesPath + pic;
+
+            var img = fs.readFileSync(`${imagesPath}/${pic}`);
+            var imgData = probe.sync(img);
+            var imgW = imgData.width;
+            var imgH = imgData.height;
+
+            image["height"] = imgH;
+            image["width"] = imgW;
+            image["id"] = id;
+            image["file_name"] = pic;
+            return image;
+        }
+
+        function category(cname) {
+            var cat = {};
+            cat["supercategory"] = "None";
+            cat["id"] = cnames.indexOf(cname);
+            cat["name"] = cname;
+            return cat;
+        }
+
+        function annotation(row) {
+            var anno = {};
+            var area = row[2] * row[3];
+            anno["segmentation"] = [];
+            anno["iscrowd"] = 0;
+            anno["area"] = area;
+            anno["image_id"] = imageNames.indexOf(row[0]);
+            anno["bbox"] = [row[4], row[6], row[2], row[3]];
+            anno["category_id"] = cnames.indexOf(row[1]);
+            anno["id"] = row[8];
+
+            return anno;
+        }
+        for (var i = 0; i < existingImages.rows.length; i++) {
+            imageNames.push(existingImages.rows[i].IName);
+            images.push(im(existingImages.rows[i].IName, i));
+        }
+        for (var i = 0; i < rows.length; i++) {
+            annotations.push(annotation(rows[i]));
+        }
+        for (var i = 0; i < cnames.length; i++) {
+            categories.push(category(cnames[i]));
+        }
+
+        coco["info"] = {
+            "description": "KitWare COCO export of project " + PName,
+            "version": "1.0",
+            "date_created": new Date().toISOString()
+        };
+        coco["videos"] = [];
+        coco["images"] = images;
+        coco["categories"] = categories;
+        coco["annotations"] = annotations;
+
+        var cocoData = JSON.stringify(coco);
+
+        fs.writeFileSync(downloadsPath + "/" + PName + "_kwcoco.json", cocoData);
+
+        var output = fs.createWriteStream(downloadsPath + "/kwcoco.zip");
+        var archive = archiver("zip");
+
+        output.on("close", function () {
+            res.download(downloadsPath + "/kwcoco.zip");
+        });
+
+        archive.on("error", function (err) {
+            throw err;
+        });
+
+        archive.pipe(output);
+
+        archive.file(downloadsPath + "/" + PName + "_kwcoco.json", {
+            name: PName + "_kwcoco.json",
+        });
+
+        try {
+            images = await queries.project.getAllImages(projectPath);
+        } catch (err) {
+            console.error(err);
             return res.status(500).send("Error fetching images.");
         }
 

@@ -4,6 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "jest",
     "dev": "nodemon server.js"
   },
@@ -18,6 +19,7 @@
   },
   "homepage": "https://github.com/madebymaze/express-server#readme",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1109.0",
     "@fortawesome/fontawesome-free": "^6.7.2",
     "@mapbox/node-pre-gyp": "^1.0.11",
     "@react-three/fiber": "^8.17.12",
@@ -41,6 +43,7 @@
     "moment": "^2.30.1",
     "multer": "^2.0.1",
     "nedb": "^1.8.0",
+    "node-fetch": "^3.3.2",
     "node-stream-zip": "^1.15.0",
     "nodemon": "^3.1.7",
     "popper.js": "^1.16.1",

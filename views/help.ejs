@@ -1,0 +1,395 @@
+<%- include('includes/header', { activePage: null }) %>
+
+<style>
+    .wiki-container {
+        padding-top: 25px;
+        padding-bottom: 50px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .wiki-hero {
+        background-color: #171717;
+        color: #ffffff;
+        padding: 35px 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .wiki-hero h1 {
+        font-weight: 700;
+        font-size: 2.2rem;
+        margin-bottom: 10px;
+    }
+
+    .wiki-hero p {
+        color: #94a3b8;
+        font-size: 1.05rem;
+        margin-bottom: 20px;
+    }
+
+    .wiki-search-box {
+        position: relative;
+        max-width: 600px;
+    }
+
+    .wiki-search-box input {
+        border-radius: 25px;
+        padding-left: 45px;
+        height: 48px;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        font-size: 1rem;
+    }
+
+    .wiki-search-box .search-icon {
+        position: absolute;
+        left: 16px;
+        top: 15px;
+        color: #64748b;
+        font-size: 1.1rem;
+    }
+
+    .wiki-nav-pills .nav-link {
+        color: #475569;
+        font-weight: 600;
+        border-radius: 20px;
+        padding: 8px 18px;
+        margin-right: 8px;
+        margin-bottom: 10px;
+        background-color: #f1f5f9;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .wiki-nav-pills .nav-link.active, .wiki-nav-pills .nav-link:hover {
+        background-color: #0284c7;
+        color: #ffffff;
+    }
+
+    .wiki-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        height: 100%;
+        background-color: #ffffff;
+    }
+
+    .wiki-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    .wiki-card-icon {
+        width: 48px;
+        height: 48px;
+        background: #e0f2fe;
+        color: #0284c7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        margin-bottom: 5px;
+    }
+
+    .wiki-card-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 10px;
+    }
+
+    .wiki-card-category {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: #64748b;
+        margin-bottom: 5px;
+    }
+
+    .wiki-card-body {
+        font-size: 0.95rem;
+        color: #334155;
+        line-height: 1.6;
+    }
+
+    .help-tooltip-demo {
+        background-color: #f8fafc;
+        border-left: 4px solid #0284c7;
+        padding: 15px 20px;
+        border-radius: 4px;
+        margin-top: 15px;
+    }
+
+    .help-tooltip-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #0284c7;
+        color: white;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-left: 6px;
+        vertical-align: middle;
+        transition: transform 0.15s ease;
+    }
+
+    .help-tooltip-icon:hover {
+        transform: scale(1.15);
+        background-color: #0369a1;
+    }
+</style>
+
+<div class="container wiki-container">
+    <!-- Hero Header -->
+    <div class="wiki-hero text-center text-md-left">
+        <div class="row align-items-center">
+            <div class="col-md-7">
+                <h1><i class="fas fa-book-open mr-2"></i> Documentation & Wiki</h1>
+                <p>Learn how to annotate datasets, train models, perform automated inference, and manage workspaces within Njobvu.</p>
+            </div>
+            <div class="col-md-5">
+                <div class="wiki-search-box mx-auto ml-md-auto">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" id="wikiSearchInput" class="form-control" placeholder="Search guides, tools, or tooltips...">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Pills -->
+    <div class="d-flex flex-wrap wiki-nav-pills mb-4" id="categoryFilter">
+        <button class="nav-link active" data-category="all">All Topics</button>
+        <button class="nav-link" data-category="General">General & Overview</button>
+        <button class="nav-link" data-category="Projects">Projects & Archives</button>
+        <button class="nav-link" data-category="Labeling">Labeling & Annotation</button>
+        <button class="nav-link" data-category="Training">Model Training</button>
+        <button class="nav-link" data-category="Inference">Inference & AI</button>
+        <button class="nav-link" data-category="Settings">Settings & Config</button>
+        <button class="nav-link" data-category="Tooltips">Interface Tooltips</button>
+    </div>
+
+    <!-- Topics Grid -->
+    <div class="row" id="wikiTopicsGrid">
+        <!-- Topic 1: Getting Started -->
+        <div class="col-md-6 col-lg-4 mb-4 wiki-topic-card" data-category="General">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">General</div>
+                <div class="wiki-card-icon"><i class="fas fa-rocket"></i></div>
+                <div class="wiki-card-title">Getting Started & Overview</div>
+                <div class="wiki-card-body">
+                    <p>Njobvu is designed for computer vision annotation and model management:</p>
+                    <ul>
+                        <li><strong>1.</strong> Create a project or import a dataset archive.</li>
+                        <li><strong>2.</strong> Draw bounding box annotations & verify labels.</li>
+                        <li><strong>3.</strong> Train custom model architectures (YOLO, Inception, VIAME).</li>
+                        <li><strong>4.</strong> Run inference and export results.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Topic 2: Project Management -->
+        <div class="col-md-6 col-lg-4 mb-4 wiki-topic-card" data-category="Projects">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">Projects</div>
+                <div class="wiki-card-icon"><i class="fas fa-folder-plus"></i></div>
+                <div class="wiki-card-title">Project Setup & Archives</div>
+                <div class="wiki-card-body">
+                    <p>Supported project creation workflows:</p>
+                    <ul>
+                        <li><strong>Blank Project:</strong> Set project name, comma-separated class names, and optional images/video files.</li>
+                        <li><strong>YOLO Archive:</strong> Import <code>.zip</code> containing images and YOLO <code>.txt</code> annotation labels.</li>
+                        <li><strong>KW-COCO & IFCB:</strong> Import COCO format JSON files or IFCB plankton data archives.</li>
+                        <li><strong>Bootstrap:</strong> Pre-annotate datasets using trained models.</li>
+                    </ul>
+                    <button class="btn"><a href="/create">Go there</a></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Topic 3: Annotation & Labeling -->
+        <div class="col-md-6 col-lg-4 mb-4 wiki-topic-card" data-category="Labeling">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">Labeling</div>
+                <div class="wiki-card-icon"><i class="fas fa-tags"></i></div>
+                <div class="wiki-card-title">Annotation & Labeling Workbench</div>
+                <div class="wiki-card-body">
+                    <p>Interactive canvas annotation tools:</p>
+                    <ul>
+                        <li><strong>Bounding Boxes:</strong> Click and drag on canvas to draw bounding box regions.</li>
+                        <li><strong>Class Assignment:</strong> Assign target class label from dropdown list.</li>
+                        <li><strong>Keyboard Shortcuts:</strong> Use <code>Left Arrow</code> (←) / <code>Right Arrow</code> (→) to cycle images. Press <code>Delete</code> to remove selected box.</li>
+                        <li><strong>Review Mode:</strong> Flag images for expert review.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Topic 4: Model Training -->
+        <div class="col-md-6 col-lg-4 mb-4 wiki-topic-card" data-category="Training">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">Training</div>
+                <div class="wiki-card-icon"><i class="fas fa-brain"></i></div>
+                <div class="wiki-card-title">Model Training & Custom Scripts</div>
+                <div class="wiki-card-body">
+                    <p>Train deep learning models on your dataset:</p>
+                    <ul>
+                        <li><strong>Dataset Split:</strong> Drag slider to adjust Train/Validation split ratio (50%-100%).</li>
+                        <li><strong>YOLOv3 & YOLOX:</strong> Run specialized YOLO object detection training pipelines.</li>
+                        <li><strong>Monitoring:</strong> Click run status buttons to inspect live training logs.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Topic 5: Inference & Active Learning -->
+        <div class="col-md-6 col-lg-4 mb-4 wiki-topic-card" data-category="Inference">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">Inference</div>
+                <div class="wiki-card-icon"><i class="fas fa-eye"></i></div>
+                <div class="wiki-card-title">Inference & Active Learning</div>
+                <div class="wiki-card-body">
+                    <p>Run model inference and cycle predictions back into dataset:</p>
+                    <ul>
+                        <li><strong>Min Confidence Threshold:</strong> Filter detections by minimum score (e.g., 0.50).</li>
+                        <li><strong>Add to Training Set:</strong> Instantly add inference detections to a labeled dataset.</li>
+                        <li><strong>Image Carousel:</strong> View bounding box overlay outputs in interactive modal.</li>
+                        <li><strong>Export Detections:</strong> Download logs and prediction files.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Topic 6: Configuration -->
+        <div class="col-md-6 col-lg-4 mb-4 wiki-topic-card" data-category="Settings">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">Settings</div>
+                <div class="wiki-card-icon"><i class="fas fa-cog"></i></div>
+                <div class="wiki-card-title">Settings & Access Permissions</div>
+                <div class="wiki-card-body">
+                    <p>Configure project properties & permissions:</p>
+                    <ul>
+                        <li><strong>Project Settings:</strong> Modify project description or delete project safely.</li>
+                        <li><strong>Class Settings:</strong> Add or edit class names and color identifiers.</li>
+                        <li><strong>User Access:</strong> Add user accounts with read/write project access.</li>
+                        <li><strong>Merge Thresholds:</strong> Set bounding box overlap IoU merge thresholds.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Topic 7: Key Interface Tooltips -->
+        <div class="col-md-12 mb-4 wiki-topic-card" data-category="Tooltips">
+            <div class="card wiki-card p-4">
+                <div class="wiki-card-category">Tooltips</div>
+                <div class="wiki-card-icon"><i class="fas fa-question-circle"></i></div>
+                <div class="wiki-card-title">Key UI Tooltips Quick Reference</div>
+                <div class="wiki-card-body">
+                    <p>Hover or click question mark icons (<span class="help-tooltip-icon" data-toggle="tooltip" title="Sample tooltip helper">?</span>) throughout the interface to see quick instructions:</p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mt-3">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Element / Feature</th>
+                                    <th>Location</th>
+                                    <th>Help Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Create Project</strong></td>
+                                    <td>Home Page Header</td>
+                                    <td>Create a new project from scratch, YOLO/KW-COCO/IFCB archive, or bootstrap model.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Switch to Validation</strong></td>
+                                    <td>Home Page Header</td>
+                                    <td>Toggle between standard labeling mode and quality assurance validation mode.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Needs Review</strong></td>
+                                    <td>Home Table</td>
+                                    <td>Indicates that one or more images in the project require expert quality verification.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Input Classes</strong></td>
+                                    <td>Create Project Form</td>
+                                    <td>Comma-separated list of target labels (e.g. <code>car,truck,bus</code>) without extra spaces.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Training Data Percentage</strong></td>
+                                    <td>Training Page</td>
+                                    <td>Slider adjusting percentage of labeled images allocated to training vs validation set.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Min Confidence</strong></td>
+                                    <td>Inference Page</td>
+                                    <td>Threshold (0.00 to 1.00) filtering predictions before adding to training dataset.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Add to Training Set</strong></td>
+                                    <td>Inference Page</td>
+                                    <td>Active learning button copying inference predictions above threshold back to project training set.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document.body).ready(function() {
+    // Initialize tooltips
+    if ($.fn.tooltip) {
+        $('[data-toggle="tooltip"]').tooltip();
+    }
+
+    // Category Filter Pills
+    $('#categoryFilter button').on('click', function() {
+        $('#categoryFilter button').removeClass('active');
+        $(this).addClass('active');
+
+        var category = $(this).data('category');
+        if (category === 'all') {
+            $('.wiki-topic-card').fadeIn(200);
+        } else {
+            $('.wiki-topic-card').hide();
+            $('.wiki-topic-card[data-category="' + category + '"]').fadeIn(200);
+        }
+    });
+
+    // Search Input Live Filter
+    $('#wikiSearchInput').on('keyup', function() {
+        var query = $(this).val().toLowerCase().trim();
+        if (query === '') {
+            var activeCategory = $('#categoryFilter button.active').data('category');
+            if (activeCategory === 'all') {
+                $('.wiki-topic-card').show();
+            } else {
+                $('.wiki-topic-card').hide();
+                $('.wiki-topic-card[data-category="' + activeCategory + '"]').show();
+            }
+            return;
+        }
+
+        $('.wiki-topic-card').each(function() {
+            var text = $(this).text().toLowerCase();
+            if (text.indexOf(query) !== -1) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+});
+</script>
+
+<%- include('includes/footer') %>

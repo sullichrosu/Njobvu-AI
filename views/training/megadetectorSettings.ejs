@@ -1,0 +1,176 @@
+<%- include('../includes/header') %>
+    <%- include('../includes/inferenceNav', { activePage }) %>
+        <script>
+            if ("<%= access.includes(user)%>" == "false") {
+                window.location.replace("/home");
+            }
+        </script>
+        <h1 style="text-align: center;">
+            <%= PName %>
+        </h1>
+        <div id="training" style="width: 100%">
+            <div class="container">
+                <div class="col-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">
+                                    <h4>MegaDetector Inference</h4>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <form class="add-inference" action="/upload_inference_file"
+                                        enctype="multipart/form-data" id="add-md-inference">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <h5><label for="upload-md-inference" style="width: 200%;">Upload
+                                                        inference file (.jpg, .png, .gif, .tif, .mp4)</label></h5>
+                                                <input id="upload-md-inference" name="upload-inference" type="file"
+                                                    class="form-control-file" required>
+                                            </div>
+                                        </div>
+                                        <div class="col text-left">
+                                            <button id="MdInfUploadBtn" type="submit" class="btn btn-primary btn-lg"
+                                                value="submit" style="border-radius: 0">ADD FILE</button>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                    <form class="Configure Project For MegaDetector" action="/megadetector-inf"
+                                        enctype="multipart/form-data" id="megadetector-inf" method="post">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="model">MegaDetector Model:</label></h5>
+                                                <select name="model" id="model" style="width:100%">
+                                                    <% for (var i = 0; i < megadetector_models.length; i++) { %>
+                                                        <option value="<%= megadetector_models[i] %>"><%= megadetector_models[i] %></option>
+                                                    <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="threshold">Confidence Threshold:</label></h5>
+                                                <input
+                                                    type="number"
+                                                    id="threshold"
+                                                    name="threshold"
+                                                    class="form-control"
+                                                    value="0.2"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.05"
+                                                >
+                                            </div>
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="fps">Video Sample Rate (fps):</label></h5>
+                                                <input
+                                                    type="number"
+                                                    id="fps"
+                                                    name="fps"
+                                                    class="form-control"
+                                                    value="1.0"
+                                                    min="0.1"
+                                                    step="0.1"
+                                                >
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="Inference_md">Inference Files:</label></h5>
+                                                <select name="Inference_md" id="Inference_md" style="width:100%">
+                                                    <% for(var i=0; i<global_inference_upload.length; i++) {%>
+                                                        <option>
+                                                            <%= global_inference_upload[i]%>
+                                                        </option>
+                                                        <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <br>
+                                        <div class="form-row">
+                                            <div class="col text-left">
+                                                <button id="MdInfBtn" type="submit" class="btn btn-primary btn-lg"
+                                                    value="submit" style="border-radius: 0">RUN MEGADETECTOR</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <script>
+            document.addEventListener("DOMContentLoaded", () => {
+                document.forms['add-md-inference'].addEventListener('submit', (event) => {
+                    event.preventDefault();
+
+                    var formData = new FormData();
+                    const upload_project = document.getElementById('upload-md-inference');
+                    const files = upload_project.files[0];
+
+                    if (!files || !(files.size > 0)) {
+                        alert("File must have a size > 0")
+                        return;
+                    }
+
+                    formData.append('upload_inference', files);
+                    formData.append("PName", "<%= PName %>");
+                    formData.append("Admin", "<%= Admin %>");
+
+                    fetch(event.target.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then((resp) => {
+                        return resp.json();
+                    }).then((body) => {
+                        alert(body.Success);
+                        window.location.replace("/megadetector/settings?IDX=<%= IDX %>");
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                });
+
+                document.getElementById("megadetector-inf").addEventListener('submit', (event) => {
+                    event.preventDefault();
+
+                    var model = document.getElementById("model").value;
+                    var threshold = document.getElementById("threshold").value;
+                    var fps = document.getElementById("fps").value;
+                    var inferenceFile = document.getElementById("Inference_md").value;
+
+                    if (!inferenceFile) {
+                        alert("Must select an inference file");
+                        return;
+                    }
+
+                    var formData = new FormData();
+                    formData.append("PName", "<%= PName %>");
+                    formData.append("Admin", "<%= Admin %>");
+                    formData.append("model", model);
+                    formData.append("threshold", threshold);
+                    formData.append("fps", fps);
+                    formData.append("inference_file", inferenceFile);
+
+                    fetch(event.target.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then((resp) => {
+                        return resp.json();
+                    }).then((body) => {
+                        alert(body.Success);
+                        window.location.replace("/inference?IDX=<%= IDX %>");
+                    }).catch((error) => {
+                        console.log(error);
+                    });
+                });
+            });
+        </script>
+        <%- include('../includes/footer') %>

@@ -44,7 +44,10 @@ const {
     getYoloXInferenceSettingsPage,
     getYoloXTrainingSettingsPage,
     getInceptionSettingsPage,
+    getHelpPage,
+    getMegadetectorSettingsPage,
 } = require("./routes/pages");
+const { getHelpApi } = require("./routes/api/help");
 
 // middleware
 
@@ -58,10 +61,13 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(cookieParser());
 app.use("/", api);
 
+app.get("/api/v2/help", getHelpApi);
+app.get("/api/help", getHelpApi);
 
 app.get("/", getLoginPage);
 app.get("/signup", getSignupPage);
 app.get("/home", getHomePage);
+app.get("/help", getHelpPage);
 app.get("/create", getCreatePage);
 app.get("/annotate", getAnnotatePage);
 app.get("/review", getReviewPage);
@@ -84,6 +90,7 @@ app.get("/yolo/yolovXSettings", getYoloXSettingsPage);
 app.get("/yolo/yolovXInferenceSettings", getYoloXInferenceSettingsPage);
 app.get("/yolo/yolovXTrainingSettings", getYoloXTrainingSettingsPage);
 app.get("/inference/inceptionSettings", getInceptionSettingsPage);
+app.get("/megadetector/settings", getMegadetectorSettingsPage);
 app.get("/user", getUserPage);
 app.get("/servstats", getServerStatsPage);
 app.get("/homeV", getValidationHomePage);

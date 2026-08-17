@@ -4,6 +4,9 @@
             <a class="nav-link <%= activePage === 'yolovXInferencePage' ? 'active' : '' %>" href="/yolo/yolovXInferenceSettings?IDX=<%= IDX %>" style="border-radius: 0">YOLO (ultralytics)</a>
         </li>
         <li class="nav-item">
+            <a class="nav-link <%= activePage === 'megadetectorSettings' ? 'active' : '' %>" href="/megadetector/settings?IDX=<%= IDX %>" style="border-radius: 0">MegaDetector</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" <%= activePage === 'inferenceSettings' ? 'active' : '' %>" href="/inference/inceptionSettings?IDX=<%= IDX %>" style="border-radius: 0">Inception V3</a>
         </li>
         <li class="nav-item">

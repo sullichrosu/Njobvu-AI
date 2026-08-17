@@ -58,11 +58,19 @@ const importProject = require("./projects/importProject");
 const importDataset = require("./projects/importDataset");
 const importYolo = require("./projects/importYolo");
 const importKwCoco = require("./projects/importKwCoco");
+const importIfcb = require("./projects/importIfcb");
 const mergeLocal = require("./projects/mergeLocal");
 const removeAccess = require("./projects/removeAccess");
 const transferAdmin = require("./projects/transferAdmin");
 const script = require("./projects/script");
 const deleteImagesWithoutLabel = require("./projects/deleteImagesWithoutLabel");
+const { getFilteredProjectsApi, getFilteredImagesApi } = require("./api/projectsFilter");
+const {
+    attachS3Bucket,
+    getS3Bucket,
+    deleteS3Bucket,
+    syncS3Bucket,
+} = require("./api/v2/s3Buckets");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -73,6 +81,7 @@ const downloadProject = require("./downloads/downloadProject");
 const downloadScript = require("./downloads/downloadScript");
 const downloadWeights = require("./downloads/downloadWeights");
 const downloadRun = require("./downloads/downloadRun");
+const downloadClasses = require("./downloads/downloadClasses");
 
 const test = require("./tests/test");
 const mergeTest = require("./tests/mergeTest");
@@ -84,15 +93,37 @@ const changeClass = require("./validation/changeClass");
 
 const bootstrapController = require("./bootstrap/bootstrapController");
 
+const ollamaChat = require("./chat/ollamaChat");
+const { getChatConfig, updateChatConfig, getOllamaModels } = require("./chat/chatConfig");
+
 const yoloInference = require("./inference/yoloInference");
 const getRunImages = require("./inference/getRunImages");
 const uploadInferenceFile = require("./inference/uploadInferenceFile");
 const inceptionInference = require("./inference/inceptionInference");
 const addYoloInferenceToDataset = require("./inference/addYoloInferenceToDataset");
+const megadetectorInference = require("./inference/megadetectorInference");
+
+const { executePythonSandbox, handleRunSummary, handleListRuns, handleRunDocumentContext, handlePersistCustomSummary } = require("../controllers/sandboxController");
+
+// CHAT HARNESS ROUTES
+api.post("/api/chat", ollamaChat);
+api.get("/api/chat/config", getChatConfig);
+api.post("/api/chat/config", updateChatConfig);
+api.get("/api/chat/models", getOllamaModels);
+
+// SANDBOX & RUN SUMMARY ROUTES
+api.post("/api/sandbox/python", executePythonSandbox);
+api.post("/api/runs/summary", handleRunSummary);
+api.get("/api/runs/list", handleListRuns);
+api.post("/api/runs/list", handleListRuns);
+api.get("/api/runs/context", handleRunDocumentContext);
+api.post("/api/runs/context", handleRunDocumentContext);
+api.post("/api/runs/persist-summary", handlePersistCustomSummary);
 
 // INFERENCE ROUTES
 api.post("/yolo-inf", yoloInference);
 api.post("/inception-inf", inceptionInference);
+api.post("/megadetector-inf", megadetectorInference);
 api.post("/upload_inference_file", uploadInferenceFile);
 api.get("/runs/:runId/images", getRunImages);
 api.post("/inference/add-inference-run-to-dataset", addYoloInferenceToDataset);
@@ -138,11 +169,22 @@ api.post("/import", importProject);
 api.post("/api/projects/import-dataset", importDataset);
 api.post("/api/projects/import-yolo", importYolo);
 api.post("/api/projects/import-kwcoco", importKwCoco);
+api.post("/api/projects/import-ifcb", importIfcb);
 api.post("/mergeLocal", mergeLocal);
 api.post("/removeAccess", removeAccess);
 api.post("/transferAdmin", transferAdmin);
 api.post("/script", script);
 api.post("/deleteImagesWithoutLabel", deleteImagesWithoutLabel);
+api.get("/api/v2/projects", getFilteredProjectsApi);
+api.get("/api/v2/projects/:IDX/images", getFilteredImagesApi);
+api.get("/api/projects/filter", getFilteredProjectsApi);
+api.get("/api/projects/filter-images", getFilteredImagesApi);
+
+// S3 BUCKET ROUTES (strangler-fig v2, mounts an S3 bucket as a project's image volume)
+api.post("/api/v2/projects/:admin/:projectName/s3-bucket", attachS3Bucket);
+api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
+api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
+api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);
@@ -155,6 +197,7 @@ api.post("/downloadProject", downloadProject);
 api.post("/downloadScript", downloadScript);
 api.post("/downloadWeights", downloadWeights);
 api.post("/downloadRun", downloadRun);
+api.post("/downloadClasses", downloadClasses);
 
 // VALIDATION ROUTES
 api.post("/changeValidation", changeValidation);
