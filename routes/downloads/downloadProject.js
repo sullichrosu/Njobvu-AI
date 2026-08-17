@@ -28,12 +28,14 @@ async function downloadProject(req, res) {
     }
 
     let tableExists;
+
     try {
         tableExists = await queries.project.checkTableExists(projectPath, 'Labels');
     } catch (err) {
         global.logger.debug("Error checking table existence:", err);
         return res.json({ success: false, message: "Database error occurred" });
     }
+
     if (tableExists.rows[0].count == 0) {
         return res.json({ success: false, message: "No Labels table found" });
     } else {
@@ -41,7 +43,7 @@ async function downloadProject(req, res) {
 
         var archive = archiver("zip");
 
-        output.on("close", function () {
+        output.on("close", function() {
             return res.download(downloadPath + "/" + PName + ".zip", (err) => {
                 if (err) {
                     global.logger.debug("Download error:", err);
@@ -50,7 +52,7 @@ async function downloadProject(req, res) {
             });
         });
 
-        archive.on("error", function (err) {
+        archive.on("error", function(err) {
             global.logger.error(err);
             return res.json({ success: false, message: "Archive creation failed" });
         });

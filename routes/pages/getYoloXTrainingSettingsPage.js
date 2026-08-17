@@ -156,9 +156,23 @@ async function getYoloXInferencePage(req, res) {
         global.logger.error(err);
     }
 
+    var classImageCounts = {};
+
+    try {
+        var imageCountsResult = await queries.project.getClassImageCounts(project_path);
+        if (imageCountsResult && imageCountsResult.rows) {
+            imageCountsResult.rows.forEach(function (row) {
+                classImageCounts[row.CName] = row.imageCount;
+            });
+        }
+    } catch (err) {
+        global.logger.error(err);
+    }
+
     results2 = results2.map(function (cls) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
+            imageCount: classImageCounts[cls.CName] || 0,
         });
     });
 

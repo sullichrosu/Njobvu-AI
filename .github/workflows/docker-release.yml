@@ -45,6 +45,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set up config.json
+        run: cp config.example.json config.json
+
+      - name: Install Python test dependencies
+        # A few tests (e.g. the real KW Coco import round trip) shell out to the actual
+        # controllers/imports/import_options.py, which needs Pillow and PyYAML. This is
+        # deliberately a small subset of requirements.txt, not the full ML stack (torch,
+        # tensorflow, ultralytics, ...), which isn't needed by anything npm test exercises.
+        run: pip install --break-system-packages Pillow PyYAML
+
       - name: Run unit & integration tests
         run: npm test
 
