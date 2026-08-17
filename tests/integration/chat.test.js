@@ -359,7 +359,7 @@ describe('Chat Harness API Integration Tests', () => {
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
-        });
+        }, 20000); // exercises real (unmocked) run discovery across public/projects/, which can be slow
 
         it('should reject off-topic LLM output and fall back to the deterministic run summary report', async () => {
             const fs = require('fs');
@@ -548,7 +548,7 @@ describe('Chat Harness API Integration Tests', () => {
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
-        });
+        }, 20000); // exercises real (unmocked) run discovery across public/projects/, which can be slow
 
         it('should trigger run listing tool via free text "list available runs" and prepend formatted runs', async () => {
             global.managedDbClient = {
@@ -691,7 +691,7 @@ describe('Chat Harness API Integration Tests', () => {
 
             global.fetch = originalFetch;
             try { fs.rmSync(testRunDir, { recursive: true, force: true }); } catch (e) {}
-        });
+        }, 20000); // exercises real (unmocked) run discovery across public/projects/, which can be slow
 
         it('should summarize EVERY run in the nested training/logs/<timestamp>/<run> layout and write per-run summaries', async () => {
             const fs = require('fs');
@@ -750,9 +750,21 @@ describe('Chat Harness API Integration Tests', () => {
 
             global.fetch = originalFetch;
             try { fs.rmSync(projRoot, { recursive: true, force: true }); } catch (e) {}
-        });
+        }, 20000); // exercises real (unmocked) run discovery across public/projects/, which can be slow
 
         it('should short-circuit with a deterministic error and NO LLM call when no runs are available', async () => {
+            const fs = require('fs');
+            const path = require('path');
+            // The "### Available Runs" hint is a global listing, not scoped to the requested
+            // project -- so it needs at least one genuinely discoverable run (a marker file like
+            // args.yaml) to exist somewhere, for an unrelated project, while chat_no_runs_project
+            // itself still has none.
+            const otherRunDir = path.join(process.cwd(), 'runs', 'train', 'chat_other_project_run');
+            if (!fs.existsSync(otherRunDir)) {
+                fs.mkdirSync(otherRunDir, { recursive: true });
+            }
+            fs.writeFileSync(path.join(otherRunDir, 'args.yaml'), 'model: yolo11n.pt\nepochs: 10', 'utf8');
+
             const originalFetch = global.fetch;
             global.fetch = jest.fn(() => {
                 throw new Error('LLM should not be called for a failed tool');
@@ -781,7 +793,8 @@ describe('Chat Harness API Integration Tests', () => {
             expect(global.fetch).not.toHaveBeenCalled();
 
             global.fetch = originalFetch;
-        });
+            try { fs.rmSync(otherRunDir, { recursive: true, force: true }); } catch (e) {}
+        }, 20000);
 
         it('should short-circuit with the tool error and available-runs hint when a named run is missing', async () => {
             const originalFetch = global.fetch;

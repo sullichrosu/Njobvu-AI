@@ -30,6 +30,10 @@ RUN npm ci --only=production
 # copy application source code
 COPY . .
 
+# config.json is gitignored (local/machine-specific settings) and won't exist in a fresh
+# checkout -- fall back to the tracked example so the app has a valid config to boot with.
+RUN [ -f config.json ] || cp config.example.json config.json
+
 # runner stage for production runtime
 FROM node:20-slim AS runner
 

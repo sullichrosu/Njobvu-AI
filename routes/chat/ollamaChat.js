@@ -2,7 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
 const queries = require("../../queries/queries");
-const fetch = require("node-fetch");
 
 const NJOBVU_SYSTEM_PROMPT = `You are Njobvu AI, an intelligent assistant built into the Njobvu Computer Vision & Machine Learning Platform.
 Your primary role is to assist engineers, researchers, and project managers in managing computer vision workflows including image labeling, dataset imports/exports, model training (YOLO, Darknet, Inception), model inference, and run performance analytics.

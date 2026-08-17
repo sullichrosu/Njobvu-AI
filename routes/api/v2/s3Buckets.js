@@ -67,7 +67,7 @@ async function attachS3Bucket(req, res) {
             Prefix || "",
             AccessKeyId,
             SecretAccessKey,
-            Endpoint,
+            ...(Endpoint ? [Endpoint] : []),
         );
 
         return res.status(200).json({ success: true });

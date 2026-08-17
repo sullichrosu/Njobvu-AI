@@ -156,7 +156,7 @@ async function yoloInference(req, res) {
             }
         }
 
-        var cmd = `${config["default_python_path"]} ${yoloScript} -d ${runPath} -i ${inferenceFilePath} -n ${classesPath} -l ${absUltralyticsProjectRun}/${log} -f ${ultralyticsPath} -w ${weightPath} -t ${yoloTask}`;
+        var cmd = `${config["default_python_path"] || "python3"} ${yoloScript} -d ${runPath} -i ${inferenceFilePath} -n ${classesPath} -l ${absUltralyticsProjectRun}/${log} -f ${ultralyticsPath} -w ${weightPath} -t ${yoloTask}`;
 
         var success = "";
         var error = "";
