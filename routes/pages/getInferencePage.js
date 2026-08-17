@@ -360,6 +360,8 @@ async function getProcessingPage(req, res) {
 
             if (type.trim() === "inception") {
                 run_types.push("Inception");
+            } else if (type.trim() === "megadetector") {
+                run_types.push("MegaDetector");
             } else if (type.trim() === "yolo") {
                 run_types.push("YOLO");
             } else {
@@ -367,10 +369,13 @@ async function getProcessingPage(req, res) {
             }
         } else {
             const inceptionExists = fileExistsRecursive(run_path_inf, "inception.py");
+            const megadetectorExists = fileExistsRecursive(run_path_inf, "megadetector.py");
             const yoloExists = fileExistsRecursive(run_path_inf, "datatovalues.py");
 
             if (inceptionExists) {
                 run_types.push("Inception");
+            } else if (megadetectorExists) {
+                run_types.push("MegaDetector");
             } else if (yoloExists) {
                 run_types.push("YOLO");
             } else {

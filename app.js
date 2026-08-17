@@ -45,6 +45,7 @@ const {
     getYoloXTrainingSettingsPage,
     getInceptionSettingsPage,
     getHelpPage,
+    getMegadetectorSettingsPage,
 } = require("./routes/pages");
 const { getHelpApi } = require("./routes/api/help");
 
@@ -89,6 +90,7 @@ app.get("/yolo/yolovXSettings", getYoloXSettingsPage);
 app.get("/yolo/yolovXInferenceSettings", getYoloXInferenceSettingsPage);
 app.get("/yolo/yolovXTrainingSettings", getYoloXTrainingSettingsPage);
 app.get("/inference/inceptionSettings", getInceptionSettingsPage);
+app.get("/megadetector/settings", getMegadetectorSettingsPage);
 app.get("/user", getUserPage);
 app.get("/servstats", getServerStatsPage);
 app.get("/homeV", getValidationHomePage);
