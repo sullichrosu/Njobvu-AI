@@ -93,6 +93,31 @@
         </form>
     </div>
     <hr>
+    <div class="mb-3">
+        <h3>
+            Pre-Processing: Map KW COCO CSV Annotations
+        </h3>
+        <p>
+            Upload a `.csv` annotation file (KW COCO format) to map bounding box labels directly to project images.
+        </p>
+        <form action="/api/projects/map-kwcoco-csv" method="POST" enctype="multipart/form-data" id="mapKwCocoCsvForm">
+            <input type="hidden" name="PName" value="<%= PName %>">
+            <input type="hidden" name="Admin" value="<%= Admin %>">
+            <input type="hidden" name="IDX" value="<%= IDX %>">
+            <div class="mb-3">
+                <label for="kwcoco_csv" class="form-label">Upload KW COCO CSV File (.csv)</label>
+                <input id="kwcoco_csv" name="kwcoco_csv" aria-label="Upload KW COCO CSV annotation file" type="file" accept=".csv" class="form-control" required>
+            </div>
+            <div>
+                <% if(user == Admin) { %>
+                    <button class="btn btn-primary" type="submit" id="mapKwCocoBtn">Map Annotations</button>
+                <% } else { %>
+                    <a href="#" role="button" class="btn btn-primary disabled" style="border-radius: 0">Save</a>
+                <% } %>
+            </div>
+        </form>
+    </div>
+    <hr>
     <div>
         <h3>Delete Images Without Label</h3>
         <form action="/deleteImagesWithoutLabel" method="post" id="delete-images-without-label">
@@ -237,4 +262,39 @@
 		request.send(formData);
 		console.log(formData);
 	});
+
+	if (document.forms['mapKwCocoCsvForm']) {
+		document.forms['mapKwCocoCsvForm'].addEventListener('submit', (event) => {
+			event.preventDefault();
+			var formData = new FormData();
+			const csvFileInput = document.getElementById('kwcoco_csv');
+			if (!csvFileInput || !csvFileInput.files[0]) {
+				alert("Please select a .csv file to upload.");
+				return;
+			}
+			formData.append('kwcoco_csv', csvFileInput.files[0]);
+			formData.append("PName", "<%= PName %>");
+			formData.append("Admin", "<%= Admin %>");
+			formData.append("IDX", "<%= IDX %>");
+
+			var request = new XMLHttpRequest();
+			request.open("post", event.target.action, true);
+			request.onreadystatechange = function receiveResponse() {
+				if (this.readyState == 4) {
+					if (this.status == 200) {
+						try {
+							var res = JSON.parse(this.response);
+							alert(res.message || "Annotations successfully mapped!");
+						} catch (e) {
+							alert("Annotations mapped successfully.");
+						}
+						window.location.reload();
+					} else {
+						alert("Failed to map annotations: " + this.response);
+					}
+				}
+			}
+			request.send(formData);
+		});
+	}
 </script>
