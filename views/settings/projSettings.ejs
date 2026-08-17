@@ -95,18 +95,18 @@
     <hr>
     <div class="mb-3">
         <h3>
-            Pre-Processing: Map KW COCO CSV Annotations
+            Pre-Processing: Map KW COCO Annotations
         </h3>
         <p>
-            Upload a `.csv` annotation file (KW COCO format) to map bounding box labels directly to project images.
+            Upload a `.csv` or `.json` annotation file (KW COCO format) to map bounding box labels directly to project images.
         </p>
         <form action="/api/projects/map-kwcoco-csv" method="POST" enctype="multipart/form-data" id="mapKwCocoCsvForm">
             <input type="hidden" name="PName" value="<%= PName %>">
             <input type="hidden" name="Admin" value="<%= Admin %>">
             <input type="hidden" name="IDX" value="<%= IDX %>">
             <div class="mb-3">
-                <label for="kwcoco_csv" class="form-label">Upload KW COCO CSV File (.csv)</label>
-                <input id="kwcoco_csv" name="kwcoco_csv" aria-label="Upload KW COCO CSV annotation file" type="file" accept=".csv" class="form-control" required>
+                <label for="kwcoco_csv" class="form-label">Upload KW COCO Annotation File (.csv or .json)</label>
+                <input id="kwcoco_csv" name="kwcoco_csv" aria-label="Upload KW COCO annotation file" type="file" accept=".csv,.json" class="form-control" required>
             </div>
             <div>
                 <% if(user == Admin) { %>

@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const parseKwCocoCsv = require('../../utils/parseKwCocoCsv');
+const parseKwCocoJson = require('../../utils/parseKwCocoJson');
 const queries = require('../../queries/queries');
 const { Client } = require('../../queries/client');
 
@@ -14,19 +15,24 @@ async function mapKwCocoCsv(req, res) {
         }
 
         if (!req.files || Object.keys(req.files).length === 0) {
-            return res.status(400).json({ success: false, message: 'No CSV file was uploaded.' });
+            return res.status(400).json({ success: false, message: 'No annotation file was uploaded.' });
         }
 
-        const uploadedFile = req.files.kwcoco_csv || req.files.csv_file || req.files.upload_csv || Object.values(req.files)[0];
+        const uploadedFile = req.files.kwcoco_csv || req.files.kwcoco_json || req.files.csv_file
+            || req.files.json_file || req.files.upload_csv || req.files.upload_json || Object.values(req.files)[0];
         if (!uploadedFile) {
             return res.status(400).json({ success: false, message: 'Invalid file upload payload.' });
         }
 
-        const csvContent = uploadedFile.data ? uploadedFile.data.toString('utf8') : fs.readFileSync(uploadedFile.tempFilePath, 'utf8');
+        const fileContent = uploadedFile.data ? uploadedFile.data.toString('utf8') : fs.readFileSync(uploadedFile.tempFilePath, 'utf8');
 
-        const parsedAnnotations = parseKwCocoCsv(csvContent);
+        const ext = path.extname(uploadedFile.name || '').toLowerCase();
+        const trimmedContent = fileContent.trim();
+        const isJson = ext === '.json' || (ext !== '.csv' && (trimmedContent.startsWith('{') || trimmedContent.startsWith('[')));
+
+        const parsedAnnotations = isJson ? parseKwCocoJson(fileContent) : parseKwCocoCsv(fileContent);
         if (parsedAnnotations.length === 0) {
-            return res.status(400).json({ success: false, message: 'No valid KW COCO CSV annotations found in file.' });
+            return res.status(400).json({ success: false, message: 'No valid KW COCO annotations found in file.' });
         }
 
         const mainPath = path.join(__dirname, '..', '..', 'public', 'projects');

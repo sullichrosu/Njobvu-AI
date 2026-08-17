@@ -48,7 +48,7 @@ describe('POST /api/projects/map-kwcoco-csv', () => {
         expect(res.body.message).toMatch(/Project name is required/i);
     });
 
-    test('returns 400 when no CSV file is uploaded', async () => {
+    test('returns 400 when no annotation file is uploaded', async () => {
         const res = await request(app)
             .post('/api/projects/map-kwcoco-csv')
             .field('PName', 'testproj')
@@ -56,7 +56,7 @@ describe('POST /api/projects/map-kwcoco-csv', () => {
 
         expect(res.statusCode).toBe(400);
         expect(res.body.success).toBe(false);
-        expect(res.body.message).toMatch(/No CSV file was uploaded/i);
+        expect(res.body.message).toMatch(/No annotation file was uploaded/i);
     });
 
     test('returns 404 when project path does not exist', async () => {
@@ -86,6 +86,35 @@ img2.jpg,shark,30,40,80,120`;
             .field('PName', 'testproj')
             .field('Admin', 'admin')
             .attach('kwcoco_csv', csvPath);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.labelsInserted).toBe(2);
+    });
+
+    test('successfully maps KW COCO JSON annotations', async () => {
+        const jsonContent = JSON.stringify({
+            images: [
+                { id: 1, file_name: 'img1.jpg' },
+                { id: 2, file_name: 'img2.jpg' }
+            ],
+            annotations: [
+                { id: 1, image_id: 1, category_id: 1, bbox: [10, 20, 90, 130] },
+                { id: 2, image_id: 2, category_id: 2, bbox: [30, 40, 50, 80] }
+            ],
+            categories: [
+                { id: 1, name: 'dolphin' },
+                { id: 2, name: 'shark' }
+            ]
+        });
+        const jsonPath = path.join(tmpDir, 'test.json');
+        fs.writeFileSync(jsonPath, jsonContent);
+
+        const res = await request(app)
+            .post('/api/projects/map-kwcoco-csv')
+            .field('PName', 'testproj')
+            .field('Admin', 'admin')
+            .attach('kwcoco_json', jsonPath);
 
         expect(res.statusCode).toBe(200);
         expect(res.body.success).toBe(true);
