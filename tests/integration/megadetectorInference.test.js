@@ -12,7 +12,7 @@ jest.mock('node-fetch', () => jest.fn());
 // forward-slash venv path (as commonly written in config.json on Windows)
 // must not be handed to child_process.exec() unresolved, since cmd.exe
 // can't parse a leading "./" and fails with "'.' is not recognized...".
-jest.mock('../../config.json', () => ({
+jest.mock('../../utils/config', () => ({
   default_python_path: './.venv/Scripts/python',
 }));
 

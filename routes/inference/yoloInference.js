@@ -1,7 +1,7 @@
 const queries = require("../../queries/queries");
 const path = require("path");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
-const config = require("../../config.json");
+const config = require("../../utils/config");
 
 async function yoloInference(req, res) {
     try {

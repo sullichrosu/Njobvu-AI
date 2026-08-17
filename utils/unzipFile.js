@@ -3,7 +3,7 @@ const cleanDirectory = require("./cleanDirectory");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const rimraf = require("../public/libraries/rimraf");
-const configFile = require("../config.json");
+const configFile = require("./config");
 const StreamZip = require("node-stream-zip");
 const logger = global.logger || require("./logger");
 

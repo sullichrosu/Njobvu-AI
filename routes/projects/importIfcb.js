@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const unzip = require('../../utils/unzipFile');
 const queries = require('../../queries/queries');
 const { Client } = require('../../queries/client');
-const config = require('../../config.json');
+const config = require('../../utils/config');
 const pythonPath = config.default_python_path || 'python3';
 
 const findFiles = (dir, ext) => {

@@ -2,7 +2,7 @@ global.logger = require('./utils/logger');
 const app = require('./app');
 const { Client } = require("./queries/client");
 
-global.configFile = require("./config.json");
+global.configFile = require("./utils/config");
 
 const port = configFile.port;
 const hostname = configFile.hostname;

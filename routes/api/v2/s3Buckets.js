@@ -25,16 +25,19 @@ function sanitizeFileName(name) {
         .join("_");
 }
 
+function trimOrUndefined(value) {
+    return typeof value === "string" ? value.trim() : value;
+}
+
 async function attachS3Bucket(req, res) {
     const { admin, projectName } = req.params;
-    const {
-        BucketName,
-        Region,
-        Prefix,
-        AccessKeyId,
-        SecretAccessKey,
-        Endpoint,
-    } = req.body || {};
+    const body = req.body || {};
+    const BucketName = trimOrUndefined(body.BucketName);
+    const Region = trimOrUndefined(body.Region);
+    const Prefix = trimOrUndefined(body.Prefix);
+    const AccessKeyId = trimOrUndefined(body.AccessKeyId);
+    const SecretAccessKey = trimOrUndefined(body.SecretAccessKey);
+    const Endpoint = trimOrUndefined(body.Endpoint);
 
     if (!isOwner(req, admin)) {
         return res.status(403).json({ success: false, error: "Not authorized for this project" });
@@ -72,7 +75,11 @@ async function attachS3Bucket(req, res) {
 
         return res.status(200).json({ success: true });
     } catch (err) {
-        global.logger.error(err);
+        global.logger.error(err, {
+            httpStatusCode: err.$metadata?.httpStatusCode,
+            code: err.Code || err.name,
+            requestId: err.$metadata?.requestId,
+        });
         return res.status(400).json({
             success: false,
             error: "Could not verify or attach S3 bucket. Check credentials and permissions.",
@@ -190,7 +197,11 @@ async function syncS3Bucket(req, res) {
             images: syncedImages,
         });
     } catch (err) {
-        global.logger.error(err);
+        global.logger.error(err, {
+            httpStatusCode: err.$metadata?.httpStatusCode,
+            code: err.Code || err.name,
+            requestId: err.$metadata?.requestId,
+        });
         return res.status(500).json({ success: false, error: "Error syncing S3 bucket" });
     }
 }
