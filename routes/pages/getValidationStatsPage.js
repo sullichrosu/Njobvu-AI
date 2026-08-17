@@ -1,137 +1,139 @@
-async function getValidationStatsPage(req, res) {
-    // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+const path = require("path");
+const queries = require("../../queries/queries");
 
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+async function getValidationStatsPage(req, res) {
+    let idx = parseInt(req.query.IDX, 10);
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
+    let projects = [];
+    try {
+        const userProjectsRes = await queries.managed.getUserProjects(user);
+        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+    } catch (err) {
+        global.logger.error("Error fetching projects for validation stats page:", err);
+    }
 
-    var num = IDX;
-
-    if (num >= projects.length) {
-        valid = 1;
+    if (!projects || idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
 
-    var public_path = currentPath;
-    var main_path = public_path + "public/projects/";
-    var path = main_path + admin + "-" + PName + "/" + PName + ".db";
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    var sdb = new sqlite3.Database(path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
-        }
-        global.logger.info("Connected to tdb.")
-    });
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
 
-    // create async database object functions
-    sdb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    sdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var results2 = await sdb.allAsync("SELECT * FROM `Classes`");
-
-    var classes = [];
-    var counts = [];
-    var icounts = [];
-    var lcounts = 0;
-    for (var i = 0; i < results2.length; i++) {
-        var results3 = await sdb.getAsync(
-            "SELECT COUNT(*) FROM Labels Where CName = '" +
-                results2[i].CName +
-                "'",
+    let projRecord = null;
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
         );
-        classes.push(results2[i].CName);
-        counts.push(results3["COUNT(*)"]);
-        var results4 = await sdb.allAsync(
-            "SELECT DISTINCT IName FROM Labels WHERE CName = '" +
-                results2[i].CName +
-                "'",
-        );
-        icounts.push(results4.length);
+        projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
+    } catch (err) {
+        global.logger.error("Error fetching project record:", err);
     }
 
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-    for (var i = 0; i < acc.length; i++) {
-        access.push(acc[i].Username);
+    let classRows = [];
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classRows = (classRes && classRes.rows) ? classRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error fetching classes for validation stats page:", err);
     }
 
-    var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
-    var results6 = await sdb.allAsync(
-        "SELECT DISTINCT IName FROM Images WHERE reviewImage = 1",
-    );
-    var complete =
-        100 - Math.trunc(100 * (results6.length / results5["COUNT(*)"]));
+    const classes = [];
+    const counts = [];
+    const icounts = [];
 
-    // close the database
-    sdb.close(function (err) {
-        if (err) {
-            global.logger.error(err);
-        } else {
+    for (let i = 0; i < classRows.length; i++) {
+        const className = classRows[i].CName;
+        classes.push(className);
+
+        let labelCount = 0;
+        try {
+            const countRes = await queries.project.sql(
+                projectDir,
+                "SELECT COUNT(*) as count FROM Labels WHERE CName = ?",
+                [className]
+            );
+            labelCount = (countRes && countRes.rows && countRes.rows[0]) ? Number(countRes.rows[0].count) : 0;
+        } catch (err) {
+            labelCount = 0;
         }
-    });
+        counts.push(labelCount);
+
+        let imageCount = 0;
+        try {
+            const imgCountRes = await queries.project.sql(
+                projectDir,
+                "SELECT COUNT(DISTINCT IName) as count FROM Labels WHERE CName = ?",
+                [className]
+            );
+            imageCount = (imgCountRes && imgCountRes.rows && imgCountRes.rows[0]) ? Number(imgCountRes.rows[0].count) : 0;
+        } catch (err) {
+            imageCount = 0;
+        }
+        icounts.push(imageCount);
+    }
+
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        const rows = (accRes && accRes.rows) ? accRes.rows : [];
+        accessUsers = rows.map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error fetching access users for validation stats page:", err);
+    }
+
+    let totalImages = 0;
+    try {
+        const imgRes = await queries.project.sql(projectDir, "SELECT COUNT(*) as count FROM Images", []);
+        totalImages = (imgRes && imgRes.rows && imgRes.rows[0]) ? Number(imgRes.rows[0].count) : 0;
+    } catch (err) {
+        totalImages = 0;
+    }
+
+    let reviewImagesCount = 0;
+    try {
+        const reviewRes = await queries.project.sql(
+            projectDir,
+            "SELECT COUNT(DISTINCT IName) as count FROM Images WHERE reviewImage = 1",
+            []
+        );
+        reviewImagesCount = (reviewRes && reviewRes.rows && reviewRes.rows[0]) ? Number(reviewRes.rows[0].count) : 0;
+    } catch (err) {
+        reviewImagesCount = 0;
+    }
+
+    let complete = 100;
+    if (totalImages > 0) {
+        complete = 100 - Math.trunc(100 * (reviewImagesCount / totalImages));
+    }
 
     res.render("statsV", {
         title: "stats",
-        user: req.cookies.Username,
-        access: access,
-        PName: PName,
+        user,
+        access: accessUsers,
+        PName,
         Admin: admin,
-        IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
-        classes: classes,
-        counts: counts,
-        icounts: icounts,
-        complete: complete,
+        IDX: idx,
+        PDescription: projRecord ? projRecord.PDescription : "",
+        AutoSave: projRecord ? projRecord.AutoSave : 0,
+        classes,
+        counts,
+        icounts,
+        complete,
         logged: req.query.logged,
         activePage: "StatsV",
     });

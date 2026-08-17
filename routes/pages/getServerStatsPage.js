@@ -1,137 +1,100 @@
 const { exec } = require("child_process");
 const { promisify } = require("util");
 const execAsync = promisify(exec);
+const queries = require("../../queries/queries");
 
 async function getServerStatsPage(req, res) {
-    // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        user = req.cookies.Username;
+    let idx = parseInt(req.query.IDX, 10);
+    const user = req.cookies ? req.cookies.Username : undefined;
 
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    var num = IDX;
+    let projects = [];
+    try {
+        const userProjectsRes = await queries.managed.getUserProjects(user);
+        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+    } catch (err) {
+        global.logger.error("Error fetching projects for server stats page:", err);
+    }
 
-    if (num >= projects.length) {
-        valid = 1;
+    if (!projects || idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
 
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-        PName +
-        "' AND Admin = '" +
-        admin +
-        "'",
-    );
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-        PName +
-        "' AND Admin = '" +
-        admin +
-        "'",
-    );
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    var access = [];
-    for (var i = 0; i < acc.length; i++) {
-        access.push(acc[i].Username);
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        const rows = (accRes && accRes.rows) ? accRes.rows : [];
+        accessUsers = rows.map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error fetching access users:", err);
     }
 
     process.env.TERM = "xterm";
-    var top_stdout = "",
-        nvidia_smi,
-        gpu_info = [];
+    let topStdout = "";
+    let gpuInfo = [];
 
     try {
-        // const { stdout, stderr } = await exec( "uptime");
-        const { stdout, stderr } = await execAsync("top -bn1|head -20");
-        top_stdout = stdout;
-        global.logger.debug("this is top_stdout: ", top_stdout);
+        const { stdout } = await execAsync("top -bn1|head -20");
+        topStdout = stdout;
     } catch (error) {
         global.logger.error(error);
-        top_stdout = ""; // Set default value on error
+        topStdout = "";
     }
 
     try {
-        // Fetch GPU information using CSV format
         const { stdout } = await execAsync(
-            "nvidia-smi --format=csv,noheader,nounits --query-gpu=name,temperature.gpu,power.draw,power.limit,memory.used,memory.total,utilization.gpu",
+            "nvidia-smi --format=csv,noheader,nounits --query-gpu=name,temperature.gpu,power.draw,power.limit,memory.used,memory.total,utilization.gpu"
         );
 
-        if (!stdout || stdout.trim().length === 0) {
-            throw new Error("nvidia-smi output is empty.");
+        if (stdout && stdout.trim().length > 0) {
+            const lines = stdout.trim().split("\n");
+            gpuInfo = lines.map((line) => {
+                const [
+                    name,
+                    temp,
+                    power_usage,
+                    power_cap,
+                    memory_used,
+                    memory_total,
+                    utilization,
+                ] = line.split(",").map((x) => x.trim());
+                return {
+                    name,
+                    temp: `${temp} C`,
+                    power_usage: `${power_usage} W`,
+                    power_cap: `${power_cap} W`,
+                    memory_used: `${memory_used} MiB`,
+                    memory_total: `${memory_total} MiB`,
+                    utilization: `${utilization} %`,
+                };
+            });
         }
-
-        // Convert CSV output into structured JSON
-        let lines = stdout.trim().split("\n");
-        gpu_info = lines.map((line) => {
-            let [
-                name,
-                temp,
-                power_usage,
-                power_cap,
-                memory_used,
-                memory_total,
-                utilization,
-            ] = line.split(",").map((x) => x.trim());
-            return {
-                name,
-                temp: `${temp} C`,
-                power_usage: `${power_usage} W`,
-                power_cap: `${power_cap} W`,
-                memory_used: `${memory_used} MiB`,
-                memory_total: `${memory_total} MiB`,
-                utilization: `${utilization} %`,
-            };
-        });
     } catch (error) {
         global.logger.debug("Error fetching GPU stats:", error);
-        gpu_info = []; // Set default value on error
+        gpuInfo = [];
     }
-
-    // var g_stdout;
-    // try {
-    // 	const { stdout, stderr } = await exec( "nvidia-smi -q -x");
-    // 	g_stdout = stdout;
-    // 	// console.log("this is g_stdout: ", g_stdout);
-    // }
-    // catch( error) {
-    // 	global.logger.error(error);
-    // }
-
-    // var gpu_data = "";
-
-    // parseString( g_stdout,  function( error, gpu_result) {
-    // 	if (error) {
-    // 		global.logger.error(error);
-    // 	} else {
-    // 		// console.log( result);
-    // 		gpu_data = JSON.stringify( gpu_result);
-    // 	}
-    // });
 
     res.render("servstats", {
         title: "servstats",
-        user: req.cookies.Username,
-        access: access,
-        PName: PName,
+        user,
+        access: accessUsers,
+        PName,
         Admin: admin,
-        IDX: IDX,
-        top_stdout: top_stdout,
-        gpu_info: gpu_info,
+        IDX: idx,
+        top_stdout: topStdout,
+        gpu_info: gpuInfo,
         activePage: "servstats",
     });
 }

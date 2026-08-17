@@ -1,47 +1,65 @@
+const queries = require("../../queries/queries");
+
 async function getProjectSettingsPage(req, res) {
-    var user = req.cookies.Username;
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    if (req.query.IDX == undefined) {
+    const user = req.cookies ? req.cookies.Username : undefined;
+    if (user === undefined) {
+        return res.redirect("/");
+    }
+    if (req.query.IDX === undefined) {
         return res.redirect("/home");
     }
 
-    if (user == undefined) {
-        return res.redirect("/");
+    const idx = parseInt(req.query.IDX, 10);
+
+    let projects = [];
+    if (global.db && typeof global.db.allAsync === "function") {
+        try {
+            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.getUserProjects === "function") {
+        try {
+            const dbRes = await queries.managed.getUserProjects(user);
+            projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
+        } catch (err) {}
     }
 
-    var IDX = parseInt(req.query.IDX, 10);
-
-    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
+    if (!Number.isInteger(idx) || idx < 0 || idx >= projects.length) {
         return res.redirect("/home?error=project_not_found");
     }
 
-    var PName = projects[IDX].PName;
-    var admin = projects[IDX].Admin;
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
+    let projRecord = null;
+    if (global.db && typeof global.db.getAsync === "function") {
+        try {
+            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+        } catch (err) {}
+    }
+    if (!projRecord && queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const projRes = await queries.managed.sql(
+                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
+        } catch (err) {}
+    }
 
-    if (!results1) {
+    if (!projRecord) {
         return res.redirect("/home?error=project_not_found");
     }
 
-    global.logger.debug("username: ", user);
     try {
         res.render("settings/projSettings", {
             title: "projSettings",
             logged: req.query.logged,
-            user: user,
-            PName: PName,
+            user,
+            PName,
             Admin: admin,
-            PDescription: results1.PDescription,
-            IDX: IDX,
+            PDescription: projRecord.PDescription,
+            IDX: idx,
             activePage: "projSettings",
         });
     } catch (error) {

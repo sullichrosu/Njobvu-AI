@@ -1,18 +1,26 @@
+const queries = require("../../queries/queries");
+
 async function getCreatePage(req, res) {
-    username = req.cookies.Username;
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Admin = '" + username + "'",
-    );
-    var PNames = [];
-    for (var i = 0; i < projects.length; i++) {
-        PNames.push(projects[i].PName);
+    const username = req.cookies ? req.cookies.Username : undefined;
+    let PNames = [];
+    if (username) {
+        try {
+            const projectsRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE Admin = ?",
+                [username]
+            );
+            const rows = (projectsRes && projectsRes.rows) ? projectsRes.rows : [];
+            PNames = rows.map((p) => p.PName);
+        } catch (err) {
+            global.logger.error("Error fetching projects for create page:", err);
+        }
     }
 
     res.render("create", {
         title: "create",
-        user: req.cookies.Username,
+        user: username,
         logged: req.query.logged,
-        PNames: PNames,
+        PNames,
         activePage: "default",
     });
 }

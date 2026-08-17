@@ -1,69 +1,75 @@
-// MegaDetector ships these built-in model weights; the megadetector
-// package resolves/downloads them by name, so no local weight management
-// or admin configuration is needed.
+const path = require("path");
+const fs = require("fs");
+const queries = require("../../queries/queries");
+
 const MEGADETECTOR_MODELS = ["MDV5A", "MDV5B", "MDv1000-redwood"];
 
 async function getMegadetectorSettingsPage(req, res) {
-    // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+    let idx = parseInt(req.query.IDX, 10);
+    const user = req.cookies ? req.cookies.Username : undefined;
 
-    if (IDX == undefined) {
-        IDX = 0;
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    var num = IDX;
+    let projects = [];
+    try {
+        const userProjectsRes = await queries.managed.getUserProjects(user);
+        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+    } catch (err) {
+        global.logger.error("Error fetching projects for megadetector settings page:", err);
+    }
 
-    if (num >= projects.length) {
+    if (!projects || idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
 
-    // set paths
-    var public_path = currentPath,
-        main_path = public_path + "public/projects/",
-        project_path = main_path + admin + "-" + PName,
-        inference_path = project_path + "/inference",
-        inference_upload_path = project_path + "/inference/uploads";
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    if (!fs.existsSync(inference_path)) {
-        fs.mkdirSync(inference_path);
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+    const inferencePath = path.join(projectDir, "inference");
+    const inferenceUploadPath = path.join(inferencePath, "uploads");
+
+    if (!fs.existsSync(inferencePath)) {
+        fs.mkdirSync(inferencePath, { recursive: true });
     }
-    if (!fs.existsSync(inference_upload_path)) {
-        fs.mkdirSync(inference_upload_path);
-    }
-
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-    for (var i = 0; i < acc.length; i++) {
-        access.push(acc[i].Username);
+    if (!fs.existsSync(inferenceUploadPath)) {
+        fs.mkdirSync(inferenceUploadPath, { recursive: true });
     }
 
-    var global_inference_upload = await readdirAsync(inference_upload_path);
-    global_inference_upload.push(project_path + "/images");
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        const rows = (accRes && accRes.rows) ? accRes.rows : [];
+        accessUsers = rows.map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error fetching access users:", err);
+    }
+
+    let globalInferenceUpload = [];
+    try {
+        globalInferenceUpload = fs.readdirSync(inferenceUploadPath);
+    } catch (e) {
+        globalInferenceUpload = [];
+    }
+    globalInferenceUpload.push(path.join(projectDir, "images"));
 
     res.render("training/megadetectorSettings", {
         title: "megadetectorSettings",
-        user: req.cookies.Username,
-        access: access,
-        PName: PName,
+        user,
+        access: accessUsers,
+        PName,
         Admin: admin,
-        IDX: IDX,
-        global_inference_upload: global_inference_upload,
+        IDX: idx,
+        global_inference_upload: globalInferenceUpload,
         megadetector_models: MEGADETECTOR_MODELS,
         activePage: "megadetectorSettings",
     });

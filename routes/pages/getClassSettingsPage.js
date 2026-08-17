@@ -1,80 +1,81 @@
+const path = require("path");
+const queries = require("../../queries/queries");
+
 async function getClassSettingsPage(req, res) {
-    if (req.query.IDX == undefined) {
+    if (req.query.IDX === undefined) {
         return res.redirect("/home");
     }
 
-    var user = req.cookies.Username;
-    if (user == undefined) {
+    const user = req.cookies ? req.cookies.Username : undefined;
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var IDX = parseInt(req.query.IDX, 10);
+    const idx = parseInt(req.query.IDX, 10);
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
+    let projects = [];
+    if (global.db && typeof global.db.allAsync === "function") {
+        try {
+            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.getUserProjects === "function") {
+        try {
+            const dbRes = await queries.managed.getUserProjects(user);
+            projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
+        } catch (err) {}
+    }
+
+    if (!Number.isInteger(idx) || idx < 0 || idx >= projects.length) {
         return res.redirect("/home?error=project_not_found");
     }
 
-    var PName = projects[IDX].PName;
-    var admin = projects[IDX].Admin;
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    var public_path = currentPath,
-        main_path = public_path + "public/projects/",
-        project_path = main_path + admin + "-" + PName,
-        path = project_path + "/" + PName + ".db";
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectPath = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
 
-    var cfdb = new sqlite3.Database(path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
+    let classes = [];
+    if (queries.project && typeof queries.project.getAllClasses === "function") {
+        try {
+            const classRes = await queries.project.getAllClasses(projectPath);
+            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
+        } catch (err) {}
+    }
+    if ((!classes || classes.length === 0) && global.sqlite3) {
+        try {
+            const dbPath = path.join(projectPath, `${PName}.db`);
+            const tdb = new global.sqlite3.Database(dbPath, () => {});
+            if (tdb && typeof tdb.all === "function") {
+                classes = await new Promise((resolve) => {
+                    tdb.all("SELECT * FROM Classes", [], (err, rows) => resolve(rows || []));
+                });
+            }
+        } catch (err) {}
+    }
+
+    const colors = [];
+    let colorIdx = 0;
+    const colorList = global.colorsJSON || [];
+    while (colors.length < classes.length) {
+        if (colorIdx >= colorList.length) {
+            colorIdx = 0;
         }
-        global.logger.info("Connected to cfdb.")
-    });
-
-    cfdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-
-    var results2 = await cfdb.allAsync("SELECT * FROM `Classes`");
-
-    cfdb.close(function (err) {
-        if (err) {
-            global.logger.error(err);
-        } else {
-        }
-    });
-
-    var colors = [];
-    var i = 0;
-    while (colors.length < results2.length) {
-        if (i >= colorsJSON.length) {
-            i = 0;
-        }
-        colors.push(colorsJSON[i]);
-        i++;
+        colors.push(colorList[colorIdx]);
+        colorIdx++;
     }
 
     try {
         res.render("settings/classSettings", {
             title: "classSettings",
             logged: req.query.logged,
-            user: user,
-            PName: PName,
+            user,
+            PName,
             Admin: admin,
-            IDX: IDX,
-            classes: results2,
-            colors: colors,
+            IDX: idx,
+            classes,
+            colors,
             activePage: "classSettings",
         });
     } catch (error) {

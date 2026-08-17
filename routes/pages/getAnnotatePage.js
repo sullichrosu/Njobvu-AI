@@ -1,219 +1,193 @@
-async function getAnnotatePage(req, res) {
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        user = req.cookies.Username;
+const path = require("path");
+const fs = require("fs");
+const queries = require("../../queries/queries");
 
-    if (isNaN(IDX) || IDX == undefined) {
-        IDX = 0;
+async function getAnnotatePage(req, res) {
+    let idx = parseInt(req.query.IDX, 10);
+    const IName = String(req.query.IName || "");
+    let currClass = req.query.curr_class;
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (isNaN(idx) || idx === undefined) {
+        idx = 0;
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
 
-    var num = IDX;
+    let projects = [];
+    try {
+        const userProjectsRes = await queries.managed.getUserProjects(user);
+        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+    } catch (err) {
+        global.logger.error("Error fetching projects for annotate page:", err);
+    }
 
-    if (!projects || num >= projects.length) {
+    if (!projects || idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
 
-    // set paths
-    var public_path = currentPath,
-        main_path = public_path + "public/projects/",
-        project_path = main_path + admin + "-" + PName;
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    var rel_project_path = "projects/" + admin + "-" + PName;
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+    const relProjectPath = `projects/${admin}-${PName}`;
 
-    //Connect Database
-    var ldb = new sqlite3.Database(
-        project_path + "/" + PName + ".db",
-        (err) => {
-            if (err) {
-                return global.logger.error(err.message);
-            }
-            global.logger.info("Connected to ldb.")
-        },
-    );
-
-    // create async database object functions
-    ldb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    ldb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    ldb.eachAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.each(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-
-    global.logger.debug(String(IName));
-
-    var results1 = await ldb.allAsync("SELECT * FROM `Classes`");
-    var Classes = [];
-    if (results1) {
-        for (var i = 0; i < results1.length; i++) {
-            Classes.push(results1[i].CName);
-        }
+    let classRows = [];
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classRows = (classRes && classRes.rows) ? classRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error fetching classes for annotate page:", err);
     }
-    var results2 = await ldb.allAsync("SELECT * FROM `Images`");
-    var rowid = await ldb.getAsync(
-        `SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = '${String(IName)}'`,
-    );
+    const classNames = classRows.map((c) => c.CName);
 
-    var results3 = await ldb.allAsync(
-        "SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'",
-    );
-    var results4 = await ldb.allAsync(
-        "SELECT * FROM `Images` WHERE IName = '" + String(IName) + "'",
-    );
-    var results5 = await db.getAsync(
-        "SELECT AutoSave FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-
-    if (curr_class == null && results1 && results1.length > 0) {
-        curr_class = results1[0].CName;
+    let allImages = [];
+    try {
+        const imgRes = await queries.project.getAllImages(projectDir);
+        allImages = (imgRes && imgRes.rows) ? imgRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error fetching images for annotate page:", err);
     }
 
-    if (acc) {
-        for (var i = 0; i < acc.length; i++) {
-            access.push(acc[i].Username);
-        }
+    let rowidRecord = null;
+    try {
+        const rowidRes = await queries.project.sql(
+            projectDir,
+            "SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = ?",
+            [IName]
+        );
+        rowidRecord = (rowidRes && rowidRes.rows && rowidRes.rows.length > 0) ? rowidRes.rows[0] : null;
+    } catch (err) {
+        global.logger.error("Error querying image rowid:", err);
     }
 
-    var abs_image_path = project_path + "/images/" + IName;
+    let labels = [];
+    try {
+        const labelRes = await queries.project.getLabelsForImageName(projectDir, IName);
+        labels = (labelRes && labelRes.rows) ? labelRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error querying image labels:", err);
+    }
 
-    if (!results4 || results4.length === 0 || !fs.existsSync(abs_image_path)) {
-        res.render("404", {
+    let imageRecord = null;
+    try {
+        const imgDetailRes = await queries.project.getImage(projectDir, IName);
+        imageRecord = (imgDetailRes && imgDetailRes.row) ? imgDetailRes.row : null;
+    } catch (err) {
+        global.logger.error("Error querying image record:", err);
+    }
+
+    let projRecord = null;
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : null;
+    } catch (err) {
+        global.logger.error("Error querying project AutoSave:", err);
+    }
+
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        const rows = (accRes && accRes.rows) ? accRes.rows : [];
+        accessUsers = rows.map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying access users:", err);
+    }
+
+    if (!currClass && classNames.length > 0) {
+        currClass = classNames[0];
+    }
+
+    const absImagePath = path.join(projectDir, "images", IName);
+
+    if (!imageRecord || !fs.existsSync(absImagePath)) {
+        return res.render("404", {
             title: "404",
-            user: req.cookies.Username,
-        });
-    } else {
-        var rel_image_path = rel_project_path + "/images/" + results4[0].IName;
-        var img = fs.readFileSync(
-                project_path + "/images/" + results4[0].IName,
-                (err) => {
-                    if (err) {
-                        res.render("404", {
-                            title: "404",
-                            user: req.cookies.Username,
-                        });
-                    }
-                },
-            ),
-            img_data = probe.sync(img),
-            img_w = img_data.width,
-            img_h = img_data.height,
-            image_ratio = img_h / img_w,
-            image_width = img_w,
-            image_height = image_ratio * image_width,
-            prev_IName = (next_IName = -1);
-        var curr_index = 1;
-
-        var list_counter = [];
-
-        if (rowid && rowid.display_id) {
-            curr_index = Number(rowid.display_id);
-        }
-        if (results2 && curr_index > 1 && results2[curr_index - 2]) {
-            prev_IName = results2[curr_index - 2]["IName"];
-        }
-        if (results2 && curr_index < results2.length && results2[curr_index]) {
-            next_IName = results2[curr_index]["IName"];
-        }
-
-        ldb.close(function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-
-        var colors = [];
-        var i = 0;
-        while (colors.length < Classes.length) {
-            if (i >= colorsJSON.length) {
-                i = 0;
-            }
-            colors.push(colorsJSON[i]);
-            i++;
-        }
-        global.logger.debug(results3);
-        res.render("annotate", {
-            title: "annotate",
-            user: user,
-            access: access,
-            image_width: image_width,
-            image_height: image_height,
-            image_path: rel_image_path,
-            image_name: results4[0].IName,
-            image_ratio: image_ratio,
-            classes: Classes,
-            images: results2 || [],
-            labels: results3 || [],
-            colors: colors,
-            IName: IName,
-            prev_IName: prev_IName,
-            next_IName: next_IName,
-            PName: PName,
-            Admin: admin,
-            IDX: IDX,
-            images_length: results2 ? results2.length : 0,
-            curr_index: curr_index,
-            curr_class: curr_class,
-            rev_image: results4[0].reviewImage,
-            list_counter: list_counter,
-            AutoSave: results5 ? results5["AutoSave"] : 0,
-            logged: req.query.logged,
-            activePage: "project",
+            user: req.cookies ? req.cookies.Username : undefined,
         });
     }
+
+    const relImagePath = `${relProjectPath}/images/${imageRecord.IName}`;
+    let imgData;
+    try {
+        const imgBuffer = fs.readFileSync(absImagePath);
+        imgData = probe.sync(imgBuffer);
+    } catch (err) {
+        return res.render("404", {
+            title: "404",
+            user: req.cookies ? req.cookies.Username : undefined,
+        });
+    }
+
+    const imgWidth = imgData.width;
+    const imgHeight = imgData.height;
+    const imageRatio = imgHeight / imgWidth;
+    const imageDisplayWidth = imgWidth;
+    const imageDisplayHeight = imageRatio * imageDisplayWidth;
+
+    let prevIName = -1;
+    let nextIName = -1;
+    let currIndex = 1;
+
+    if (rowidRecord && rowidRecord.display_id) {
+        currIndex = Number(rowidRecord.display_id);
+    }
+
+    if (allImages && currIndex > 1 && allImages[currIndex - 2]) {
+        prevIName = allImages[currIndex - 2].IName;
+    }
+    if (allImages && currIndex < allImages.length && allImages[currIndex]) {
+        nextIName = allImages[currIndex].IName;
+    }
+
+    const colors = [];
+    let colorIdx = 0;
+    const colorList = global.colorsJSON || [];
+    while (colors.length < classNames.length) {
+        if (colorIdx >= colorList.length) {
+            colorIdx = 0;
+        }
+        colors.push(colorList[colorIdx]);
+        colorIdx++;
+    }
+
+    res.render("annotate", {
+        title: "annotate",
+        user,
+        access: accessUsers,
+        image_width: imageDisplayWidth,
+        image_height: imageDisplayHeight,
+        image_path: relImagePath,
+        image_name: imageRecord.IName,
+        image_ratio: imageRatio,
+        classes: classNames,
+        images: allImages || [],
+        labels: labels || [],
+        colors,
+        IName,
+        prev_IName: prevIName,
+        next_IName: nextIName,
+        PName,
+        Admin: admin,
+        IDX: idx,
+        images_length: allImages ? allImages.length : 0,
+        curr_index: currIndex,
+        curr_class: currClass,
+        rev_image: imageRecord.reviewImage,
+        list_counter: [],
+        AutoSave: projRecord ? projRecord.AutoSave : 0,
+        logged: req.query.logged,
+        activePage: "project",
+    });
 }
 
 module.exports = getAnnotatePage;

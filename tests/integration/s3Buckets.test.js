@@ -96,6 +96,7 @@ describe('S3 Bucket Routes', () => {
                 'images/',
                 'AKIA...',
                 'secret',
+                undefined,
             );
         });
 

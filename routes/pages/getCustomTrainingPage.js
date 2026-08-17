@@ -1,261 +1,217 @@
+const path = require("path");
+const fs = require("fs");
+const queries = require("../../queries/queries");
+
 async function getTrainingPage(req, res) {
-    const readdir = util.promisify(fs.readdir);
-    const readFile = util.promisify(fs.readFile);
+    let idx = parseInt(req.query.IDX, 10);
+    const user = req.cookies ? req.cookies.Username : undefined;
 
-    // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        user = req.cookies.Username;
-
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    var num = IDX;
+    let projects = [];
+    try {
+        const userProjectsRes = await queries.managed.getUserProjects(user);
+        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+    } catch (err) {
+        global.logger.error("Error fetching projects for custom training page:", err);
+    }
 
-    if (num >= projects.length) {
-        valid = 1;
+    if (!projects || idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
 
-    // set paths
-    var public_path = currentPath,
-        main_path = public_path + "public/projects/",
-        project_path = main_path + admin + "-" + PName,
-        path = project_path + "/" + PName + ".db",
-        training_path = project_path + "/training",
-        log_path = training_path + "/logs/",
-        weights_path = training_path + "/weights",
-        python_path = training_path + "/python",
-        python_path_file = training_path + "/Paths.txt";
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    if (!fs.existsSync(training_path)) {
-        fs.mkdirSync(training_path);
-        fs.mkdirSync(log_path);
-        fs.mkdirSync(python_path);
-        fs.mkdirSync(weights_path);
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+    const trainingPath = path.join(projectDir, "training");
+    const logPath = path.join(trainingPath, "logs");
+    const weightsPath = path.join(trainingPath, "weights");
+    const pythonPath = path.join(trainingPath, "python");
+    const pythonPathFile = path.join(trainingPath, "Paths.txt");
 
-        fs.writeFile(python_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
+    if (!fs.existsSync(trainingPath)) {
+        fs.mkdirSync(trainingPath, { recursive: true });
+        fs.mkdirSync(logPath, { recursive: true });
+        fs.mkdirSync(pythonPath, { recursive: true });
+        fs.mkdirSync(weightsPath, { recursive: true });
+        fs.writeFileSync(pythonPathFile, "");
+    } else if (!fs.existsSync(weightsPath)) {
+        fs.mkdirSync(weightsPath, { recursive: true });
+    }
+
+    let projRecord = null;
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
+    } catch (err) {
+        global.logger.error("Error fetching project record:", err);
+    }
+
+    let classes = [];
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = (classRes && classRes.rows) ? classRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error fetching classes for custom training page:", err);
+    }
+
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        const rows = (accRes && accRes.rows) ? accRes.rows : [];
+        accessUsers = rows.map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error fetching access users:", err);
+    }
+
+    let globalWeights = [];
+    try {
+        globalWeights = fs.readdirSync(weightsPath);
+    } catch (e) {
+        globalWeights = [];
+    }
+
+    let runs = [];
+    try {
+        runs = fs.readdirSync(logPath);
+        runs = runs.filter((r) => {
+            try {
+                return fs.statSync(path.join(logPath, r)).isDirectory();
+            } catch (e) {
+                return false;
             }
         });
-    } else if (!fs.existsSync(weights_path)) {
-        fs.mkdirSync(weights_path);
+        runs = runs.reverse();
+    } catch (e) {
+        runs = [];
     }
 
-    // connect to project database
-    var tdb = new sqlite3.Database(path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
-        }
-        global.logger.info("Connected to tdb.")
-    });
+    const runStatus = [];
+    const logFiles = [];
+    const logContents = [];
+    const weightsList = [];
+    const errFiles = [];
+    const errContents = [];
+    const weightsFiles = [];
+    const runPaths = [];
 
-    // create async database object functions
-    tdb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    tdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
+    for (let i = 0; i < runs.length; i++) {
+        const runName = runs[i];
+        const runDir = path.join(logPath, runName);
+        runPaths.push(`${runDir}/`);
 
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var results2 = await tdb.allAsync("SELECT * FROM `Classes`");
-
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-    for (var i = 0; i < acc.length; i++) {
-        access.push(acc[i].Username);
-    }
-
-    //Get global weights///////////////////////////////////////////
-    var global_weights = await readdirAsync(weights_path);
-
-    // get runs ///////////////////////////////////////////////////
-    var runs = await readdirAsync(log_path);
-    // Non-directory entries (e.g. summary.json / run_summary.md written by the chat run-summary
-    // feature directly into this folder) are not run folders and must be skipped, not scandir'd.
-    runs = runs.filter((r) => {
+        let logs = [];
         try {
-            return fs.statSync(`${log_path}${r}`).isDirectory();
+            logs = fs.readdirSync(runDir);
         } catch (e) {
-            return false;
+            logs = [];
         }
-    });
-    runs = runs.reverse();
-    // get logfiles
-    var logs = [];
 
-    var log_idx;
-    var err_idx;
-    var done_idx;
-    var run_status = [];
-    var log_files = [];
-    var log_contents = [];
-    var weights = [];
-    var weight = [];
-    var err_file = [];
-    var err = [];
-    var prev = 0;
-    var weights_names = [];
-    var weights_files = [];
-    var run_path = "";
-    var run_paths = [];
-    var idx = 0;
+        const logIdx = logs.indexOf(`${runName}.log`);
+        logFiles.push(`${runName}.log`);
 
-    // Get weights files and log files for each run
-    for (var i = 0; i < runs.length; i++) {
-        weight = [];
-        run_path = `${log_path}${runs[i]}/`;
-        run_paths.push(run_path);
-        // get all files for each run
-        logs = await readdirAsync(`${run_path}`);
-        // get index of log file
-        log_idx = logs.indexOf(`${runs[i]}.log`);
-        // get log file for each run
-        log_files.push(`${runs[i]}.log`);
+        let logContent = "";
+        try {
+            logContent = fs.readFileSync(path.join(runDir, `${runName}.log`), "utf8");
+        } catch (e) {
+            logContent = "";
+        }
+        logContents.push(logContent);
 
-        log_contents.push(fs.readFileSync(`${run_path}${runs[i]}.log`, "utf8"));
+        const errIdx = logs.indexOf(`${runName}-error.log`);
+        const doneIdx = logs.indexOf("done.log");
 
-        //check for error file
-        err_idx = logs.indexOf(`${runs[i]}-error.log`);
-        done_idx = logs.indexOf("done.log");
+        const weight = [];
+        const weightsNames = [];
 
-        if (err_idx >= 0) {
-            // Add error to arrays
-            run_status.push("FAILED");
-            err_file.push(`${logs[err_idx]}`);
-            err.push(fs.readFileSync(run_path + logs[err_idx], "utf8"));
-
-            // Add weights to array
-            for (var j = 0; j < logs.length; j++) {
-                if (j == log_idx || j == err_idx) {
-                    continue;
-                }
-                weight.push(`${run_path}${logs[j]}`);
-                weights_names.push(logs[j]);
+        if (errIdx >= 0) {
+            runStatus.push("FAILED");
+            errFiles.push(logs[errIdx]);
+            try {
+                errContents.push(fs.readFileSync(path.join(runDir, logs[errIdx]), "utf8"));
+            } catch (e) {
+                errContents.push("");
             }
-        } else if (done_idx >= 0) {
-            run_status.push("DONE");
-
-            err_file.push("NULL");
-            err.push("NULL");
-            // Add weights to array
-            for (var j = 0; j < logs.length; j++) {
-                if (j == log_idx || j == done_idx) {
-                    continue;
-                }
-                weight.push(`${run_path}${logs[j]}`);
-                weights_names.push(logs[j]);
+            for (let j = 0; j < logs.length; j++) {
+                if (j === logIdx || j === errIdx) continue;
+                weight.push(path.join(runDir, logs[j]));
+                weightsNames.push(logs[j]);
+            }
+        } else if (doneIdx >= 0) {
+            runStatus.push("DONE");
+            errFiles.push("NULL");
+            errContents.push("NULL");
+            for (let j = 0; j < logs.length; j++) {
+                if (j === logIdx || j === doneIdx) continue;
+                weight.push(path.join(runDir, logs[j]));
+                weightsNames.push(logs[j]);
             }
         } else {
-            run_status.push("RUNNING");
-
-            err_file.push("NULL");
-            err.push("NULL");
-            // Add weights to array
-            for (var j = 0; j < logs.length; j++) {
-                if (j == log_idx) {
-                    continue;
-                }
-                weight.push(`${run_path}${logs[j]}`);
-                weights_names.push(logs[j]);
+            runStatus.push("RUNNING");
+            errFiles.push("NULL");
+            errContents.push("NULL");
+            for (let j = 0; j < logs.length; j++) {
+                if (j === logIdx) continue;
+                weight.push(path.join(runDir, logs[j]));
+                weightsNames.push(logs[j]);
             }
         }
-        weights.push(weight);
-        weights_files.push(weights_names);
+        weightsList.push(weight);
+        weightsFiles.push(weightsNames);
     }
 
-    // close the database
-    tdb.close(function (err) {
-        if (err) {
-            global.logger.error(err);
-        } else {
-        }
-    });
-
-    // get python scripts
-    var scripts = await readdirAsync(python_path);
-
-    // get python paths
-    // This places the entire file into memory
-    // Will not work with large files, apx 10000000 lines
-    var paths = fs
-        .readFileSync(python_path_file, "utf-8")
-        .split("\n")
-        .filter(Boolean);
-
-    // Get default python path
-    var default_path = configFile.default_python_path;
-    if (!default_path) {
-        default_path = null;
+    let scripts = [];
+    try {
+        scripts = fs.readdirSync(pythonPath);
+    } catch (e) {
+        scripts = [];
     }
+
+    let pathsList = [];
+    if (fs.existsSync(pythonPathFile)) {
+        pathsList = fs
+            .readFileSync(pythonPathFile, "utf-8")
+            .split("\n")
+            .filter(Boolean);
+    }
+
+    const defaultPath = (global.configFile && global.configFile.default_python_path) || null;
+
     res.render("customTraining", {
         title: "customTraining",
-        user: req.cookies.Username,
-        access: access,
-        PName: PName,
+        user,
+        access: accessUsers,
+        PName,
         Admin: admin,
-        IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
-        classes: results2,
-        logs: log_files,
-        err_file: err_file,
-        err_contents: err,
-        default_path: default_path,
-        paths: paths,
-        scripts: scripts,
-        global_weights: global_weights,
-        weights: weights,
-        weight_names: weights_files,
-        run_status: run_status,
-        run_paths: run_paths,
-        log_contents: log_contents,
+        IDX: idx,
+        PDescription: projRecord ? projRecord.PDescription : "",
+        AutoSave: projRecord ? projRecord.AutoSave : 0,
+        classes,
+        logs: logFiles,
+        err_file: errFiles,
+        err_contents: errContents,
+        default_path: defaultPath,
+        paths: pathsList,
+        scripts,
+        global_weights: globalWeights,
+        weights: weightsList,
+        weight_names: weightsFiles,
+        run_status: runStatus,
+        run_paths: runPaths,
+        log_contents: logContents,
         logged: req.query.logged,
         activePage: "Training",
     });
