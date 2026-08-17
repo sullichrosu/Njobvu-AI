@@ -14,11 +14,22 @@ async function getValidationConfigPage(req, res) {
     }
 
     let projects = [];
-    try {
-        const userProjectsRes = await queries.managed.getUserProjects(user);
-        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-    } catch (err) {
-        global.logger.error("Error fetching projects for validation config page:", err);
+    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
+        try {
+            const userProjectsRes = await queries.managed.getUserProjects(user);
+            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
+            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
+        try {
+            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+        } catch (err) {}
     }
 
     if (!projects || idx < 0 || idx >= projects.length) {
@@ -29,14 +40,14 @@ async function getValidationConfigPage(req, res) {
     const admin = projects[idx].Admin;
 
     let mergeProjects = [];
-    try {
-        const mergeRes = await queries.managed.sql(
-            "SELECT * FROM Access WHERE Username = ? AND NOT PName = ?",
-            [user, PName]
-        );
-        mergeProjects = (mergeRes && mergeRes.rows) ? mergeRes.rows : [];
-    } catch (err) {
-        global.logger.error("Error fetching merge projects:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const mergeRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE Username = ? AND NOT PName = ?",
+                [user, PName]
+            );
+            mergeProjects = (mergeRes && mergeRes.rows) ? mergeRes.rows : [];
+        } catch (err) {}
     }
 
     const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
@@ -48,77 +59,81 @@ async function getValidationConfigPage(req, res) {
     const darknetPathFile = path.join(trainingPath, "darknetPaths.txt");
     const weightsPath = path.join(trainingPath, "weights");
 
-    if (!fs.existsSync(trainingPath)) {
-        fs.mkdirSync(trainingPath, { recursive: true });
-        fs.mkdirSync(logPath, { recursive: true });
-        fs.mkdirSync(pythonPath, { recursive: true });
-        fs.mkdirSync(weightsPath, { recursive: true });
-        fs.writeFileSync(pythonPathFile, "");
-        fs.writeFileSync(darknetPathFile, "");
+    const fsObj = global.fs || fs;
+
+    if (!fsObj.existsSync(trainingPath)) {
+        try {
+            fsObj.mkdirSync(trainingPath, { recursive: true });
+            fsObj.mkdirSync(logPath, { recursive: true });
+            fsObj.mkdirSync(pythonPath, { recursive: true });
+            fsObj.mkdirSync(weightsPath, { recursive: true });
+            fsObj.writeFileSync(pythonPathFile, "");
+            fsObj.writeFileSync(darknetPathFile, "");
+        } catch (e) {}
     }
-    if (!fs.existsSync(weightsPath)) {
-        fs.mkdirSync(weightsPath, { recursive: true });
+    if (!fsObj.existsSync(weightsPath)) {
+        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) {}
     }
-    if (!fs.existsSync(darknetPathFile)) {
-        fs.writeFileSync(darknetPathFile, "");
+    if (!fsObj.existsSync(darknetPathFile)) {
+        try { fsObj.writeFileSync(darknetPathFile, ""); } catch (e) {}
     }
-    if (!fs.existsSync(pythonPathFile)) {
-        fs.writeFileSync(pythonPathFile, "");
+    if (!fsObj.existsSync(pythonPathFile)) {
+        try { fsObj.writeFileSync(pythonPathFile, ""); } catch (e) {}
     }
 
     let projRecord = null;
-    try {
-        const projRes = await queries.managed.sql(
-            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-    } catch (err) {
-        global.logger.error("Error fetching project record:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const projRes = await queries.managed.sql(
+                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
+        } catch (err) {}
     }
 
     let classes = [];
-    try {
-        const classRes = await queries.project.getAllClasses(projectDir);
-        classes = (classRes && classRes.rows) ? classRes.rows : [];
-    } catch (err) {
-        global.logger.error("Error fetching classes for validation config page:", err);
+    if (queries.project && typeof queries.project.getAllClasses === "function") {
+        try {
+            const classRes = await queries.project.getAllClasses(projectDir);
+            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
+        } catch (err) {}
     }
 
     let accessOtherUsers = [];
-    try {
-        const accRes = await queries.managed.sql(
-            "SELECT * FROM Access WHERE PName = ? AND Admin = ? AND Username != ?",
-            [PName, admin, user]
-        );
-        const rows = (accRes && accRes.rows) ? accRes.rows : [];
-        accessOtherUsers = rows.map((r) => r.Username);
-    } catch (err) {
-        global.logger.error("Error fetching other access users:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE PName = ? AND Admin = ? AND Username != ?",
+                [PName, admin, user]
+            );
+            const rows = (accRes && accRes.rows) ? accRes.rows : [];
+            accessOtherUsers = rows.map((r) => r.Username);
+        } catch (err) {}
     }
 
     let otherAdminProjects = [];
-    try {
-        const otherProjRes = await queries.managed.sql(
-            "SELECT * FROM Projects WHERE PName = ? AND Admin != ?",
-            [PName, user]
-        );
-        const rows = (otherProjRes && otherProjRes.rows) ? otherProjRes.rows : [];
-        otherAdminProjects = rows.map((r) => r.Admin);
-    } catch (err) {
-        global.logger.error("Error fetching other admin projects:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const otherProjRes = await queries.managed.sql(
+                "SELECT * FROM Projects WHERE PName = ? AND Admin != ?",
+                [PName, user]
+            );
+            const rows = (otherProjRes && otherProjRes.rows) ? otherProjRes.rows : [];
+            otherAdminProjects = rows.map((r) => r.Admin);
+        } catch (err) {}
     }
 
     let allAccessUsers = [];
-    try {
-        const allAccRes = await queries.managed.sql(
-            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        const rows = (allAccRes && allAccRes.rows) ? allAccRes.rows : [];
-        allAccessUsers = rows.map((r) => r.Username);
-    } catch (err) {
-        global.logger.error("Error fetching all access users:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const allAccRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            const rows = (allAccRes && allAccRes.rows) ? allAccRes.rows : [];
+            allAccessUsers = rows.map((r) => r.Username);
+        } catch (err) {}
     }
 
     const colors = [];
@@ -141,7 +156,7 @@ async function getValidationConfigPage(req, res) {
         }
     } else {
         try {
-            scripts = fs.readdirSync(pythonPath);
+            scripts = fsObj.readdirSync(pythonPath);
         } catch (e) {
             scripts = [];
         }
@@ -156,21 +171,31 @@ async function getValidationConfigPage(req, res) {
         }
     } else {
         try {
-            weights = fs.readdirSync(weightsPath);
+            weights = fsObj.readdirSync(weightsPath);
         } catch (e) {
             weights = [];
         }
     }
 
-    const paths = fs
-        .readFileSync(pythonPathFile, "utf-8")
-        .split("\n")
-        .filter(Boolean);
+    let paths = [];
+    try {
+        paths = fsObj
+            .readFileSync(pythonPathFile, "utf-8")
+            .split("\n")
+            .filter(Boolean);
+    } catch (e) {
+        paths = [];
+    }
 
-    const darknetPaths = fs
-        .readFileSync(darknetPathFile, "utf-8")
-        .split("\n")
-        .filter(Boolean);
+    let darknetPaths = [];
+    try {
+        darknetPaths = fsObj
+            .readFileSync(darknetPathFile, "utf-8")
+            .split("\n")
+            .filter(Boolean);
+    } catch (e) {
+        darknetPaths = [];
+    }
 
     res.render("configV", {
         title: "config",

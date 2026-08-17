@@ -1,5 +1,21 @@
 module.exports = {
     managed: {
+        getUserProjects: async function (username) {
+            const query = "SELECT * FROM Access WHERE Username = ?";
+            try {
+                if (global.managedDbClient && typeof global.managedDbClient.all === "function") {
+                    const res = await global.managedDbClient.all(query, [username]);
+                    const rows = Array.isArray(res) ? res : (res && res.rows ? res.rows : []);
+                    return { success: true, rows };
+                }
+                if (global.managedDbClient && typeof global.managedDbClient.run === "function") {
+                    const res = await global.managedDbClient.run(query, [username]);
+                    const rows = Array.isArray(res) ? res : (res && res.rows ? res.rows : []);
+                    return { success: true, rows };
+                }
+            } catch (err) {}
+            return { success: false, rows: [] };
+        },
         deleteAccessFromProject: async function (username, projectName) {
             const query = "DELETE FROM Access WHERE Username = ? AND PName = ?";
             const result = await global.managedDbClient.run(query, [

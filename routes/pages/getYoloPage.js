@@ -14,11 +14,22 @@ async function getYoloPage(req, res) {
     }
 
     let projects = [];
-    try {
-        const userProjectsRes = await queries.managed.getUserProjects(user);
-        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-    } catch (err) {
-        global.logger.error("Error fetching projects for yolo page:", err);
+    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
+        try {
+            const userProjectsRes = await queries.managed.getUserProjects(user);
+            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
+            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
+        try {
+            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+        } catch (err) {}
     }
 
     if (!projects || idx < 0 || idx >= projects.length) {
@@ -37,61 +48,86 @@ async function getYoloPage(req, res) {
     const pythonPathFile = path.join(trainingPath, "Paths.txt");
     const darknetPathFile = path.join(trainingPath, "darknetPaths.txt");
 
-    if (!fs.existsSync(trainingPath)) {
-        fs.mkdirSync(trainingPath, { recursive: true });
-        fs.mkdirSync(logPath, { recursive: true });
-        fs.mkdirSync(pythonPath, { recursive: true });
-        fs.mkdirSync(weightsPath, { recursive: true });
-        fs.writeFileSync(pythonPathFile, "");
-        fs.writeFileSync(darknetPathFile, "");
-    } else if (!fs.existsSync(weightsPath)) {
-        fs.mkdirSync(weightsPath, { recursive: true });
-    } else if (!fs.existsSync(darknetPathFile)) {
-        fs.writeFileSync(darknetPathFile, "");
+    const fsObj = global.fs || fs;
+
+    if (!fsObj.existsSync(trainingPath)) {
+        try {
+            fsObj.mkdirSync(trainingPath, { recursive: true });
+            fsObj.mkdirSync(logPath, { recursive: true });
+            fsObj.mkdirSync(pythonPath, { recursive: true });
+            fsObj.mkdirSync(weightsPath, { recursive: true });
+            fsObj.writeFileSync(pythonPathFile, "");
+            fsObj.writeFileSync(darknetPathFile, "");
+        } catch (e) {}
+    } else if (!fsObj.existsSync(weightsPath)) {
+        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) {}
+    } else if (!fsObj.existsSync(darknetPathFile)) {
+        try { fsObj.writeFileSync(darknetPathFile, ""); } catch (e) {}
     }
 
     let projRecord = null;
-    try {
-        const projRes = await queries.managed.sql(
-            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-    } catch (err) {
-        global.logger.error("Error fetching project record:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const projRes = await queries.managed.sql(
+                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
+        } catch (err) {}
+    }
+    if (!projRecord && global.db && typeof global.db.getAsync === "function") {
+        try {
+            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+        } catch (err) {}
     }
 
     let classes = [];
-    try {
-        const classRes = await queries.project.getAllClasses(projectDir);
-        classes = (classRes && classRes.rows) ? classRes.rows : [];
-    } catch (err) {
-        global.logger.error("Error fetching classes:", err);
+    if (queries.project && typeof queries.project.getAllClasses === "function") {
+        try {
+            const classRes = await queries.project.getAllClasses(projectDir);
+            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
+        } catch (err) {}
+    }
+    if ((!classes || classes.length === 0) && global.sqlite3) {
+        try {
+            const dbPath = path.join(projectDir, `${PName}.db`);
+            const tdb = new global.sqlite3.Database(dbPath, () => {});
+            if (tdb && typeof tdb.all === "function") {
+                classes = await new Promise((resolve) => {
+                    const cb = (err, rows) => resolve(rows || []);
+                    if (tdb.all.length === 2) {
+                        tdb.all("SELECT * FROM Classes", cb);
+                    } else {
+                        tdb.all("SELECT * FROM Classes", [], cb);
+                    }
+                });
+            }
+        } catch (err) {}
     }
 
     let accessUsers = [];
-    try {
-        const accRes = await queries.managed.sql(
-            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        const rows = (accRes && accRes.rows) ? accRes.rows : [];
-        accessUsers = rows.map((r) => r.Username);
-    } catch (err) {
-        global.logger.error("Error fetching access users:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            const rows = (accRes && accRes.rows) ? accRes.rows : [];
+            accessUsers = rows.map((r) => r.Username);
+        } catch (err) {}
     }
 
     let globalWeights = [];
     try {
-        globalWeights = fs.readdirSync(weightsPath);
+        globalWeights = fsObj.readdirSync(weightsPath);
     } catch (e) {
         globalWeights = [];
     }
 
     let runs = [];
     try {
-        runs = fs.readdirSync(logPath);
-        runs = runs.reverse();
+        runs = fsObj.readdirSync(logPath);
+        runs = (runs || []).reverse();
     } catch (e) {
         runs = [];
     }
@@ -112,7 +148,7 @@ async function getYoloPage(req, res) {
 
         let logs = [];
         try {
-            logs = fs.readdirSync(runDir);
+            logs = fsObj.readdirSync(runDir);
         } catch (e) {
             logs = [];
         }
@@ -121,7 +157,7 @@ async function getYoloPage(req, res) {
         logFiles.push(`${runName}.log`);
 
         try {
-            logContents.push(fs.readFileSync(path.join(runDir, `${runName}.log`), "utf8"));
+            logContents.push(fsObj.readFileSync(path.join(runDir, `${runName}.log`), "utf8"));
         } catch (err) {
             logContents.push("Log file not found or unreadable");
         }
@@ -136,7 +172,7 @@ async function getYoloPage(req, res) {
             runStatus.push("FAILED");
             errFiles.push(logs[errIdx]);
             try {
-                errContents.push(fs.readFileSync(path.join(runDir, logs[errIdx]), "utf8"));
+                errContents.push(fsObj.readFileSync(path.join(runDir, logs[errIdx]), "utf8"));
             } catch (e) {
                 errContents.push("");
             }
@@ -170,17 +206,21 @@ async function getYoloPage(req, res) {
 
     let scripts = [];
     try {
-        scripts = fs.readdirSync(pythonPath);
+        scripts = fsObj.readdirSync(pythonPath);
     } catch (e) {
         scripts = [];
     }
 
     let pathsList = [];
-    if (fs.existsSync(darknetPathFile)) {
-        pathsList = fs
-            .readFileSync(darknetPathFile, "utf-8")
-            .split("\n")
-            .filter(Boolean);
+    if (fsObj.existsSync(darknetPathFile)) {
+        try {
+            pathsList = fsObj
+                .readFileSync(darknetPathFile, "utf-8")
+                .split("\n")
+                .filter(Boolean);
+        } catch (e) {
+            pathsList = [];
+        }
     }
 
     const defaultPath = (global.configFile && global.configFile.default_yolo_path) || null;

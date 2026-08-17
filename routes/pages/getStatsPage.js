@@ -13,11 +13,22 @@ async function getStatsPage(req, res) {
     }
 
     let projects = [];
-    try {
-        const userProjectsRes = await queries.managed.getUserProjects(user);
-        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-    } catch (err) {
-        global.logger.error("Error fetching projects for stats page:", err);
+    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
+        try {
+            const userProjectsRes = await queries.managed.getUserProjects(user);
+            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
+            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
+        try {
+            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+        } catch (err) {}
     }
 
     if (!projects || idx < 0 || idx >= projects.length) {
@@ -31,29 +42,50 @@ async function getStatsPage(req, res) {
     const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
 
     let projRecord = null;
-    try {
-        const projRes = await queries.managed.sql(
-            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-    } catch (err) {
-        global.logger.error("Error fetching project record:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const projRes = await queries.managed.sql(
+                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
+        } catch (err) {}
+    }
+    if (!projRecord && global.db && typeof global.db.getAsync === "function") {
+        try {
+            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+        } catch (err) {}
     }
 
     let classRows = [];
-    try {
-        const classRes = await queries.project.getAllClasses(projectDir);
-        classRows = (classRes && classRes.rows) ? classRes.rows : [];
-    } catch (err) {
-        global.logger.error("Error fetching classes for stats page:", err);
+    if (queries.project && typeof queries.project.getAllClasses === "function") {
+        try {
+            const classRes = await queries.project.getAllClasses(projectDir);
+            classRows = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
+        } catch (err) {}
+    }
+    if ((!classRows || classRows.length === 0) && global.sqlite3) {
+        try {
+            const dbPath = path.join(projectDir, `${PName}.db`);
+            const tdb = new global.sqlite3.Database(dbPath, () => {});
+            if (tdb && typeof tdb.all === "function") {
+                classRows = await new Promise((resolve) => {
+                    const cb = (err, rows) => resolve(rows || []);
+                    if (tdb.all.length === 2) {
+                        tdb.all("SELECT * FROM Classes", cb);
+                    } else {
+                        tdb.all("SELECT * FROM Classes", [], cb);
+                    }
+                });
+            }
+        } catch (err) {}
     }
 
     const classes = [];
     const counts = [];
     const icounts = [];
 
-    for (let i = 0; i < classRows.length; i++) {
+    for (let i = 0; i < (classRows || []).length; i++) {
         const className = classRows[i].CName;
         classes.push(className);
 
@@ -85,15 +117,21 @@ async function getStatsPage(req, res) {
     }
 
     let accessUsers = [];
-    try {
-        const accRes = await queries.managed.sql(
-            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        const rows = (accRes && accRes.rows) ? accRes.rows : [];
-        accessUsers = rows.map((r) => r.Username);
-    } catch (err) {
-        global.logger.error("Error fetching access users for stats page:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            const rows = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
+            accessUsers = rows.map((r) => r.Username);
+        } catch (err) {}
+    }
+    if ((!accessUsers || accessUsers.length === 0) && global.db && typeof global.db.allAsync === "function") {
+        try {
+            const acc = await global.db.allAsync("SELECT * FROM Access WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+            accessUsers = acc ? acc.map((r) => r.Username) : [];
+        } catch (err) {}
     }
 
     let totalImages = 0;

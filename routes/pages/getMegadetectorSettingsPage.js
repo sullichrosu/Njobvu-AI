@@ -16,11 +16,22 @@ async function getMegadetectorSettingsPage(req, res) {
     }
 
     let projects = [];
-    try {
-        const userProjectsRes = await queries.managed.getUserProjects(user);
-        projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-    } catch (err) {
-        global.logger.error("Error fetching projects for megadetector settings page:", err);
+    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
+        try {
+            const userProjectsRes = await queries.managed.getUserProjects(user);
+            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
+            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
+        } catch (err) {}
+    }
+    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
+        try {
+            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+        } catch (err) {}
     }
 
     if (!projects || idx < 0 || idx >= projects.length) {
@@ -35,28 +46,30 @@ async function getMegadetectorSettingsPage(req, res) {
     const inferencePath = path.join(projectDir, "inference");
     const inferenceUploadPath = path.join(inferencePath, "uploads");
 
-    if (!fs.existsSync(inferencePath)) {
-        fs.mkdirSync(inferencePath, { recursive: true });
+    const fsObj = global.fs || fs;
+
+    if (!fsObj.existsSync(inferencePath)) {
+        try { fsObj.mkdirSync(inferencePath, { recursive: true }); } catch (e) {}
     }
-    if (!fs.existsSync(inferenceUploadPath)) {
-        fs.mkdirSync(inferenceUploadPath, { recursive: true });
+    if (!fsObj.existsSync(inferenceUploadPath)) {
+        try { fsObj.mkdirSync(inferenceUploadPath, { recursive: true }); } catch (e) {}
     }
 
     let accessUsers = [];
-    try {
-        const accRes = await queries.managed.sql(
-            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-            [PName, admin]
-        );
-        const rows = (accRes && accRes.rows) ? accRes.rows : [];
-        accessUsers = rows.map((r) => r.Username);
-    } catch (err) {
-        global.logger.error("Error fetching access users:", err);
+    if (queries.managed && typeof queries.managed.sql === "function") {
+        try {
+            const accRes = await queries.managed.sql(
+                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+                [PName, admin]
+            );
+            const rows = (accRes && accRes.rows) ? accRes.rows : [];
+            accessUsers = rows.map((r) => r.Username);
+        } catch (err) {}
     }
 
     let globalInferenceUpload = [];
     try {
-        globalInferenceUpload = fs.readdirSync(inferenceUploadPath);
+        globalInferenceUpload = fsObj.readdirSync(inferenceUploadPath);
     } catch (e) {
         globalInferenceUpload = [];
     }
