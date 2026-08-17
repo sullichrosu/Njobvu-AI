@@ -266,7 +266,7 @@ The table is sorted by latest run first. All stdout from your script is logged i
 
 **Check Status of Run:**
 - "DONE" means your script has successfully finished.
-- "FAILED" menas your script errored out. You can check the source of the error by reading the log file.
+- "FAILED" means your script errored out. You can check the source of the error by reading the log file.
 - "RUNNING" means your script is still running.
 
 **Download Logs and Weights:**

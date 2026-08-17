@@ -1,4 +1,6 @@
-<%- include('includes/header') %>
+
+<%- include('includes/header', { activePage }) %>
+<%- include('includes/configNav', { activePage }) %>
 <script>
 	console.log("<%= acc.includes(user)%>");
 	if("<%= acc.includes(user)%>" == "false")
@@ -8,32 +10,15 @@
 	console.log("DAdmin: <%= DAdmin.includes('benny')%>")
 </script>
 <div id="config">
-	<div class="col-md-12">
-		<ul class="nav nav-tabs">
-			<li class="nav-item">
-				<a class="nav-link" href="/project?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Labels</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link active" href="/config?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link" href="/download?IDX=<%= IDX %>" style="border-radius: 0">Download</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link" href="/stats?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link" href="/training?IDX=<%= IDX %>" style="border-radius: 0">Tensorflow</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link" href="/yolo?IDX=<%= IDX %>" style="border-radius: 0">Yolo</a>
-			</li>
-		</ul>
-	</div>
-	<div class="col-md-12">
-		<h1 style="text-align: center;"><%= PName %></h1>
-	</div>
-	
+	<!-- <div>
+		<div class="sidebar">
+			<ul>
+				<li>
+					<a class="nav-link" href="/config/projSettings?IDX=<%= IDX %>" style="border-radius: 0">Project Configurations</a>
+				</li>
+			</ul>
+		</div>
+	</div> -->
 	<div class="container">
 		<div class="col-md-12">
 			<div class="card">
@@ -78,7 +63,6 @@
 				</div>
 			</div>
 		</div>
-		
 		<div class="col-md-12">
 			<div class="card">
 				<div class="card-header">
@@ -86,12 +70,20 @@
 				</div>
 				<div class="card-body">
 					<p class="card-text">
-			
 						<form class="delete-class-form" action ="/deleteClass" method="POST" enctype="multipart/form-data" id="deleteClassForm">
 							<div class="form-group row">
 								<div class="col-md-10 mr-0 ml-0 row justify-content-md-center padding" >
-									<% for(var i=0; i<classes.length; i++) {%>										
-										<button type="button" value="<%=classes[i].CName%>" class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>"><%= i+1 %>: <%= classes[i].CName %></button>
+									<% for(var i=0; i<classes.length; i++) {%>			
+										<input type="hidden" name="CName" value="<%= classes[i].CName %>" data-id="updateButton<%=i%>">							
+										<button 
+											contenteditable="true"
+											id="updateButton<%=i%>" 
+											type="button" 
+											value="<%=classes[i].CName%>" 
+											class="col-sx-3 mr-1 ml-1 pt-0 pb-0 btn class-selection" 
+											style="background-color: <%= colors[i].value %>; border-radius: 0; border: 5px solid <%= colors[i].value %>">
+											<span contenteditable="false"><%= i+1 %>: </span><%= classes[i].CName %>
+										</button>
 									<% } %>
 								</div>		
 								<div class="col-md-2 text-right">
@@ -103,7 +95,6 @@
 								</div>	
 							</div>
 						</form>
-
 						<form class="add-classes-form" action ="/addClasses" method="POST" enctype="multipart/form-data" id="addClassesForm">
 							<input type="hidden" name="PName" value="<%= PName %>">
 							<input type="hidden" name="Admin" value="<%= Admin %>">
@@ -119,7 +110,6 @@
 									<%}else {%>
 										<a href="#" role="button" class="btn btn-primary disabled" value="Add" style="border-radius: 0">Add</a>
 									<%}%>
-
 								</div>
 							</div>
 						</form>
@@ -166,7 +156,6 @@
 				</div>
 				<div class="card-body">
 					<p class="card-text">
-						
 						<table class="table table-striped">
 							<tbody>
 								<tr>
@@ -238,15 +227,17 @@
 				</div>
 			</div>
 		</div>
-		
+		<div class="card">
 		<div class="col-md-12">
-			<div class="card">
 				<div class="card-header">
 					Merge Projects
 				</div>
 				<div class="card-body">
 					<p class="card-text">
 						<form class="add-User-form" action="/mergeTest" method="POST" enctype="multipart/form-data" id="mergeForm">
+							<input type="hidden" name="PName" value="<%= PName %>">
+							<input type="hidden" name="Admin" value="<%= Admin %>">
+							<input type="hidden" name="IDX" value="<%= IDX %>">
 							<div class="form-group row">
 								<label class="col-md-4 col-form-label" for="upload_project">Upload Project (.zip)</label>
 								<div class="col-md">
@@ -445,6 +436,66 @@
 
 	</div>
 </div>
+
+
+<script>
+
+	document.querySelectorAll(".class-selection").forEach(button => {
+		button.addEventListener("blur", function(){
+			const UpdatedContent = this.textContent.trim();
+			const buttonID = this.id;
+
+			console.log("UpdatedContent: ", UpdatedContent);
+			console.log("buttonID: ", buttonID);
+
+			const [classNumber, newClassName] = UpdatedContent.split(": ").map(item => item.trim());
+
+			 const currentClassName = document.querySelector(`input[name="CName"][data-id="${buttonID}"]`).value;
+
+			console.log("classNumber: ", classNumber);
+			console.log("newClassName: ", newClassName);
+			console.log("currentClassName: ", currentClassName);
+
+			updateDatabase(buttonID, classNumber, currentClassName ,newClassName);
+		});
+	});
+
+	function updateDatabase(buttonID, classNumber, currentClassName ,newClassName){
+		
+		const classId = buttonID.replace("updateButton", "");
+
+		console.log("classId: ", classId);
+
+		var allData = new FormData();
+		allData.append("classId", classId);
+		allData.append("classNumber", classNumber);
+		allData.append("currentClassName", currentClassName);
+		allData.append("className", newClassName);
+		allData.append("PName", "<%= PName %>");
+		allData.append("Admin", "<%= Admin %>");
+		allData.append("IDX", "<%= IDX %>");
+	
+		fetch('/updateClass', {
+			method: 'POST',
+			body: allData
+		})
+		.then(response => {
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+			return response.json();
+		})
+		.then(result => {
+			// Handle successful response
+			console.log("Success:", result);
+		})
+		.catch(error => {
+			// Handle any errors (network errors, HTTP errors)
+			console.error("Error:", error.message);
+		});
+	}
+
+</script>
 
 <script>
 	$(".class-selection").click(function () {

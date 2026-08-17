@@ -1,0 +1,485 @@
+<%- include('includes/header') %>
+<%- include('includes/inferenceNav', { activePage }) %>
+
+<%
+    const imageExtensions = [
+        ".jpg", ".jpeg", ".png", ".gif",
+        ".webp", ".bmp", ".tiff", ".tif",
+        ".svg", ".avif"
+    ];
+%>
+
+<script>
+    if ("<%= access.includes(user) %>" == "false") {
+        window.location.replace("/home");
+    }
+</script>
+
+<h1 style="text-align: center;">
+    <%= PName %>
+</h1>
+
+<div id="Inference" style="width: 100%; padding-left: 50px">
+    <div class="container">
+        <h3>List of Inference Runs <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="View past inference prediction runs, inspect confidence scores, or add detections to training dataset">?</span></h3>
+
+        <div class="col-12">
+            <table class="table table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th scope="col">Run Name</th>
+                        <th class="text-center">Run Type</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center" scope="col">Files</th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <% for (var i = 0; i < logs_inf.length; i++) { %>
+                        <tr>
+                            <td scope="row">
+                                <button
+                                    type="button"
+                                    class="btn btn-primary"
+                                    data-toggle="modal"
+                                    data-target="#log_modal<%= i %>"
+                                >
+                                    <%= logs_inf[i] %>
+                                </button>
+                            </td>
+
+                            <td scope="row">
+                                <%= run_types[i] %>
+                            </td>
+
+                            <% if (run_status_inf[i] == "FAILED") { %>
+                                <td class="text-center">
+                                    <button
+                                        type="button"
+                                        class="btn"
+                                        style="background-color: black; color: white;"
+                                        data-toggle="modal"
+                                        data-target="#error_modal<%= i %>"
+                                    >
+                                        <%= run_status_inf[i] %>
+                                    </button>
+                                </td>
+                            <% } else { %>
+                                <td class="text-center">
+                                    <button
+                                        type="button"
+                                        class="btn"
+                                        style="background-color: green; color: white;"
+                                        data-toggle="modal"
+                                        data-target="#log_modal<%= i %>"
+                                    >
+                                        <%= run_status_inf[i] %>
+                                    </button>
+                                </td>
+                            <% } %>
+
+                            <form action="downloadRun" method="POST" enctype="multipart/form-data">
+                                <td>
+                                    <ul>
+                                        <% for (var j = 0; j < weights_inf[i].length; j++) { %>
+                                            <%
+                                                const filename = weights_inf[i][j];
+                                                const lower = filename.toLowerCase();
+                                                const isImage = imageExtensions.some(ext => lower.endsWith(ext));
+                                            %>
+
+                                            <% if (!isImage && filename !== "images") { %>
+                                                <li>
+                                                    <a href="/projects/<%= Admin %>-<%= PName %>/inference/logs/<%= log_folder_inf[i] %>/<%= weights_inf[i][j] %>">
+                                                        <%= weights_inf[i][j] %>
+                                                    </a>
+                                                </li>
+                                            <% } %>
+                                        <% } %>
+                                    </ul>
+                                </td>
+
+                                <td class="text-center">
+                                    <input type="hidden" name="PName" value="<%= PName %>">
+                                    <input type="hidden" name="Admin" value="<%= Admin %>">
+                                    <input type="hidden" name="IDX" value="<%= IDX %>">
+                                    <input type="hidden" name="log_file" value="<%= logs_inf[i] %>">
+                                    <input type="hidden" name="run_path" value="<%= run_paths_inf[i] %>">
+
+                                    <div class="d-flex flex-column">
+                                        <button
+                                            type="submit"
+                                            name="form_action"
+                                            value="download"
+                                            class="btn btn-primary mb-2"
+                                        >
+                                            Download
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            class="btn btn-secondary mb-2"
+                                            data-toggle="modal"
+                                            data-target="#images_modal<%= i %>"
+                                            onclick="initCarousel(<%= i %>)"
+                                        >
+                                            View Images
+                                        </button>
+                                    </div>
+                                </td>
+                            </form>
+
+                            <td class="text-center">
+                                <% if ((run_types[i] === 'YOLO' || run_types[i] === 'MegaDetector') && run_status_inf[i] !== 'RUNNING' && run_status_inf[i] !== 'FAILED') { %>
+                                    <div class="input-group input-group-sm mb-2">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text" data-toggle="tooltip" title="Minimum confidence score threshold (0.0 to 1.0) for active learning">Min Conf <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Filter bounding box detections by minimum score">?</span></span>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            class="form-control add-to-dataset-conf"
+                                            value="0.5"
+                                            min="0"
+                                            max="1"
+                                            step="0.05"
+                                        >
+
+                                        <button
+                                            type="button"
+                                            class="btn btn-success add-to-dataset-btn mt-2"
+                                            data-pname="<%= PName %>"
+                                            data-admin="<%= Admin %>"
+                                            data-idx="<%= IDX %>"
+                                            data-timestamp="<%= log_folder_inf[i] %>"
+                                            data-toggle="tooltip"
+                                            title="Copy predictions above confidence threshold directly into training dataset"
+                                        >
+                                            Add to Training Set <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Active learning: transfer predictions into labeled dataset">?</span>
+                                        </button>
+                                    </div>
+                                <% } %>
+                            </td>
+
+                            <td class="text-right">
+                                <% if (run_status_inf[i] != "RUNNING") { %>
+                                    <form action="deleteRun" method="POST" enctype="multipart/form-data">
+                                        <input type="hidden" name="PName" value="<%= PName %>">
+                                        <input type="hidden" name="Admin" value="<%= Admin %>">
+                                        <input type="hidden" name="IDX" value="<%= IDX %>">
+                                        <input type="hidden" name="weights" value="<%= weights_inf[i] %>">
+                                        <input type="hidden" name="log_file" value="<%= logs_inf[i] %>">
+                                        <input type="hidden" name="run_path" value="<%= run_paths_inf[i] %>">
+                                        <input type="hidden" name="type" value="inference">
+
+                                        <button
+                                            type="submit"
+                                            name="form_action"
+                                            value="download"
+                                            class="btn btn-danger"
+                                        >
+                                            Delete
+                                        </button>
+                                    </form>
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<% for (let i = 0; i < logs_inf.length; i++) { %>
+  <div class="modal fade" id="images_modal<%= i %>" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title">
+            <%= logs_inf[i] %> — Images
+          </h4>
+
+          <button type="button" class="close" data-dismiss="modal">
+            <span>&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+            <div
+                style="position: relative; height: 75vh; display: flex; align-items: center; justify-content: center;"
+            >
+                <img
+                id="carousel-img-<%= i %>"
+                style="max-height: 100%; max-width: 100%; object-fit: contain;"
+                >
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="
+                        position: absolute;
+                        left: 10px;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        opacity: 0.7;
+                    "
+                    onclick="carouselPrev(<%= i %>)"
+                >
+                ◀
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="
+                        position: absolute;
+                        right: 10px;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        opacity: 0.7;
+                    "
+                    onclick="carouselNext(<%= i %>)"
+                >
+                ▶
+                </button>
+            </div>
+
+            <div class="text-center mt-3">
+                <span id="carousel-counter-<%= i %>"></span>
+            </div>
+
+            <div class="text-center text-muted mt-2" style="font-size: 0.9rem;">
+                ← key = previous &nbsp;&nbsp; | &nbsp;&nbsp; → key = next
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.carouselData = window.carouselData || {};
+
+    window.carouselData[<%= i %>] = {
+        images: [],
+        index: 0,
+        loaded: false,
+        runId: "<%= log_folder_inf[i] %>",
+        basePath: "/projects/<%= Admin %>-<%= PName %>/inference/logs/<%= log_folder_inf[i] %>/"
+    };
+  </script>
+<% } %>
+
+<% for (var i = 0; i < logs_inf.length; i++) { %>
+    <div
+        class="modal fade"
+        id="log_modal<%= i %>"
+        tabindex="-1"
+        role="dialog"
+        aria-labelledby="menuModal"
+    >
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title" id="myModalLabel">
+                        <%= logs_inf[i] %>
+                    </h4>
+                    <button
+                        type="button"
+                        class="close"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <pre><%= log_contents_inf[i] %></pre>
+            </div>
+        </div>
+    </div>
+
+    <div
+        class="modal fade"
+        id="error_modal<%= i %>"
+        tabindex="-1"
+        role="dialog"
+        aria-labelledby="menuModal"
+    >
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title" id="myModalLabel">
+                        <%= logs_inf[i] %>
+                    </h4>
+                    <button
+                        type="button"
+                        class="close"
+                        data-dismiss="modal"
+                        aria-label="Close"
+                    >
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <pre><%= err_contents_inf[i] %></pre>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<script>
+let activeCarousel = null;
+
+function buildPath(data, filename) {
+    return data.basePath + filename;
+}
+
+function updateImage(runId) {
+    const data = window.carouselData[runId];
+    if (!data || data.images.length === 0) return;
+
+    const imgEl = document.getElementById("carousel-img-" + runId);
+    const counterEl = document.getElementById("carousel-counter-" + runId);
+
+    const idx = ((data.index % data.images.length) + data.images.length) % data.images.length;
+    data.index = idx;
+
+    imgEl.src = buildPath(data, data.images[idx]);
+
+    counterEl.textContent = (idx + 1) + " / " + data.images.length;
+
+    preload(runId, idx + 1);
+    preload(runId, idx - 1);
+}
+
+function preload(runId, idx) {
+    const data = window.carouselData[runId];
+    if (!data) return;
+
+    const normalized = ((idx % data.images.length) + data.images.length) % data.images.length;
+    const img = new Image();
+
+    img.src = buildPath(data, data.images[normalized]);
+}
+
+function carouselNext(runId) {
+    const data = window.carouselData[runId];
+    if (!data) return;
+
+    data.index++;
+    updateImage(runId);
+}
+
+function carouselPrev(runId) {
+    const data = window.carouselData[runId];
+    if (!data) return;
+
+    data.index--;
+    updateImage(runId);
+}
+
+
+async function initCarousel(runId) {
+    const data = window.carouselData[runId];
+    if (!data) return;
+
+    activeCarousel = runId;
+
+    if (!data.loaded) {
+        try {
+            const response = await fetch(
+                `/runs/${data.runId}/images?Admin=<%= Admin %>&PName=<%= PName %>`
+            );
+
+            const result = await response.json();
+
+            data.images = result.images || [];
+            data.loaded = true;
+        } catch (err) {
+            console.error("Failed to load images", err);
+        }
+    }
+
+    if (data.images.length > 0) {
+        updateImage(runId);
+    } else {
+        const counterEl = document.getElementById("carousel-counter-" + runId);
+        counterEl.textContent = "No images";
+    }
+}
+
+document.addEventListener("shown.bs.modal", function (event) {
+    const modal = event.target;
+
+    const id = modal.id;
+    if (!id.startsWith("images_modal")) return;
+
+    const runId = id.replace("images_modal", "");
+    updateImage(runId);
+});
+
+
+document.addEventListener("keydown", function (e) {
+    if (activeCarousel === null) return;
+
+    if (e.key === "ArrowRight") {
+        carouselNext(activeCarousel);
+    }
+
+    if (e.key === "ArrowLeft") {
+        carouselPrev(activeCarousel);
+    }
+});
+
+
+document.addEventListener("hidden.bs.modal", function () {
+  activeCarousel = null;
+});
+
+document.addEventListener("click", async function (e) {
+    const btn = e.target.closest(".add-to-dataset-btn");
+    if (!btn) return;
+
+    const inputGroup = btn.closest(".input-group");
+    const confInput = inputGroup.querySelector(".add-to-dataset-conf");
+
+    const PName = btn.dataset.pname;
+    const Admin = btn.dataset.admin;
+    const IDX = btn.dataset.idx;
+    const runTimestamp = btn.dataset.timestamp;
+    const minConfidence = confInput.value;
+
+    btn.disabled = true;
+    btn.textContent = "Adding...";
+
+    try {
+        const response = await fetch("/inference/add-inference-run-to-dataset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ PName, Admin, IDX, runTimestamp, minConfidence })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.Success) {
+            alert(
+                `Done!\n\n` +
+                `Images copied: ${result.imagesCopied}\n` +
+                `Label files written: ${result.labelFilesWritten}\n` +
+                `Detections skipped (unknown class): ${result.skippedUnknownClass ?? 0}\n` +
+                `Images skipped (not found): ${result.skipped.length}`
+            );
+        } else {
+            alert(`Error: ${result.message || response.statusText}`);
+        }
+    } catch (err) {
+        alert(`Request failed: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Add to Training Set";
+    }
+});
+</script>
+<%- include('includes/footer') %>
+

@@ -19,7 +19,7 @@
 										<%=Fname%>
 									</td>
 									<td class="text-right">
-										<button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Fchange" data-toggle="modal" data-target="#FName_modal" style="border-radius: 0">Change</button>
+										<button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Fchange" aria-label="Change first name" data-toggle="modal" data-target="#FName_modal" style="border-radius: 0">Change</button>
 									</td>
 								</tr>
 
@@ -29,7 +29,7 @@
 										<%=Lname%>
 									</td>
 									<td class="text-right">
-                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Lchange" data-toggle="modal" data-target="#LName_modal" style="border-radius: 0">Change</button>
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Lchange" aria-label="Change last name" data-toggle="modal" data-target="#LName_modal" style="border-radius: 0">Change</button>
 									</td>
 								</tr>
 
@@ -39,7 +39,7 @@
 										<%=email%>
 									</td>
 									<td class="text-right">
-                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Echange" data-toggle="modal" data-target="#Email_modal" style="border-radius: 0">Change</button>
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Echange" aria-label="Change email" data-toggle="modal" data-target="#Email_modal" style="border-radius: 0">Change</button>
                                     </td>
 								</tr>
 
@@ -49,7 +49,7 @@
 										<%=user%>
 									</td>
 									<td class="text-right">
-                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Uchange" data-toggle="modal" data-target="#Uname_modal" style="border-radius: 0">Change</button>
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Uchange" aria-label="Change username" data-toggle="modal" data-target="#Uname_modal" style="border-radius: 0">Change</button>
                                     </td>
 								</tr>
 
@@ -59,13 +59,13 @@
 										********
 									</td>
 									<td class="text-right">
-                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Pchange" data-toggle="modal" data-target="#Password_modal" style="border-radius: 0">Change</button>
+                                        <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="Pchange" aria-label="Change password" data-toggle="modal" data-target="#Password_modal" style="border-radius: 0">Change</button>
                                     </td>
 								</tr>
 								<tr>
 									<td >
 										<form class="deleteUserForm" action ="/deleteUser" method="POST" enctype="multipart/form-data" id="deleteUserForm">
-											<input type="submit" class="btn btn-danger" value="Delete User" style="border-radius: 0">
+											<input type="submit" class="btn btn-danger" aira-label="Delete user" value="Delete User" style="border-radius: 0">
 										</form>
 									</td>
 								</tr>
@@ -80,11 +80,11 @@
 </div>
 
 <!-- Modals -->
-<div class="modal fade" id="FName_modal" tabindex="-1" role="dialog" aria-labelledby="FNameModal">
+<div class="modal fade" id="FName_modal" tabindex="-1" role="dialog" aria-labelledby="FirstNameModal">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Change First Name</h4>
+                <h4 class="modal-title" id="FirstNameModal">Change First Name</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -99,7 +99,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="text" name="Fname" id="Fname" value="<%= Fname%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Fname" required>
+									<input type="text" name="Fname" id="Fname" aria-label="Enter first name" value="<%= Fname%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Fname" required>
 								</td>
 							</tr>
 							<tr>
@@ -122,7 +122,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Change Last Name</h4>
+                <h4 class="modal-title" id="LNameModal">Change Last Name</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -137,7 +137,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="text" name="Lname" id="Lname" value="<%= Lname%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Lname" required>
+									<input type="text" name="Lname" id="Lname" aria-label="Enter last name" value="<%= Lname%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Lname" required>
 								</td>
 							</tr>
 							<tr>
@@ -159,7 +159,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Change Email</h4>
+                <h4 class="modal-title" id="LNameModal">Change Email</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -174,7 +174,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="text" name="email" id="email" value="<%= email%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="email" required>
+									<input type="text" name="email" id="email" aria-label="Enter email" value="<%= email%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="email" required>
 								</td>
 							</tr>
 							<tr>
@@ -196,7 +196,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Change Username</h4>
+                <h4 class="modal-title" id="UnameModal">Change Username</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -211,7 +211,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="text" name="Uname" id="Uname" value="<%= user%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Uname" required>
+									<input type="text" name="Uname" id="Uname" aria-label="Enter username" value="<%= user%>" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Uname" required>
 								</td>
 							</tr>
 							<tr>
@@ -232,7 +232,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Change Password</h4>
+                <h4 class="modal-title" id="PasswordModal">Change Password</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -247,7 +247,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="password" name="oldPassword" id="oldPassword" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="oldPassword" required>
+									<input type="password" name="oldPassword" id="oldPassword" aria-label="Enter old password" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="oldPassword" required>
 								</td>
 							</tr>
 							<tr>
@@ -257,7 +257,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="password" name="newPassword" id="newPassword" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="newPassword" required>
+									<input type="password" name="newPassword" id="newPassword" aria-label="Enter new password" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="newPassword" required>
 								</td>
 							</tr>
 							<tr>
@@ -267,7 +267,7 @@
 							</tr>
 							<tr>
 								<td colspan="2">
-									<input type="password" name="rPassword" id="rPassword" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="rPassword" required>
+									<input type="password" name="rPassword" id="rPassword" aria-label="Retype password" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="rPassword" required>
 								</td>
 							</tr>
 							<tr>

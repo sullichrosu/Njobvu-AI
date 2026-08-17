@@ -1,0 +1,12 @@
+<div class="col-md-12">
+    <ul class="nav nav-tabs">
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'ProjectV' ? 'active' : '' %>" href="/projectV?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Project</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'ConfigurationV' ? 'active' : '' %>" href="/configV?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'StatsV' ? 'active' : '' %>" href="/statsV?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
+        </li>
+    </ul>

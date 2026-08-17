@@ -1,0 +1,196 @@
+<%- include('../includes/header') %>
+<%- include('../includes/configNav', { activePage }) %>
+
+<div class="container  pb-5">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Class Settings</h1>
+            <p>
+                This page allows you to update your current classes, delete classes, or add new classes to the Njobvu AI platform. 
+            </p>
+            <hr>
+        </div>
+    </div>
+    <div>
+        <h3> Add New Class</h3>
+        <p>
+            Add a new class to this existing project.
+        </p>
+        <form class="row" action="/addClasses" method="POST" enctype="multipart/form-data" id="addClassesForm">
+            <input type="hidden" name="PName" value="<%= PName %>">
+            <input type="hidden" name="Admin" value="<%= Admin %>">
+            <input type="hidden" name="IDX" value="<%= IDX %>">
+            <div class="col-auto">
+              <input name="input_classes" type="text" class="form-control" id="input_classes" placeholder="cat,dog,large mouse" required>
+            </div>
+            <div class="col-auto">
+                <% if(user == Admin) {%>
+                    <button type="submit" class="btn btn-primary mb-3">Add</button>
+                <%}else {%>
+                    <a href="#" role="button" class="btn btn-danger disabled" value="Add">Add</a>
+                <%}%>
+            </div>
+        </form>
+        <hr>
+        <div>
+            <h3>Update Class Information</h3>
+            <p>
+                Update the class information for this existing project.
+            </p>
+            <form class="row" action="/updateClass" method="POST" enctype="multipart/form-data" id="updateClassForm">
+                <input type="hidden" name="PName" value="<%= PName %>">
+                <input type="hidden" name="Admin" value="<%= Admin %>">
+                <input type="hidden" name="IDX" value="<%= IDX %>">
+                <% for(var i=0; i<classes.length; i++) {%>
+                    <div class="col-auto mr-4 mb-4">
+                        <input class="form-check-input self-align-center" type="checkbox" value="<%=classes[i].CName%>" id="checkClass-<%= i %>" aria-label="Select <%=classes[i].CName%>">
+                        <input name="input_updateClass" type="text" class="form-control" style="outline: 2px solid <%= colors[i].value %>" id="input_updateClass-<%= i %>" aria-label="Current class name" value="<%=classes[i].CName%>"  required>
+                    </div>
+                <% } %>
+            </form>
+        </div>
+        <hr>
+        <h3>Delete Class</h3>
+            <p>
+                delete by selecting the class information above for this existing project.
+            </p>
+            <button type="button" id="deleteButton" class="btn btn-danger">Delete Selected</button>
+
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll("#updateClassForm input[name='input_updateClass']")
+    .forEach(input => {
+        const originalValue = input.value;
+
+        // Handle blur event
+        input.addEventListener("blur", async function(event) {
+            const updatedValue = this.value;
+            const inputElement = this; // Capture the input element reference
+
+            if (updatedValue !== originalValue) {
+                console.log("Updating class name...");
+                $.ajax({
+                    type: "POST",
+                    url: '/updateClass',
+                    data: {
+                        currentClassName: originalValue,
+                        updatedValue: updatedValue,
+                        PName: "<%= PName %>",
+                        Admin: "<%= Admin %>"
+                    },
+                    success: function(response) {
+                        console.log(response); 
+
+                        const checkbox = inputElement.closest(".col-auto").querySelector("input[type='checkbox']");
+                        checkbox.value = updatedValue; 
+                    },
+                    error: function(error) {
+                        console.error("Error updating class name:", error);
+                    }
+                });
+            }
+        });
+
+        // Handle Enter key press
+        input.addEventListener("keydown", function(event) {
+            const inputElement = this; // Capture the input element reference
+
+            if (event.key === "Enter") {
+                event.preventDefault();
+
+                const updatedValue = this.value;
+
+                if (updatedValue !== originalValue) {
+                    console.log("Updating class name...");
+                    $.ajax({
+                        type: "POST",
+                        url: '/updateClass',
+                        data: {
+                            currentClassName: originalValue,
+                            updatedValue: updatedValue,
+                            PName: "<%= PName %>",
+                            Admin: "<%= Admin %>"
+                        },
+                        success: function(response) {
+                            console.log(response); // Log success response
+
+                            // Use the captured input element reference
+                            const checkbox = inputElement.closest(".col-auto").querySelector("input[type='checkbox']");
+                            checkbox.value = updatedValue; // Update the checkbox value dynamically
+                            const alertDiv = `<div class="alert alert-success" role="alert">
+                                            Class ${originalValue} updated to ${updatedValue} successfully!
+                                            </div>`;
+                            
+                            document.getElementById("updateClassForm").insertAdjacentHTML("afterend", alertDiv);
+
+                        },
+                        error: function(error) {
+                            console.error("Error updating class name:", error);
+                            const alertDiv = `<div class="alert alert-danger" role="alert">
+                                            Error updating class ${originalValue} to ${updatedValue}!
+                                            </div>`;
+                                    
+                            document.getElementById("updateClassForm").insertAdjacentHTML("afterend", alertDiv);
+                            
+                        }
+                    });
+                }
+                input.blur(); // Mimic losing focus
+            }
+        });
+    });
+
+</script>
+
+
+<script>
+    document.getElementById("deleteButton").addEventListener("click", async function(event){
+        const checkedBoxes = [];
+        document.querySelectorAll("#updateClassForm input[type='checkbox']:checked").forEach((checkbox) => {
+            const className = checkbox.getAttribute("value");
+            checkedBoxes.push(className);
+        })
+        
+        const classesLength = "<%= classes.length %>";
+
+        if(classesLength == 1){
+            const alertDiv = `<div class="alert alert-danger" role="alert">
+                                Cannot delete the last class in the project!
+                              </div>`;
+        
+            document.getElementById("updateClassForm").insertAdjacentHTML("afterend", alertDiv);
+        }
+        else if(classesLength == checkedBoxes.length){
+            const alertDiv = `<div class="alert alert-danger" role="alert">
+                                Cannot delete all classes in the project!
+                              </div>`;
+        
+            document.getElementById("updateClassForm").insertAdjacentHTML("afterend", alertDiv);
+        }
+        else if(checkedBoxes.length == 0){
+            alert("Please select a class to delete");
+        }
+        else if(confirm("Are you sure you want to delete the selected classes?")){
+            $.ajax({
+                type: "POST",
+                url: '/deleteClass',
+                data: {
+                    classArray: checkedBoxes,
+                    PName: "<%= PName %>",
+                    Admin :"<%= Admin %>",
+                    IDX: "<%= IDX %>"
+                },
+                success: function(data) {
+                    location.reload();
+                },
+                error: function (data) {
+                    alert("Error occurred while deleting the classes");
+                }
+            })
+        }
+    });
+
+</script>
+

@@ -19,23 +19,24 @@
 	</div>
     <div class="col-12">
         <table class="table table-striped">
-            <thead class="thead-dark">
-                <tr>
-                    <th scope="col">Project Name</th>
+            <colgroup>
+                <col style="width: 10%;">  <col style="width: 10%;"> <col style="width: 20%;"> <col style="width: 20%;">  <col style="width: 20%;"> </colgroup>
+			<thead class="thead-dark">
+				<tr>
+					<th scope="col">Project Name</th>
 					<th class="text-center" scope="col">Admin</th>
-					<th></th>
+					<th class="text-center" scope="col">Review Status</th>
 					<th class="text-center" scope="col">Number of Labels</th>
 					<th class="text-center" scope="col">Number of Images</th>
 					<th class="text-center" scope="col">% Labeled</th>
-					<th></th>
-					<th></th>
-					<th></th>
-                </tr>
-            </thead>
+
+					<th scope="col" colspan="3" class="text-center">Project Actions</th>
+				</tr>
+			</thead>
             <tbody>
                 <% for(var i=((page-1)*perPage); i<(Math.min(projects.length,(((page-1)*perPage)+Number(perPage)))); i++) {%>
 					<tr>
-						<td scope="row"><a href="/projectV?IDX=<%= projects[i][1] %>%>&page=1&perPage=<%= perPage %>&sort=null&class=null"><%= projects[i][0].PName %></a></td>
+						<td scope="row"><a href="/projectV?IDX=<%= projects[i][1] %>&page=1&perPage=<%= perPage %>&sort=null&class=null"><%= projects[i][0].PName %></a></td>
 						<td class="text-center" scope="row"><%= projects[i][0].Admin %></td>
 						<% if (projects[i][2] != 0) {%>
 							<td class="text-center" style="color: red;">Needs Review</td>
@@ -50,10 +51,12 @@
 								<input id = "PName<%=i%>" type="hidden" name="PName" value="<%= projects[i][0].PName %>">
 								<input id = "Admin<%=i%>" type="hidden" name="Admin" value="<%= projects[i][0].Admin %>">
 								<input id = "PDescription<%=i%>" type="hidden" name="PDescription" value="<%= projects[i][0].PDescription %>">
-								<button id = "downloadbtn<%=i%>" name="form_action"  id="form-download" value="download" class="btn btn-primary">Download Project</button>
+								<button id="downloadbtn<%=i%>" name="form_action" value="download" class="btn btn-primary" title="Download Project">
+									<i class="fas fa-download"></i>
+								</button>																							
 							</form>
 						</td>
-						<td class="text-right"><button id="changeValidbtn<%=i%>" type="submit" class="btn btn-primary" onclick="changeValidation('<%= projects[i][0].PName %>', '<%= projects[i][0].Admin %>')">Disable Validation</button></td>
+						<td class="text-right"><button id="changeValidbtn<%=i%>" type="button" class="btn btn-primary" onclick="event.stopPropagation(); changeValidation('<%= projects[i][0].PName %>', '<%= projects[i][0].Admin %>')">Disable Validation</button></td>
 						<td class="text-right"><a class="btn btn-primary" href="/projectV?IDX=<%= projects[i][1] %>&page=1&perPage=<%= perPage %>&sort=null&class=null" role="button" style="border-radius: 0">Project Page</a></td>
 					</tr>
 				<% } %>
@@ -117,7 +120,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Import Project</h4>
+                <h4 class="modal-title" id="menuModal">Import Project</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -125,15 +128,15 @@
 					<div class="form-row">
 						<div class="form-group col-md-6">
 							<label for="project-name">Project Name</label>
-							<input id = "project_name" name="project_name" type="text" class="form-control" placeholder="Project Name" required>
+							<input id = "project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
 						</div>
 						<div class="form-group col-md-6">
 							<label for="upload_project">Upload Project (.zip)</label>
-							<input id = "upload_project" name="upload_project" type="file" class="form-control-file" required>
+							<input id = "upload_project" aria-label="Upload project"name="upload_project" type="file" class="form-control-file" required>
 						</div>
 					</div>
 					<div class="col text-center">
-						<label for="progress" id="progress"></label>
+						<label for="progress" id="progress" aria-live="polite" aria-atomic="true" ></label>
 					</div>	
 					<div class="col text-center">
 						<hr class="my-4">
@@ -145,7 +148,25 @@
     </div>
 </div>
 
-
+<div class="modal fade" id="confirmValidModal" tabindex="-1" role="dialog" aria-labelledby="confirmValidModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="confirmValidModalLabel">Disable Validation</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Disabling Validation mode will remove 'Needs Review' from all your images. Are you sure?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmValidBtn">Disable Validation</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 
 <script>
@@ -279,33 +300,41 @@
 			window.location.replace("/home");
 		}
 	}
-	async function changeValidation(Pname, Admin){
+	
+	let pendingPname = null;
+    let pendingAdmin = null;
 
-		if(confirm("Disabling Validation mode will remove 'Needs Review' from all your images ")){
+    function changeValidation(Pname, Admin) {
+        pendingPname = Pname;
+        pendingAdmin = Admin;
+        $('#confirmValidModal').modal('show');
+    }
 
-			var formData = new FormData();
-			formData.append('PName', Pname);
-			formData.append('Admin', Admin);
-			formData.append('validMode', "1");
+    document.getElementById('confirmValidBtn').addEventListener('click', async function() {
+        $('#confirmValidModal').modal('hide');
+        try {
+            var formData = new FormData();
+            formData.append('PName', pendingPname);
+            formData.append('Admin', pendingAdmin);
+            formData.append('validMode', "1");
 
-			let options = {
-				method: 'POST', 
-				body: formData
-			}
+            let response = await fetch('/changeValidation', {
+                method: 'POST',
+                body: formData
+            });
 
-			let cred = await fetch('/changeValidation', options);
-			cred = await cred.json();
-			console.log("cred: ", cred);
-			if(cred.Success == "Yes"){
-				alert("Project has been removed from Validation.");
-				window.location.replace("/homeV");
-			}
-			else{
-				alert("An error occured. Please try again");
-				window.location.replace("/homeV");
-			}
-		}
-	}
+            let cred = await response.json();
+            if(cred.Success == "Yes"){
+                alert("Project has been removed from Validation.");
+                window.location.reload();
+            } else {
+                alert("An error occurred: " + JSON.stringify(cred));
+            }
+            
+        } catch(error) {
+            alert("Request failed: " + error.message);
+        }
+    });
 </script>
 <%- include('includes/footer') %>
 

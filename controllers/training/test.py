@@ -1,13 +1,29 @@
-import sqlite3
+#!/usr/bin/python
+import time
+import glob
+import os
+import sys
 
-# Create a SQL connection to our SQLite database
-con = sqlite3.connect("all.db")
+try:
+        sys.argv[1]
+        sys.argv[2]
+        sys.argv[3]
 
-cur = con.cursor()
+except:
+        print ("")
+        print ("You did not provide all the needed command line arguments")
+        print ("Example:")
+        print (" Test.py <1> <2> <3>")
+        print ("")
 
-# The result of a "cursor.execute" can be iterated over by row
-for row in cur.execute('SELECT * FROM Projects;'):
-    print(row)
+else:
+	one = sys.argv[1]
+	two = sys.argv[2]
+	three = sys.argv[3]
 
-# Be sure to close the connection
-con.close()
+	print ("Test Python 1: " + str(one)+"\t")
+	print ("Test Python 2: " + str(two)+"\t")
+	print ("Test Python 3: " + str(three)+"\n")
+
+
+

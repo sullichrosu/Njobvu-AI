@@ -1,0 +1,123 @@
+<%- include('includes/header') %>
+	<%- include('includes/processingNav', { activePage }) %>
+		<script>
+			// console.log("<%= access.Username%>");
+			if ("<%= access.includes(user)%>" == "false") {
+				window.location.replace("/home");
+			}
+		</script>
+		<h1 style="text-align: center;">
+			<%= PName %>
+		</h1>
+		<div id="training" style="width: 100%; padding-left: 50px">
+			<div class="container">
+				<h3>List of Training Runs</h3>
+				<div class="col-12">
+					<table class="table table-striped">
+						<thead class="thead-dark">
+							<tr>
+								<th scope="col">Run Name</th>
+								<th class="text-center">Status</th>
+								<th class="text-center" scope="col">Files</th>
+								<th></th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							<% for(var i=0; i<logs.length; i++) {%>
+								<tr>
+									<td scope="row"><button type="button" class="btn btn-primary" data-toggle="modal"
+											data-target="#log_modal<%= i%>">
+											<%= logs[i] %>
+										</button></td>
+									<% if(run_status[i]=="FAILED" ){ %>
+										<td class="text-center"><button type="button" class="btn "
+												style="background-color: black; color: white;" data-toggle="modal"
+												data-target="#error_modal<%= i%>">
+												<%= run_status[i] %>
+											</button></td>
+										<% }else{ %>
+											<td class="text-center"><button type="button" class="btn"
+													style="background-color: green; color: white;" data-toggle="modal"
+													data-target="#log_modal<%= i%>">
+													<%= run_status[i] %>
+												</button></td>
+											<% } %>
+												<form action="downloadRun" method="POST" enctype="multipart/form-data">
+													<td>
+														<ul>
+															<%for(var j=0; j<weights[i].length; j++) {%>
+																<li><a
+																		href="/projects/<%= Admin %>-<%= PName %>/training/logs/<%= log_folder[i] %>/<%=weights[i][j]%>">
+																		<%=weights[i][j]%>
+																	</a></li>
+																<% } %>
+														</ul>
+													</td>
+													<td class="text-center">
+														<input type="hidden" name="PName" value="<%= PName %>">
+														<input type="hidden" name="Admin" value="<%= Admin %>">
+														<input type="hidden" name="IDX" value="<%= IDX %>">
+														<input type="hidden" name="log_file" value="<%= logs[i] %>">
+														<input type="hidden" name="run_path"
+															value="<%= run_paths[i] %>">
+														<button type="submit" name="form_action" value="download"
+															class="btn btn-primary">Download</button>
+													</td>
+												</form>
+												<td class="text-right">
+													<% if(run_status[i] !="RUNNING" ){ %>
+														<form action="deleteRun" method="POST"
+															enctype="multipart/form-data">
+															<input type="hidden" name="PName" value="<%= PName %>">
+															<input type="hidden" name="Admin" value="<%= Admin %>">
+															<input type="hidden" name="IDX" value="<%= IDX %>">
+															<input type="hidden" name="weights"
+																value="<%= weights[i] %>">
+															<input type="hidden" name="log_file" value="<%= logs[i] %>">
+															<input type="hidden" name="run_path"
+																value="<%= run_paths[i] %>">
+															<button type="submit" name="form_action" value="download"
+																class="btn btn-danger">Delete</button>
+														</form>
+														<% } %>
+												</td>
+								</tr>
+								<% } %>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<% for(var i=0; i<logs.length; i++) {%>
+			<div class="modal fade" id="log_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+				<div class="modal-dialog modal-lg" role="document">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h4 class="modal-title" id="myModalLabel">
+								<%= logs[i]%>
+							</h4>
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+									aria-hidden="true">&times;</span></button>
+						</div>
+						<pre><%=log_contents[i]%></pre>
+					</div>
+				</div>
+			</div>
+			<div class="modal fade" id="error_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+				<div class="modal-dialog modal-lg" role="document">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h4 class="modal-title" id="myModalLabel">
+								<%= logs[i]%>
+							</h4>
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+									aria-hidden="true">&times;</span></button>
+						</div>
+						<pre><%=err_contents[i]%></pre>
+					</div>
+				</div>
+			</div>
+			<% } %>
+
+				<%- include('includes/footer') %>

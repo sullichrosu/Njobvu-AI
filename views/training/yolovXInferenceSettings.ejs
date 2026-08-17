@@ -1,0 +1,418 @@
+<%- include('../includes/header') %>
+    <%- include('../includes/inferenceNav', { activePage }) %>
+        <script>
+            // console.log("<%= access.Username%>");
+            if ("<%= access.includes(user)%>" == "false") {
+                window.location.replace("/home");
+            }
+        </script>
+        <h1 style="text-align: center;">
+            <%= PName %>
+        </h1>
+        <div id="training" style="width: 100%">
+            <div class="container">
+                <h3>Process Ultralytics YOLO</h3>
+                <div class="col-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">
+                                    <h4>Ultralytics YOLO Base Files</h4>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <form class="add-darknet" action="/yolovx" enctype="multipart/form-data"
+                                        id="yolovxForm">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <h5><label for="project-name">Input YOLO Binary Path</label></h5>
+                                                <input id="yolovx_path" name="yolovx_path" type="text"
+                                                    class="form-control" id="yolovx_path" placeholder="YOLO Path"
+                                                    required>
+                                            </div>
+                                        </div>
+                                        <div class="col text-left">
+                                            <button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+                                                value="submit" style="border-radius: 0">ADD PATH</button>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                    <form class="add-weights" action="/upload_pre_weights" enctype="multipart/form-data"
+                                        id="add-weights">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <h5><label for="upload-weights" style="width: 200%;">Upload
+                                                        model/weights file (.pt, .weights)</label></h5>
+                                                <input id="upload-weights" name="upload-weights" type="file"
+                                                    class="form-control-file" required>
+                                            </div>
+                                        </div>
+                                        <div class="col text-left">
+                                            <button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+                                                value="submit" style="border-radius: 0">ADD FILE</button>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="training" style="width: 100%">
+            <div class="container">
+                <div class="col-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">
+                                    <h4>Ultralytics YOLO Inference</h4>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <form class="add-inference" action="/upload_inference_file"
+                                        enctype="multipart/form-data" id="add-inference">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <h5><label for="upload-inference" style="width: 200%;">Upload inference
+                                                        file (.jpg, .png, .gif, .tif, .mp4)</label></h5>
+                                                <input id="upload-inference" name="upload-inference" type="file"
+                                                    class="form-control-file" required>
+                                                <p>This is for doing predict or track for the YOLO MODE.</p>
+                                            </div>
+                                        </div>
+                                        <div class="col text-left">
+                                            <button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+                                                value="submit" style="border-radius: 0">ADD FILE</button>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                    <form class="Configure Project For YOLO" action="/yolo-inf"
+                                        enctype="multipart/form-data" id="yolo-inf" method=post>
+                                        <input type="hidden" id="yolo_version" name="height" value="5">
+
+                                        <div class="form-row">
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="yolo_task">YOLO TASK:</label></h5>
+                                                <select id="yolo_task" name="yolo_task" style="width: 200%;">
+                                                    <option value="detect">Use Label Data (detect)</option>
+                                                    <option value="classify">Use Annotation Data (classify)</option>
+                                                    <option value="pose">Use Pose Data (pose)</option>
+                                                    <option value="segment">Use Segment Data (segment)</option>
+                                                    <option value="obb">Oriented Bounding Boxes (obb)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="yolo_mode">YOLO MODE:</label></h5>
+                                                <select id="yolo_mode" name="yolo_mode" style="width: 200%;">
+                                                    <option value="predict">Predict Data (predict)</option>
+                                                    <option value="track">Tracking (track)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-2">
+                                                <h5><label for="YOLO">YOLO Path:</label></h5>
+                                                <select name="Yolo" id="Yolo" style="width:100%">
+                                                    <% if(default_path !=null){%>
+                                                        <option>
+                                                            <%= default_path %>
+                                                        </option>
+                                                        <%}%>
+                                                            <% for(var i=0; i<paths.length; i++) {%>
+                                                                <option>
+                                                                    <%= paths[i] %>
+                                                                </option>
+                                                                <% } %>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="upload-command">Model/Weights File:</label></h5>
+                                                <select name="Weights_inf" id="Weights_inf" style="width:100%">
+                                                    <% for(var i=0; i<global_weights.length; i++) {%>
+                                                        <option>
+                                                            <%= global_weights[i]%>
+                                                        </option>
+                                                        <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3">
+                                                <h5><label for="upload-command">Inference Files:</label></h5>
+                                                <select name="Inference" id="Inference" style="width:100%">
+                                                    <% for(var i=0; i<global_inference_upload.length; i++) {%>
+                                                        <option>
+                                                            <%= global_inference_upload[i]%>
+                                                        </option>
+                                                        <% } %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <br>
+                                        <div class="form-row">
+                                            <div class="col text-left">
+                                                <button id="Infbtn" type="submit" class="btn btn-primary btn-lg"
+                                                    value="submit" style="border-radius: 0">RUN INFERENCE</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                    <br>
+                                    <br>
+                                    <br>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <% for(var i=0; i<logs.length; i++) {%>
+            <div class="modal fade" id="log_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+                <div class="modal-dialog modal-lg" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4 class="modal-title" id="myModalLabel">
+                                <%= logs[i]%>
+                            </h4>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+                                    aria-hidden="true">&times;</span></button>
+                        </div>
+                        <pre><%=log_contents[i]%></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal fade" id="error_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+                <div class="modal-dialog modal-lg" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4 class="modal-title" id="myModalLabel">
+                                <%= logs[i]%>
+                            </h4>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span></button>
+                        </div>
+                        <pre><%=err_contents[i]%></pre>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+                <script>
+                    document.addEventListener("DOMContentLoaded", () => {
+                        document.forms['add-inference'].addEventListener('submit', (event) => {
+                            event.preventDefault();
+
+                            console.log("Import inference:");
+                            var formData = new FormData();
+                            const upload_project = document.getElementById('upload-inference');
+                            const files = upload_project.files[0];
+                            console.log(files.size)
+                            if (!files.size > 0) {
+                                alert("File must have a size > 0")
+                            }
+                            else {
+                                formData.append('upload_inference', files);
+
+                                formData.append("PName", "<%= PName %>");
+                                formData.append("Admin", "<%= Admin %>");
+
+
+                                fetch(event.target.action, {
+                                    method: 'POST',
+                                    body: formData
+                                }).then((resp) => {
+                                    return resp.json();
+                                }).then((body) => {
+                                    console.log(body);
+                                    alert(body.Success);
+                                    window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
+
+                                }).catch((error) => {
+                                    console.log(error);
+                                });
+                            }
+                        });
+
+                        document.forms['add-weights'].addEventListener('submit', (event) => {
+                            event.preventDefault();
+
+                            console.log("handleImport");
+                            var formData = new FormData();
+                            const upload_project = document.getElementById('upload-weights');
+                            const files = upload_project.files[0];
+                            console.log(files.size)
+                            if (!files.size > 0) {
+                                alert("File must have a size > 0")
+                            }
+                            else {
+                                formData.append('upload_weights', files);
+
+                                formData.append("PName", "<%= PName %>");
+                                formData.append("Admin", "<%= Admin %>");
+
+
+                                fetch(event.target.action, {
+                                    method: 'POST',
+                                    body: formData
+                                }).then((resp) => {
+                                    return resp.json();
+                                }).then((body) => {
+                                    console.log(body);
+                                    alert(body.Success);
+                                    window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
+
+                                }).catch((error) => {
+                                    console.log(error);
+                                });
+                            }
+                        });
+
+                        document.forms['yolovxForm'].addEventListener('submit', (event) => {
+                            event.preventDefault();
+
+                            console.log("handleImport");
+                            var formData = new FormData();
+
+                            formData.append("yolovx_path", document.getElementById("yolovx_path").value);
+                            formData.append("PName", "<%= PName %>");
+                            formData.append("Admin", "<%= Admin %>");
+
+
+                            fetch(event.target.action, {
+                                method: 'POST',
+                                body: formData
+                            }).then((resp) => {
+                                return resp.json();
+                            }).then((body) => {
+                                console.log(body);
+
+                                alert(body.Success);
+                                window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
+
+                            }).catch((error) => {
+                                console.log(error);
+                            });
+                        });
+
+                        var slider = document.getElementById("TrainingRange");
+                        var sliderval = document.getElementById("demo");
+                        if (slider && sliderval) {
+                            sliderval.innerHTML = slider.value;
+                            slider.oninput = function () {
+                                sliderval.innerHTML = this.value;
+                            }
+                        }
+
+                        document.getElementById("yolo-inf").addEventListener('submit', (event) => {
+                            event.preventDefault();
+                            console.log('Form for yolo-inf handler')
+
+                            var yolovx_path = document.getElementById("Yolo").value;
+                            var weights_file = document.getElementById("Weights_inf").value;
+                            var inference_file = document.getElementById("Inference").value;
+
+                            if (weights_file == "") {
+                                alert("Must select a weights file")
+                                return;
+                            }
+
+                            console.log("inference_file: ", inference_file)
+                            if (inference_file == "") {
+                                alert("Must select a inference file")
+                                return;
+                            }
+
+                            var formData = new FormData();
+                            formData.append("PName", "<%= PName %>");
+                            formData.append("Admin", "<%= Admin %>");
+                            formData.append("yolovx_path", document.getElementById("Yolo").value);
+                            formData.append("weights", document.getElementById("Weights_inf").value);
+                            formData.append("inference_file", document.getElementById("Inference").value);
+                            formData.append("yolo_version", document.getElementById("yolo_version").value);
+                            formData.append("yolo_task", document.getElementById("yolo_task").value);
+                            formData.append("yolo_mode", document.getElementById("yolo_mode").value);
+                            // formData.append("options", document.getElementById("options").value);
+                            // formData.append("device", document.getElementById("device").value);
+
+                            console.log(formData);
+
+                            fetch(event.target.action, {
+                                method: 'POST',
+                                body: formData
+                            }).then((resp) => {
+                                return resp.json();
+                            }).then((body) => {
+                                console.log(body);
+
+                                alert(body.Success);
+                                window.location.replace("/inference?IDX=<%= IDX %>");
+
+                            }).catch((error) => {
+                                console.log(error);
+                            });
+                        });
+
+
+                        document.forms['yolo-run'].addEventListener('submit', (event) => {
+                            event.preventDefault();
+                            console.log('Form for yolo-run handler')
+
+                            var yolovx_path = document.getElementById("Yolo").value;
+                            var weights_file = document.getElementById("Weights").value;
+                            var inference_file = document.getElementById("Inference").value;
+
+                            console.log("weights_file: ", weights_file)
+                            if (weights_file == "") {
+                                alert("Must select a weights file")
+                                return;
+                            }
+
+                            var formData = new FormData();
+                            formData.append("PName", "<%= PName %>");
+                            formData.append("Admin", "<%= Admin %>");
+                            formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+                            formData.append("batch", document.getElementById("batch").value);
+                            formData.append("subdiv", document.getElementById("subdiv").value);
+                            formData.append("yolovx_path", document.getElementById("Yolo").value);
+                            formData.append("weights", document.getElementById("Weights").value);
+                            formData.append("width", document.getElementById("width").value);
+                            formData.append("height", document.getElementById("height").value);
+                            formData.append("yolo_version", document.getElementById("yolo_version").value);
+                            formData.append("yolo_task", document.getElementById("yolo_task").value);
+                            formData.append("yolo_mode", document.getElementById("yolo_mode").value);
+                            formData.append("epochs", document.getElementById("epochs").value);
+                            formData.append("options", document.getElementById("options").value);
+                            formData.append("imgsz", document.getElementById("imgsz").value);
+                            formData.append("device", document.getElementById("device").value);
+
+                            fetch(event.target.action, {
+                                method: 'POST',
+                                body: formData
+                            }).then((resp) => {
+                                return resp.json();
+                            }).then((body) => {
+                                console.log(body);
+
+                                alert(body.Success);
+                                window.location.replace("/inference?IDX=<%= IDX %>");
+
+                            }).catch((error) => {
+                                console.log(error);
+                            });
+                        });
+                    });
+
+                </script>
+                <%- include('../includes/footer') %>

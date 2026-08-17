@@ -1,0 +1,290 @@
+<%- include('../includes/header') %>
+<%- include('../includes/inferenceNav', { activePage }) %>
+
+<script>
+    if ("<%= access.includes(user) %>" == "false") {
+        window.location.replace("/home");
+    }
+</script>
+
+<h1 style="text-align: center;">
+    <%= PName %>
+</h1>
+
+<div id="training" style="width: 100%">
+    <div class="container">
+        <h3>Run InceptionV3 Inference</h3>
+
+        <div class="col-12">
+            <table class="table table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th scope="col">
+                            <h4>InceptionV3 Path Settings</h4>
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr>
+                        <td>
+
+                            <!-- Upload Weights Form -->
+                            <form
+                                class="add-weights"
+                                action="/upload_pre_weights"
+                                enctype="multipart/form-data"
+                                method="POST"
+                                id="add-weights"
+                            >
+                                <input type="hidden" name="PName" value="<%= PName %>">
+                                <input type="hidden" name="Admin" value="<%= Admin %>">
+
+                                <div class="form-row">
+                                    <div class="form-group col-md-6">
+                                        <h5>
+                                            <label for="upload-weights">
+                                                Upload model/weights file (.h5)
+                                            </label>
+                                        </h5>
+                                        <input
+                                            id="upload-weights"
+                                            name="upload_weights"
+                                            type="file"
+                                            class="form-control-file"
+                                            required
+                                        >
+                                    </div>
+                                </div>
+
+                                <div class="col text-left">
+                                    <button
+                                        id="Createbtn"
+                                        type="submit"
+                                        class="btn btn-primary btn-lg"
+                                        style="border-radius: 0"
+                                    >
+                                        ADD FILE
+                                    </button>
+                                </div>
+                            </form>
+
+                            <br><br>
+
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- INFERENCE SECTION -->
+
+<div id="training" style="width: 100%">
+    <div class="container">
+        <div class="col-12">
+            <table class="table table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th scope="col">
+                            <h4>InceptionV3 Inference</h4>
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr>
+                        <td>
+
+                            <!-- Upload Inference File -->
+                            <form
+                                class="add-inference"
+                                action="/upload_inference_file"
+                                enctype="multipart/form-data"
+                                id="add-inference"
+                            >
+                                <div class="form-row">
+                                    <div class="form-group col-md-6">
+                                        <h5>
+                                            <label for="upload-inference">
+                                                Upload inference file (.jpg, .png, .gif, .tif, .mp4)
+                                            </label>
+                                        </h5>
+
+                                        <input
+                                            id="upload-inference"
+                                            name="upload-inference"
+                                            type="file"
+                                            class="form-control-file"
+                                            required
+                                        >
+                                    </div>
+                                </div>
+
+                                <div class="col text-left">
+                                    <button
+                                        id="Createbtn"
+                                        type="submit"
+                                        class="btn btn-primary btn-lg"
+                                        style="border-radius: 0"
+                                    >
+                                        ADD FILE
+                                    </button>
+                                </div>
+                            </form>
+
+                            <br><br>
+
+                            <!-- Inception Inference Config -->
+                            <form
+                                action="/inception-inf"
+                                enctype="multipart/form-data"
+                                id="inception-inf"
+                                method="post"
+                            >
+                                <input type="hidden" name="PName" value="<%= PName %>">
+                                <input type="hidden" name="Admin" value="<%= Admin %>">
+
+                                <div class="form-row">
+                                    <div class="form-group col-md-3">
+                                        <h5><label for="Weights_inf">Model/Weights File:</label></h5>
+                                        <select name="Weights_inf" id="Weights_inf">
+                                            <% for (var i = 0; i < global_weights.length; i++) { %>
+                                                <option><%= global_weights[i] %></option>
+                                            <% } %>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group col-md-3">
+                                        <h5><label for="Inference">Inference Files:</label></h5>
+                                        <select name="Inference" id="Inference">
+                                            <% for (var i = 0; i < global_inference_upload.length; i++) { %>
+                                                <option><%= global_inference_upload[i] %></option>
+                                            <% } %>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group col-md-3">
+                                        <h5><label for="TopK">Top K Predictions per Image:</label></h5>
+                                        <input type="number" id="TopK" name="TopK" value=3 placeholder="Top K Predictions per Image">
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group col-md-3">
+                                        <h5><label for="ImageNet">Use ImageNet Classes</label></h5>
+                                        <input type="checkbox" id="ImageNet" name="ImageNet">
+                                    </div>
+                                </div>
+
+                                <br>
+
+                                <div class="form-row">
+                                    <div class="col text-left">
+                                        <button
+                                            id="Infbtn"
+                                            type="submit"
+                                            class="btn btn-primary btn-lg"
+                                            style="border-radius: 0"
+                                        >
+                                            RUN INFERENCE
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <br><br><br>
+
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.forms['add-weights'].addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    var formData = new FormData();
+
+    const upload_project = document.getElementById('upload-weights');
+    const files = upload_project.files[0];
+
+    if (!files.size > 0) {
+        alert("File must have a size > 0")
+    } else {
+        formData.append('upload_weights', files);
+
+        formData.append("PName", "<%= PName %>");
+        formData.append("Admin", "<%= Admin %>");
+
+        fetch(event.target.action, {
+            method: 'POST',
+            body: formData
+        }).then((resp) => {
+            return resp.json();
+        }).then((body) => {
+            alert(body.Success);
+
+            window.location.replace("/inference/inceptionSettings?IDX=<%= IDX %>");
+        }).catch((error) => {
+            console.log(error);
+        });
+    }
+});
+
+document.getElementById("inception-inf").addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    let weights_file = document.getElementById("Weights_inf").value;
+    let inference_file = document.getElementById("Inference").value;
+    let topK = document.getElementById("TopK").value;
+
+    if (weights_file == "") {
+        alert("Must select a weights file")
+        return;
+    }
+
+    if (inference_file == "") {
+        alert("Must select a inference file")
+        return;
+    }
+
+    if (!topK) {
+        alert("Must choose a Top K value");
+        return;
+    }
+
+    var formData = new FormData();
+
+    formData.append("PName", "<%= PName %>");
+    formData.append("Admin", "<%= Admin %>");
+    formData.append("weights", weights_file);
+    formData.append("inference_file", inference_file);
+    formData.append("using_imagenet_classes", document.getElementById("ImageNet").checked);
+    formData.append("topK", topK);
+
+    fetch(event.target.action, {
+        method: 'POST',
+        body: formData
+    }).then((resp) => {
+        return resp.json();
+    }).then((body) => {
+
+        alert(body.Success);
+        window.location.replace("/inference?IDX=<%= IDX %>");
+
+    }).catch((error) => {
+        console.log(error);
+    });
+});
+</script>
+
+<%- include('../includes/footer') %>

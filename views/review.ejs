@@ -1,0 +1,523 @@
+<%- include('includes/header', { activePage }) %>
+    <div id="review">
+        <div class="container">
+            <div class="Review">
+                <input type="hidden" id="ProjectName" value="<%= PName %>">
+                <input type="hidden" id="username" value="<%= user %>">
+                <input type="hidden" id="admin" value="<%= admin %>">
+                <div class="col-md-12">
+                    <table class="table table-striped">
+                        <thead class="thead-dark">
+                            <h3 class="justify-content-start">
+                                Review Images for Class: <%= displayClassName %>
+                            </h3>
+                            <select class="form-select justify-content-start" aria-label="Default select example"
+                                onchange="window.location.href=this.value;">
+                                <option value="/review?class=<%= encodeURIComponent(unlabeledClass) %>&IDX=<%= IDX %>"
+                                    <%=(selectedClass===unlabeledClass) ? 'selected' : '' %>>
+                                    Unlabeled
+                                </option>
+                                <% classes.forEach(function(classItem) { %>
+                                    <option value="/review?class=<%= classItem.CName %>&IDX=<%= IDX %>"
+                                        <%=(selectedClass===classItem.CName) ? 'selected' : '' %>>
+                                        <%= classItem.CName %>
+                                    </option>
+                                    <% }); %>
+                            </select>
+                            <div style="padding-bottom: 20px; padding-top: 20px;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <button type="button" id="checkAllButton" class="btn btn-success">Check
+                                            All</button>
+                                        <button type="button" id="uncheckAllButton" class="btn btn-danger"
+                                            style="display: none;">Uncheck All</button>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <div class="mr-2">
+                                            <select id="switchLabels" class="form-select me-3"
+                                                aria-label="Default select example">
+                                                <% for(var i=0; i<classes.length; i++) { %>
+                                                    <option value="<%= classes[i]['CName'] %>"
+                                                        <%=(selectedClass===classes[i]['CName']) ? 'selected' : '' %>>
+                                                        <%= classes[i]['CName'] %>
+                                                    </option>
+                                                    <% } %>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <button id="submitSwitch" type="button" class="btn btn-primary">
+                                                <%= isUnlabeledMode ? 'Assign Class' : 'Switch Labels' %>
+                                            </button>
+                                            <% if (!isUnlabeledMode) { %>
+                                                <button id="deleteLabels" type="submit" class="btn btn-danger">Delete
+                                                    Labels</button>
+                                                <% } %>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                </div>
+            </div>
+            <tr>
+                <th scope="col">checkbox</th>
+                <th scope="col">Image Name</th>
+                <th scope="col">Image</th>
+                <th scope="col">Switch Classes</th>
+            </tr>
+            </thead>
+            <tbody>
+                <% if (isUnlabeledMode) { %>
+                    <% images.forEach(function(image) { %>
+                        <tr>
+                            <td>
+                                <input type="checkbox"
+                                    aria-label="<%= image.IName %> unlabeled"
+                                    class="badCheckbox" name="bad_<%= image.IName %>"
+                                    value="<%= image.IName %>">
+                            </td>
+                            <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= image.IName %>" />
+                                <%= image.IName %>
+                            </td>
+                            <td>
+                                <img class="UnlabeledImage"
+                                    src="/projects/<%= admin %>-<%= PName %>/images/<%= image.IName %>"
+                                    aria-label="<%=PName %> <%= image.IName%>"
+                                    style="max-width: 200px; max-height: 200px;">
+                            </td>
+                            <td>
+                                <form class="SwitchForm" action="/api/switchLabels" method="PUT">
+                                    <label for="switchClasses_<%= image.IName %>">Assign to:</label>
+                                    <select name="switchClasses_<%= image.IName %>" class="switchClasses"
+                                        data-label-id="<%= image.IName %>">
+                                        <% classes.forEach(function(classItem){ %>
+                                            <option value="<%= classItem.CName %>">
+                                                <%= classItem.CName %>
+                                            </option>
+                                            <% }); %>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary"
+                                        onclick="handleSwitch(event, '<%= image.IName %>')">Assign</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <% }); %>
+                    <% } else { %>
+                        <% images.forEach(function(image) { %>
+                            <% let imageName=image.IName; %>
+                                <% let labels=imageLabels[imageName]; %>
+                                    <% if (labels) { %>
+                                        <% labels.forEach(function(label) { %>
+                                            <% if (label.CName===CName) { %>
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox"
+                                                            aria-label="<%= label.IName%> label <%= label.LID %>"
+                                                            class="badCheckbox" name="bad_<%= label.LID %>"
+                                                            value="<%= label.LID %>">
+                                                    </td>
+                                                    <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= label.IName %>" />
+                                                        <%= label.IName %>
+                                                    </td>
+                                                    <td>
+                                                        <img class="Image"
+                                                            src="/projects/<%= admin %>-<%= PName %>/images/<%= label.IName %>"
+                                                            aria-label="<%=PName %> <%= label.IName%> label <%= label.LID%>"
+                                                            style="display: none;">
+                                                        <input type="hidden" class="LabelX" value="<%= label.X %>">
+                                                        <input type="hidden" class="LabelY" value="<%= label.Y %>">
+                                                        <input type="hidden" class="LabelWidth" value="<%= label.W %>">
+                                                        <input type="hidden" class="LabelHeight" value="<%= label.H %>">
+                                                        <canvas id="cropCanvas"
+                                                            style="max-width: 100%; height: 100%; display: block; cursor: pointer;"
+                                                            data-toggle="modal" data-target="#myModal"></canvas>
+                                                    </td>
+                                                    <td>
+                                                        <button type="button" class="btn btn-danger delete-button"
+                                                            data-admin="<%= admin %>" data-pname="<%= PName %>"
+                                                            data-lid="<%= label.LID %>"> Delete</button>
+                                                        <form class="SwitchForm" action="/api/switchLabels" method="PUT">
+                                                            <label for="switchClasses_<%= label.LID %>">Switch to:</label>
+                                                            <select name="switchClasses_<%= label.LID %>" class="switchClasses"
+                                                                data-label-id="<%= label.LID %>">
+                                                                <% classes.forEach(function(classItem){ %>
+                                                                    <option value="<%= classItem.CName %>">
+                                                                        <%= classItem.CName %>
+                                                                    </option>
+                                                                    <% }); %>
+                                                            </select>
+                                                            <button type="button" class="btn btn-secondary"
+                                                                onclick="handleSwitch(event, '<%= label.LID %>')">Switch</button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                                <% } %>
+                                                    <% }); %>
+                                                        <% } %>
+                                                            <% }); %>
+                                                                <% } %>
+            </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col-auto">
+            <% if (currentPage> 1) { %>
+                <button class="btn btn-primary"
+                    onclick="window.location.href = '?class=<%= CName %>&IDX=<%= IDX %>&page=<%= currentPage - 1 %>'">Previous</button>
+                <% } %>
+        </div>
+        <div class="col-auto">
+            <span>Page <%= currentPage %> of <%= totalPageCount %></span>
+        </div>
+        <div class="col-auto">
+            <% if (currentPage < totalPageCount) { %>
+                <button class="btn btn-primary"
+                    onclick="window.location.href = '?class=<%= CName %>&IDX=<%= IDX %>&page=<%= currentPage + 1 %>'">Next</button>
+                <% } %>
+        </div>
+    </div>
+    <div class="modal fade custom-modal" id="myModel" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <img id="expandedImg" alt="Expanded image" style="width:100%" />
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll(".delete-button").forEach(button => {
+                button.addEventListener("click", async function (event) {
+                    event.preventDefault(); // Prevent the default form submission
+
+                    const Admin = this.dataset.admin;
+                    const PName = this.dataset.pname;
+                    const Lid = this.dataset.lid;
+
+                    console.log()
+
+                    try {
+                        const response = await fetch(`/deleteBadLabels/${Admin}/${PName}/${Lid}`, {
+                            method: 'DELETE'
+                        });
+
+                        if (!response.ok) {
+                            throw new Error("Failed to delete item");
+                        }
+
+                        console.log("Item deleted successfully");
+
+                        // Remove the deleted row from the DOM
+                        const row = this.closest('tr');
+                        row.parentNode.removeChild(row);
+
+                    } catch (error) {
+                        console.error("Error deleting item: ", error);
+                    }
+                });
+            });
+
+            document.getElementById("checkAllButton").addEventListener("click", function () {
+                document.querySelectorAll(".badCheckbox").forEach(checkbox => {
+                    checkbox.checked = true;
+                });
+
+                document.getElementById("checkAllButton").style.display = 'none';
+                document.getElementById("uncheckAllButton").style.display = 'inline-block';
+            });
+
+            document.getElementById("uncheckAllButton").addEventListener("click", function () {
+                document.querySelectorAll(".badCheckbox").forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+
+                document.getElementById("uncheckAllButton").style.display = 'none';
+                document.getElementById("checkAllButton").style.display = 'inline-block';
+            });
+        });
+    </script>
+
+    <script>
+        document.getElementById("submitSwitch").addEventListener("click", async function () {
+            event.preventDefault();
+
+            let selectedLabels = [];
+            let currentClass = '<%= CName %>';
+            let admin = '<%= admin %>';
+            let PName = '<%= PName %>';
+
+            document.querySelectorAll(".badCheckbox:checked").forEach((checkbox) => {
+                selectedLabels.push(checkbox.value);
+            });
+
+            let selectedClass = document.querySelector('#switchLabels').value;
+
+            if (selectedLabels.length === 0) {
+                alert("Please select at least one label to switch");
+                return;
+            } else if (selectedClass === currentClass) {
+                alert("Please select a different class to switch to");
+                return;
+            }
+
+            const data = {
+                selectedLabels: selectedLabels,
+                selectedClass: selectedClass,
+                currentClass: currentClass,
+                admin: admin,
+                PName: PName
+            }
+
+            const url = '/api/switchLabels';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    location.reload();
+                    console.log('Labels switched successfully:', result);
+                } else {
+                    console.error('Failed to switch labels:', response.statusText);
+                }
+
+            } catch (error) {
+                console.error("Error feteching data:  ", error);
+
+            }
+        });
+
+        document.getElementById("deleteLabels")?.addEventListener("click", async function () {
+            event.preventDefault();
+
+            let selectedLabels = [];
+            let currentClass = '<%= CName %>';
+            let Admin = '<%= admin %>';
+            let PName = '<%= PName %>';
+
+
+            document.querySelectorAll(".badCheckbox:checked").forEach((checkbox) => {
+                selectedLabels.push(checkbox.value);
+            });
+
+            if (selectedLabels.length === 0) {
+                alert("Please select at least one label to delete");
+                return;
+            }
+
+            console.log('Selected Labels:', selectedLabels);
+
+            try {
+                const response = await fetch(`/deleteBadLabels/${Admin}/${PName}/${selectedLabels}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to delete item");
+                }
+
+                console.log('API response:', response);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Class switched successfully:', result);
+                    location.reload();
+                } else {
+                    console.error('Failed to switch class:', response.statusText);
+                }
+
+            } catch (error) {
+                console.error("Error deleting item: ", error);
+            }
+        });
+
+    </script>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        console.log(urlParams);
+        const className = urlParams.get('className');
+        console.log('hello:', className);
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            let images = document.querySelectorAll('.Image');
+
+            images.forEach(function (imageElement, index) {
+                const cropX = document.querySelectorAll('.LabelX')[index].value;
+                const cropY = document.querySelectorAll('.LabelY')[index].value;
+                const cropWidth = document.querySelectorAll('.LabelWidth')[index].value;
+                const cropHeight = document.querySelectorAll('.LabelHeight')[index].value;
+                const imageData = {
+                    imageUrl: imageElement.src,
+                    crop: {
+                        x: parseFloat(cropX),
+                        y: parseFloat(cropY),
+                        width: parseFloat(cropWidth),
+                        height: parseFloat(cropHeight)
+                    }
+                };
+                const canvas = document.querySelectorAll('#cropCanvas')[index];
+                const ctx = canvas.getContext('2d');
+                const image = new Image();
+                image.src = imageData.imageUrl;
+                image.onload = function () {
+                    canvas.width = imageData.crop.width;
+                    canvas.height = imageData.crop.height;
+                    ctx.drawImage(
+                        image,
+                        imageData.crop.x,
+                        imageData.crop.y,
+                        imageData.crop.width,
+                        imageData.crop.height,
+                        0,
+                        0,
+                        imageData.crop.width,
+                        imageData.crop.height
+                    );
+                };
+                canvas.addEventListener("click", function () {
+                    $('#myModel').modal('show');
+                    const modalImage = document.getElementById("expandedImg");
+                    modalImage.src = canvas.toDataURL();
+                    const modalName = document.getElementById("imageModalLabel");
+                    modalName.innerHTML = imageData.imageUrl.split('/').pop();
+                });
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const checkAllButton = document.getElementById('checkAllButton');
+            const uncheckAllButton = document.getElementById('uncheckAllButton');
+            const checkboxes = document.querySelectorAll('.badCheckbox');
+
+            checkAllButton.addEventListener('click', function () {
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = true;
+                });
+                checkAllButton.style.display = 'none';
+                uncheckAllButton.style.display = 'inline-block';
+            });
+
+            uncheckAllButton.addEventListener('click', function () {
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                uncheckAllButton.style.display = 'none';
+                checkAllButton.style.display = 'inline-block';
+            });
+        });
+
+        async function handleSwitch(event, labelId) {
+            const username = document.getElementById("username").value;
+            const admin = document.getElementById("admin").value;
+            const projectName = document.getElementById("ProjectName").value;
+
+            const selectElement = document.querySelector(`select[data-label-id='${labelId}']`);
+            const selectedClass = selectElement.value;
+            let currentClass = '<%= CName %>';
+
+            console.log("selectedElement", selectElement);
+            console.log("class", selectedClass);
+
+            const data = {
+                "selectedLabels": labelId,
+                "selectedClass": selectedClass,
+                "currentClass": currentClass,
+                "PName": projectName,
+                "user": username,
+                "admin": admin
+            };
+
+            try {
+                const response = await fetch('/api/switchLabels', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                console.log('API response:', response);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Class switched successfully:', result);
+                    location.reload();
+                } else {
+                    console.error('Failed to switch class:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        document.querySelectorAll('.SwitchForm').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                handleSwitch(event, form);
+            });
+        });
+
+        document.querySelectorAll('.badCheckbox').forEach(function (checkbox) {
+            checkbox.addEventListener('change', function () {
+                updateBadLabels();
+            });
+        });
+
+        function updateBadLabels() {
+            let badLabels = JSON.parse(localStorage.getItem('badLabels')) || [];
+
+            let currentPageLabels = [];
+            document.querySelectorAll('.badCheckbox').forEach(function (checkbox) {
+                if (checkbox.checked) {
+                    currentPageLabels.push(checkbox.value); // Collect all checked labels
+                } else {
+                    badLabels = badLabels.filter(label => label !== checkbox.value);
+                }
+            });
+
+            badLabels = [...new Set([...badLabels, ...currentPageLabels])];
+
+            localStorage.setItem('badLabels', JSON.stringify(badLabels));
+            console.log('Bad labels:', badLabels);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            restoreCheckboxStatus();
+        });
+
+        function restoreCheckboxStatus() {
+            let badLabels = JSON.parse(localStorage.getItem('badLabels')) || [];
+
+            document.querySelectorAll('.badCheckbox').forEach(function (checkbox) {
+                if (badLabels.includes(checkbox.value)) {
+                    checkbox.checked = true;
+                }
+            });
+            console.log('Restored bad labels:', badLabels);
+        }
+    </script>

@@ -70,13 +70,13 @@
 		//Check for bad characters
 		var username = document.getElementById("username").value
 		var Email = document.getElementById("email").value
-		console.log(username)
 		if(username.includes('#') || username.includes('<') || username.includes('>') || username.includes('$') || username.includes('%') || username.includes('!') || username.includes('&') || username.includes('*') || username.includes("'") || username.includes('{') || username.includes('}') || username.includes('?') || username.includes('"') || username.includes('/') || username.includes(':') || username.includes('\\') || username.includes(' ') || username.includes('@') || username.includes('\t') || username.includes('+') || username.includes('`') || username.includes('|') || username.includes('=') || username.includes('.'))
 		{
 			alert("Invalid username!\n Username must be alphanumeric without white space")
 		}
 		else if(users.includes(username))
 		{
+            console.log(users);
 			alert("Username already exists")
 		}
 		else if(Email.includes('/') || !Email.includes('@') || Email.includes("\\") || !Email.includes('.') || Email.includes("'") || Email.includes(" "))

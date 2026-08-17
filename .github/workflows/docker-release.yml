@@ -1,0 +1,142 @@
+name: Build, Publish Docker Image & Create Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+      - 'v*'
+  release:
+    types: [published]
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub Release on manual run'
+        type: boolean
+        default: false
+      tag_name:
+        description: 'Tag name for manual release (e.g. v1.0.0)'
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up config.json
+        run: cp config.example.json config.json
+
+      - name: Install Python test dependencies
+        # A few tests (e.g. the real KW Coco import round trip) shell out to the actual
+        # controllers/imports/import_options.py, which needs Pillow and PyYAML. This is
+        # deliberately a small subset of requirements.txt, not the full ML stack (torch,
+        # tensorflow, ultralytics, ...), which isn't needed by anything npm test exercises.
+        run: pip install --break-system-packages Pillow PyYAML
+
+      - name: Run unit & integration tests
+        run: npm test
+
+  build-and-publish:
+    name: Build & Publish Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish-release:
+    name: Create / Update GitHub Release
+    needs: [test, build-and-publish]
+    runs-on: ubuntu-latest
+    if: |
+      (startsWith(github.ref, 'refs/tags/v') || 
+       github.event_name == 'release' || 
+       (github.event_name == 'workflow_dispatch' && inputs.create_release == true))
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          name: Release ${{ inputs.tag_name || github.ref_name }}
+          body: |
+            ## Docker Image Published
+
+            The Docker image for this release is available on GitHub Container Registry (GHCR):
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ inputs.tag_name || github.ref_name }}
+            ```
+
+            ### Running the container:
+            ```bash
+            docker run -d -p 3000:3000 --name njobvu-ai ghcr.io/${{ github.repository }}:${{ inputs.tag_name || github.ref_name }}
+            ```
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

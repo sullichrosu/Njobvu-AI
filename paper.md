@@ -1,5 +1,5 @@
 ---
-title: 'Njobvu-AI: An open-source tool for collaborative image labeling and implementation of computer vision models'
+title: "Njobvu-AI: An open-source tool for collaborative image labeling and implementation of computer vision models"
 tags:
   - Node.js
   - Camera Traps
@@ -9,7 +9,7 @@ tags:
 authors:
   - name: Ashwin Subramanian
     orcid: 0009-0005-6369-5553
-    affiliation: 1 
+    affiliation: 1
   - name: Jonathan S. Koning
     affiliation: 1
   - name: Cara L. Appel
@@ -32,19 +32,18 @@ authors:
     affiliation: "2, 3"
 
 affiliations:
- - name: Center for Quantitative Life Sciences, Oregon State University, Corvallis, Oregon, USA
-   index: 1
- - name: Department of Fisheries, Wildlife, and Conservation Sciences, Oregon State University, Corvallis, Oregon, USA
-   index: 2
- - name: USDA Forest Service, Pacific Northwest Research Station, Corvallis, Oregon, USA
-   index: 3
- - name: College of Earth, Ocean, and Atmospheric Sciences, Oregon State University, Corvallis, Oregon, USA
-   index: 4
- - name: Department of Environmental and Molecular Toxicology, Oregon State University, Corvallis, Oregon, USA
-   index: 5
+  - name: Center for Quantitative Life Sciences, Oregon State University, Corvallis, Oregon, USA
+    index: 1
+  - name: Department of Fisheries, Wildlife, and Conservation Sciences, Oregon State University, Corvallis, Oregon, USA
+    index: 2
+  - name: USDA Forest Service, Pacific Northwest Research Station, Corvallis, Oregon, USA
+    index: 3
+  - name: College of Earth, Ocean, and Atmospheric Sciences, Oregon State University, Corvallis, Oregon, USA
+    index: 4
+  - name: Department of Environmental and Molecular Toxicology, Oregon State University, Corvallis, Oregon, USA
+    index: 5
 
 date: 12 March 2024
-
 ---
 
 # Summary
@@ -84,3 +83,7 @@ Bochkovskiy, A., C.-Y. Wang, and H.-Y. M. Liao. 2020. YOLOv4: Optimal speed and 
 Koning, J. S., A. Subramanian, M. Alotaibi, C. L. Appel, C. M. Sullivan, T. Chao, L. Truong, R. L. Tanguay, P. Jaiswal, T. Levi, and D. B. Lesmeister. 2023. Njobvu-AI: An open-source tool for collaborative image labeling and implementation of computer vision models. arXiv.org 2308.16435.
 
 Redmon, J. 2016. Darknet: Open Source Neural Networks in C. https://pjreddie.com/darknet/.
+
+## Testing
+
+For comprehensive information about setting up and running tests, see [TEST_README.md](TEST_README.md).

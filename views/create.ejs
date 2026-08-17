@@ -1,162 +1,463 @@
-<%- include('includes/header') %>
+<%- include('includes/header', {activePage: null}) %>
+<style>
+    .flow-content {
+        display: none;
+    }
+    .flow-content.active {
+        display: block;
+    }
+</style>
 <div id="create">
     <div class="container">
         <div class="contact">
-			<form class="add-project-form" action="/createP" method='POST' enctype="multipart/form-data" id="projectForm">
-                <h3>Add a New Project</h3>
+            <%- include('includes/createNav', { activePage }) %>
+
+            <div class="col-md-12" style="margin-top: 15px; margin-bottom: 20px; padding: 0;">
+                <ul class="nav nav-tabs">
+                    <li class="nav-item">
+                        <a id="tab-blank" class="nav-link active" href="#" onclick="switchFlow('blank')" style="border-radius: 0">Blank Project</a>
+                    </li>
+                    <li class="nav-item">
+                        <a id="tab-yolo" class="nav-link" href="#" onclick="switchFlow('yolo')" style="border-radius: 0">YOLO Archive</a>
+                    </li>
+                    <li class="nav-item">
+                        <a id="tab-kwcoco" class="nav-link" href="#" onclick="switchFlow('kwcoco')" style="border-radius: 0">KW Coco Archive</a>
+                    </li>
+                    <li class="nav-item">
+                        <a id="tab-ifcb" class="nav-link" href="#" onclick="switchFlow('ifcb')" style="border-radius: 0">IFCB Archive</a>
+                    </li>
+                    <li class="nav-item">
+                        <a id="tab-bootstrap" class="nav-link" href="#" onclick="switchFlow('bootstrap')" style="border-radius: 0">Bootstrap With Model(s)</a>
+                    </li>
+                    <li class="nav-item">
+                        <a id="tab-s3" class="nav-link" href="#" onclick="switchFlow('s3')" style="border-radius: 0">S3 Bucket</a>
+                    </li>
+                </ul>
+            </div>
+
+            <form class="add-project-form flow-content active" action="/createP" method='POST' enctype="multipart/form-data" id="blankForm">
+                <h3>Add New Project <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create a new dataset workspace for object detection or image classification">?</span></h3>
                 <div class="form-row">
                     <div class="form-group col-md-6">
-                        <label for="project-name">Project Name</label>
-                        <input id = "project_name" name="project_name" type="text" class="form-control" id="project-name" placeholder="Project Name" required>
+                        <label for="blank_project_name">Project Name <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Unique alphanumeric identifier for your project workspace">?</span></label>
+                        <input id="blank_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
                     </div>
                     <div class="form-group col-md-6">
-                        <label for="upload-images">Upload Images or Videos (.zip or .mp4/.avi/.mov)</label>
-						<input id = "upload_images" name="upload_images" type="file" class="form-control-file" id="upload-images" required>
+                        <label for="blank_upload_images">
+                            Upload Images or Videos (.zip or .mp4/.avi/.mov) (Optional) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Upload zip containing images or video files to automatically extract frames">?</span>
+                        </label>
+                        <input id="blank_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group col-md-12">
-                        <label for="input-classes">Input classes (separated with commas)</label>
-                        <input id="input_classes" name="input_classes" type="text" class="form-control" id="input-classes" placeholder="cat,dog,large mouse" required>
-						<p>Do not add leading or trailing spaces between classes</p>
+                        <label for="blank_input_classes">Input classes (separated with commas) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Comma-separated class names (e.g. car,truck,pedestrian) without leading or trailing spaces">?</span></label>
+                        <input id="blank_input_classes" name="input_classes" aria-label="Input classes. Separated by commas." type="text" class="form-control" placeholder="cat,dog,large mouse" required>
+                        <p>Do not add leading or trailing spaces between classes</p>
                     </div>
                 </div>
-				<div class="form-row">
-					<div class="form-group col-md-6"> 
-						<p>
-						<input type="checkbox" id="bootstrap_check" name="bootstrap_check">
-						Check to Enable Image Classification </p>
-					</div>
-					<div class="form-group col-md-6">
-                        <label for="upload-bootstrap">Upload (.data + .cfg + .weights).zip</label>
-						<input id = "upload_bootstrap" name="upload_bootstrap" type="file" class="form-control-file" id="upload-bootstrap">
-                    </div>
-				</div>
                 <div class="col text-center">
                     <hr class="my-4">
-						<input id="Createbtn" type="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                    <input type="submit" aria-label="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
                 </div>
             </form>
-			<div class="col text-center">
-				<label for="progress" id="progress"></label>
-			</div>
+
+            <form class="add-project-form flow-content" action="/api/projects/import-yolo" method='POST' enctype="multipart/form-data" id="yoloForm">
+                <h3>Import YOLO Project</h3>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="yolo_project_name">Project Name</label>
+                        <input id="yolo_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="yolo_task_type">YOLO Task Type</label>
+                        <select id="yolo_task_type" name="task_type" class="form-control">
+                            <option value="detect">Object Detection (detect)</option>
+                            <option value="classify">Classification (classify)</option>
+                            <option value="segment">Instance Segmentation (segment)</option>
+                            <option value="pose">Pose Estimation (pose)</option>
+                            <option value="obb">Oriented Bounding Box (obb)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="yolo_archive">Upload YOLO Archive (.zip) <span style="color: red;">*</span></label>
+                        <input id="yolo_archive" name="yolo_archive" aria-label="YOLO Archive" type="file" class="form-control-file" required>
+                        <p>Should contain images, labels, and YAML/txt class definition</p>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="yolo_weights">Upload Model Weights (.pt / .weights) (Optional)</label>
+                        <input id="yolo_weights" name="yolo_weights" aria-label="YOLO Weights" type="file" class="form-control-file">
+                    </div>
+                </div>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <input type="submit" aria-label="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                </div>
+            </form>
+
+            <form class="add-project-form flow-content" action="/api/projects/import-kwcoco" method='POST' enctype="multipart/form-data" id="kwcocoForm">
+                <h3>Import KW Coco Project</h3>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="coco_project_name">Project Name</label>
+                        <input id="coco_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="coco_archive">Upload KW Coco Archive (.zip) <span style="color: red;">*</span></label>
+                        <input id="coco_archive" name="coco_archive" aria-label="KW Coco Archive" type="file" class="form-control-file" required>
+                        <p>Should contain images and input_coco.json annotations</p>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="viame_model">Upload VIAME Model File (Optional)</label>
+                        <input id="viame_model" name="viame_model" aria-label="VIAME Model" type="file" class="form-control-file">
+                    </div>
+                </div>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <input type="submit" aria-label="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                </div>
+            </form>
+
+            <form class="add-project-form flow-content" action="/api/projects/import-ifcb" method='POST' enctype="multipart/form-data" id="ifcbForm">
+                <h3>Import IFCB Project</h3>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="ifcb_project_name">Project Name</label>
+                        <input id="ifcb_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="ifcb_archive">Upload IFCB Archive (.zip) <span style="color: red;">*</span></label>
+                        <input id="ifcb_archive" name="ifcb_archive" aria-label="IFCB Archive" type="file" class="form-control-file" required>
+                        <p>Should contain .roi and .adc files (and optionally .hdr files)</p>
+                    </div>
+                </div>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <input type="submit" aria-label="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                </div>
+            </form>
+
+            <form class="add-project-form flow-content" action="/createP" method='POST' enctype="multipart/form-data" id="bootstrapForm">
+                <h3>Add New Project</h3>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="bootstrap_project_name">Project Name</label>
+                        <input id="bootstrap_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="bootstrap_upload_images">
+                            Upload Images or Videos (.zip or .mp4/.avi/.mov) (Optional)
+                        </label>
+                        <input id="bootstrap_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="bootstrap_input_classes">Input classes (separated with commas)</label>
+                        <input id="bootstrap_input_classes" name="input_classes" aria-label="Input classes. Separated by commas." type="text" class="form-control" placeholder="cat,dog,large mouse" required>
+                        <p>Do not add leading or trailing spaces between classes</p>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="bootstrap_model_format">Model Format</label>
+                        <select id="bootstrap_model_format" name="model_format" class="form-control">
+                            <option value="darknet">Darknet (.data + .cfg + .weights)</option>
+                            <option value="ultralytics">Ultralytics YOLO (PyTorch .pt)</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="upload_bootstrap">Upload Model Zips (multiple allowed)</label>
+                        <input id="upload_bootstrap" aria-label="Upload Model Zips" name="upload_bootstrap" type="file" class="form-control-file" multiple required>
+                    </div>
+                </div>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <input type="submit" aria-label="submit" class="btn btn-primary btn-lg" value="submit" style="border-radius: 0">
+                </div>
+            </form>
+
+            <form class="add-project-form flow-content s3-flow" id="s3Form" onsubmit="return false;">
+                <h3>Add Project From S3 Bucket <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create a project backed by an S3 bucket instead of an uploaded archive. Njobvu downloads a local working copy of the bucket's images, so existing labeling, training, and inference tools work unchanged">?</span></h3>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="s3_project_name">Project Name</label>
+                        <input id="s3_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="s3_input_classes">Input classes (separated with commas)</label>
+                        <input id="s3_input_classes" name="input_classes" aria-label="Input classes. Separated by commas." type="text" class="form-control" placeholder="cat,dog,large mouse" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="s3_bucket_name">Bucket Name <span style="color: red;">*</span></label>
+                        <input id="s3_bucket_name" name="bucket_name" aria-label="S3 Bucket Name" type="text" class="form-control" placeholder="my-image-bucket" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="s3_region">Region <span style="color: red;">*</span></label>
+                        <input id="s3_region" name="region" aria-label="S3 Region" type="text" class="form-control" placeholder="us-east-1" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label for="s3_prefix">Prefix (Optional)</label>
+                        <input id="s3_prefix" name="prefix" aria-label="S3 Key Prefix" type="text" class="form-control" placeholder="images/">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="s3_endpoint">S3 Endpoint</label>
+                        <input id="s3_endpoint" name="endpoint" aria-label="S3 Endpoint URL" type="text" class="form-control" autocomplete="off">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="s3_access_key_id">Access Key ID</label>
+                        <input id="s3_access_key_id" name="access_key_id" aria-label="S3 Access Key ID" type="text" class="form-control" autocomplete="off">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="s3_secret_access_key">Secret Access Key</label>
+                        <input id="s3_secret_access_key" name="secret_access_key" aria-label="S3 Secret Access Key" type="password" class="form-control" autocomplete="off">
+                    </div>
+                </div>
+                <p>Leave the Access Key fields blank to use the server's default AWS credentials/role.</p>
+                <div class="col text-center">
+                    <hr class="my-4">
+                    <button type="button" id="s3SubmitBtn" aria-label="submit" class="btn btn-primary btn-lg" style="border-radius: 0" onclick="submitS3Form()">submit</button>
+                </div>
+            </form>
+
+            <div class="col text-center" style="margin-top: 15px;">
+                <label for="progress" id="progress" aria-live="polite" aria-atomic="true" style="font-weight: bold; color: #1569AE;"></label>
+            </div>
         </div>
     </div>
 </div>
+
 <script>
+    const PNames = "<%= PNames %>".split(",");
+    const currentUsername = "<%= user %>";
 
+    function switchFlow(flow) {
+        document.getElementById('tab-blank').classList.remove('active');
+        document.getElementById('tab-yolo').classList.remove('active');
+        document.getElementById('tab-kwcoco').classList.remove('active');
+        document.getElementById('tab-ifcb').classList.remove('active');
+        document.getElementById('tab-bootstrap').classList.remove('active');
+        document.getElementById('tab-s3').classList.remove('active');
 
-	document.forms['projectForm'].addEventListener('submit', (event) => {
-		event.preventDefault();
-			
-		var PName = document.getElementById("project_name").value
-		var PNames = "<%= PNames %>".split()
+        document.getElementById('tab-' + flow).classList.add('active');
 
-		if(PName.includes('/') || PName.includes('@') || PName.includes("\\") || PName.includes('.') || PName.includes("'") || PName.includes(" "))
-		{
-			alert("Invalid Project Name!\n Project Name Cannot Contain: /@.\\' or 'spaces'")
-		}
-		else if(PNames.includes(PName))
-		{
-			alert("That Project Name Already Exists!")
-		}
-		else
-		{
-			var formData = new FormData();
-			const upload_images = document.getElementById('upload_images');
-			const files = upload_images.files[0];
-			if(String(files.name).endsWith('mp4' || 'mov' || 'avi')){
-				var frame_rate = prompt("Please enter a number for the framerate the video should be split by. (ex: 30)");
-				console.log("Uploading video to be parsed 1 image per" + frame_rate + "frames");
-				formData.append('upload_video', files);
-				formData.append('frame_rate', frame_rate);
-			}
-			else{
-				formData.append('upload_images', new Blob([files]));
-			}
+        document.querySelectorAll('.flow-content').forEach(form => {
+            form.classList.remove('active');
+        });
+        document.getElementById(flow + 'Form').classList.add('active');
+    }
 
-			const upload_bootstrap = document.getElementById('upload_bootstrap');
-			if(document.getElementById('bootstrap_check').checked){
-				const filesB = upload_bootstrap.files[0];
-				formData.append('upload_bootstrap', new Blob([filesB]));
-			}
-			formData.append('project_name', document.getElementById("project_name").value);
-			formData.append('input_classes', document.getElementById("input_classes").value);
+    function validateProjectName(name) {
+        if (!name) return false;
 
-			//New method
-			var request = new XMLHttpRequest();
-			request.upload.addEventListener('progress', function (e) {
-				var file1Size = $('#upload_images')[0].files[0].size;
+        const invalidChars = ['/', '@', '\\', '.', "'", ' '];
+        for (let char of invalidChars) {
+            if (name.includes(char)) {
+                alert("Invalid Project Name!\nProject name cannot contain spaces or characters like: / @ \\ . '");
+                return false;
+            }
+        }
 
-				if(document.getElementById('bootstrap_check').checked){
-					console.log('Checked!!!!!');
-					var file2Size = $('#upload_bootstrap')[0].files[0].size;
-					if (e.loaded <= (file1Size + file2Size)) {
-						var percent = Math.round(e.loaded / (file1Size + file2Size) * 100);
-						console.log(percent);
-						$('#progress').text("Percent Uploaded: " + percent)
+        if (PNames.includes(name)) {
+            alert("A project with that name already exists!");
+            return false;
+        }
 
-					} 
-					if(e.loaded == e.total){
-						// console.log('100%');
-						$('#progress').text("Upload Finished. Server processing upload. Please wait for the closing prompt.")
-						document.getElementById("Importbtn").style.display = "none";
-						alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
-						// window.location.reload();
-						
-					}	
-				}
+        return true;
+    }
 
-				else{
-					if (e.loaded <= file1Size) {
-						var percent = Math.round(e.loaded / file1Size * 100);
-						console.log(percent);
-						$('#progress').text("Percent Uploaded: " + percent)
+    async function submitS3Form() {
+        const projectName = document.getElementById('s3_project_name').value;
+        if (!validateProjectName(projectName)) {
+            return;
+        }
 
-					} 
-					if(e.loaded == e.total){
-						// console.log('100%');
-						$('#progress').text("Upload Finished. Server processing upload. Please wait for the closing prompt.")
-						document.getElementById("Importbtn").style.display = "none";
-						alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
-						// window.location.reload();
-						
-					}	
-				}
+        const inputClasses = document.getElementById('s3_input_classes').value;
+        const bucketName = document.getElementById('s3_bucket_name').value;
+        const region = document.getElementById('s3_region').value;
+        const prefix = document.getElementById('s3_prefix').value;
+        const accessKeyId = document.getElementById('s3_access_key_id').value;
+        const secretAccessKey = document.getElementById('s3_secret_access_key').value;
+        const endpoint = document.getElementById("s3_endpoint").value;
 
-			}, true);   
+        if (!bucketName || !region) {
+            alert("Bucket Name and Region are required.");
+            return;
+        }
 
-			request.open("post", event.target.action, true);
-			request.onreadystatechange = function receiveResponse() {
-				if(this.readyState == 4)
-				{
-					if(this.status == 200)
-					{
-						var mssg = this.response
-						console.log("mssg: ", mssg)
-						console.log('mssg["Success"]: ', mssg["Success"]);
-						alert(this.response);
-						window.location.replace("/home");
-					}
-					else
-					{
-						if(isValid(this.response))
-						{
-							alert("Something went wrong! ", this.response);
-						}
-						else
-						{
-							alert("Something went wrong!")
-							console.log("response: ", this.response)
-						}
-					}
-				}
-			}
-			request.send(formData);
-			console.log(formData);
-		}
-	});
-	
+        const submitBtn = document.getElementById('s3SubmitBtn');
+        const progress = document.getElementById('progress');
+        submitBtn.style.display = "none";
 
+        try {
+            progress.textContent = "Creating project...";
+
+            const createFormData = new FormData();
+            createFormData.append('project_name', projectName);
+            createFormData.append('input_classes', inputClasses);
+
+            const createRes = await fetch('/createP', {
+                method: 'POST',
+                body: createFormData,
+            });
+
+            if (!createRes.ok) {
+                throw new Error(await createRes.text() || "Could not create project");
+            }
+
+            progress.textContent = "Attaching S3 bucket...";
+
+            const attachRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    BucketName: bucketName,
+                    Region: region,
+                    Prefix: prefix,
+                    AccessKeyId: accessKeyId,
+                    SecretAccessKey: secretAccessKey,
+                    Endpoint: endpoint,
+                }),
+            });
+
+            const attachBody = await attachRes.json();
+            if (!attachRes.ok || !attachBody.success) {
+                throw new Error(attachBody.error || "Could not attach S3 bucket");
+            }
+
+            progress.textContent = "Syncing images from S3...";
+
+            const syncRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket/sync`, {
+                method: 'POST',
+            });
+
+            const syncBody = await syncRes.json();
+            if (!syncRes.ok || !syncBody.success) {
+                throw new Error(syncBody.error || "Could not sync images from S3 bucket");
+            }
+
+            progress.textContent = "";
+            alert(`Project creation successful. Synced ${syncBody.syncedCount} image(s) from S3.`);
+            window.location.replace('/home');
+        } catch (err) {
+            progress.textContent = "";
+            submitBtn.style.display = "inline-block";
+            alert("Something went wrong setting up the S3-backed project.\nReason: " + err.message);
+        }
+    }
+
+    document.querySelectorAll('.flow-content:not(.s3-flow)').forEach(form => {
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const formId = this.id;
+            let nameFieldId = 'blank_project_name';
+            if (formId === 'yoloForm') nameFieldId = 'yolo_project_name';
+            if (formId === 'kwcocoForm') nameFieldId = 'coco_project_name';
+            if (formId === 'bootstrapForm') nameFieldId = 'bootstrap_project_name';
+            if (formId === 'ifcbForm') nameFieldId = 'ifcb_project_name';
+
+            const projectName = document.getElementById(nameFieldId).value;
+            if (!validateProjectName(projectName)) {
+                return;
+            }
+
+            const formData = new FormData(this);
+            const xhr = new XMLHttpRequest();
+            const progress = document.getElementById('progress');
+
+            progress.textContent = "Percent Uploaded: 0%";
+            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "none");
+
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progress.textContent = `Percent Uploaded: ${percent}%`;
+                    if (percent === 100) {
+                        progress.textContent = "Upload Finished. Server processing upload. Please wait for the closing prompt.";
+                    }
+                }
+            });
+
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+
+                    if (xhr.status === 200) {
+                        alert("Project creation successful");
+                        window.location.replace('/home');
+                    } else {
+                        progress.textContent = "";
+                        let errMsg = 'Something went wrong during project creation.';
+                        try {
+                            const resObj = JSON.parse(xhr.responseText);
+                            if (resObj && resObj.message) errMsg += `\nReason: ${resObj.message}`;
+                        } catch(e) {
+                            if (xhr.responseText) errMsg += `\nDetails: ${xhr.responseText}`;
+                        }
+                        alert(errMsg);
+                    }
+                }
+            };
+
+            xhr.open('POST', this.action, true);
+
+            if (formId === 'blankForm') {
+                const uploadImages = document.getElementById('blank_upload_images');
+
+                if (uploadImages.files.length > 0) {
+                    const file = uploadImages.files[0];
+
+                    if (file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.avi')) {
+                        const frameRate = prompt("Please enter a number for the framerate the video should be split by. (ex: 30)");
+
+                        if (frameRate) {
+                            formData.delete('upload_images');
+                            formData.append('upload_video', file);
+                            formData.append('frame_rate', frameRate);
+                        } else {
+                            progress.textContent = "";
+                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (formId === 'bootstrapForm') {
+                const uploadImages = document.getElementById('bootstrap_upload_images');
+
+                if (uploadImages.files.length > 0) {
+                    const file = uploadImages.files[0];
+
+                    if (file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.avi')) {
+                        const frameRate = prompt("Please enter a number for the framerate the video should be split by. (ex: 30)");
+
+                        if (frameRate) {
+                            formData.delete('upload_images');
+                            formData.append('upload_video', file);
+                            formData.append('frame_rate', frameRate);
+                        } else {
+                            progress.textContent = "";
+                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            xhr.send(formData);
+        });
+    });
 </script>
 <%- include('includes/footer') %>

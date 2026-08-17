@@ -1,4 +1,5 @@
 <%- include('includes/header') %>
+<%- include('includes/navbarV', { activePage }) %>
 <script>
 	console.log("<%= acc.includes(user)%>");
 	if("<%= acc.includes(user)%>" == "false")
@@ -8,18 +9,6 @@
 	console.log("DAdmin: <%= DAdmin.includes('benny')%>")
 </script>
 <div id="config">
-	<div class="col-md-12">
-		<ul class="nav nav-tabs">
-			<li class="nav-item">
-				<a class="nav-link" href="/projectV?IDX=<%= IDX %>&page=1&perPage=10" style="border-radius: 0">Labels</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link active" href="/configV?IDX=<%= IDX %>" style="border-radius: 0">Configuration</a>
-			</li>
-			<li class="nav-item">
-				<a class="nav-link" href="/statsV?IDX=<%= IDX %>" style="border-radius: 0">Stats</a>
-			</li>
-		</ul>
 	</div>
 	<div class="col-md-12">
 		<h1 style="text-align: center;"><%= PName %></h1>
@@ -58,13 +47,16 @@
 							<label class="col-md-4 col-form-label" for="list_of_available_formats">List of Available Formats</label>
 							<div class="col-md">
 								<div class="radio">
-									<label><input name="download_format" type="radio" value="0" required> YOLOv3 Format</label>
+									<label><input name="download_format" type="radio" value="0" required> YOLO Format</label>
+								</div>
+								<div class="radio">
+									<label><input name="download_format" type="radio" value="6" required> YOLO Classification</label>
 								</div>
 								<div class="radio">
 									<label><input name="download_format" type="radio" value="1"> TensorFlow Format (CSV)</label>
 								</div>
 								<div class="radio">
-									<label><input name="download_format" type="radio" value="2"> COCO Format (JSON + images)</label>
+									<label><input name="download_format" type="radio" value="7"> KitWare COCO Format (JSON + images)</label>
 								</div>
 								<div class="radio">
 									<label><input name="download_format" type="radio" value="3"> Pascal VOC Format (xml + images)</label>

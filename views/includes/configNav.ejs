@@ -1,0 +1,18 @@
+<div class="col-md-12" style="width: 10%;">
+    <ul class="nav nav-tabs flex-sm-column">
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'projSettings' ? 'active' : '' %>" href="/config/projSettings?IDX=<%= IDX %>" style="border-radius: 0">Project Settings</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'classSettings' ? 'active' : '' %>" href="/config/classSettings?IDX=<%= IDX %>" style="border-radius: 0">Classes Settings</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'accessSettings' ? 'active' : '' %>" href="/config/accessSettings?IDX=<%= IDX %>" style="border-radius: 0">User Access</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'imageSettings' ? 'active' : '' %>" href="/config/imageSettings?IDX=<%= IDX %>" style="border-radius: 0">Import Images</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'mergeSettings' ? 'active' : '' %>" href="/config/mergeSettings?IDX=<%= IDX %>" style="border-radius: 0">Merge Settings</a>
+    </ul>
+</div>

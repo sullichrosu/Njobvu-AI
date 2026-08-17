@@ -1,0 +1,16 @@
+<div class="col-md-12" style="width: 15%;">
+    <ul class="nav nav-tabs flex-sm-column">
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'yolov3Settings' ? 'active' : '' %>" href="/yolo/yolov3Settings?IDX=<%= IDX %>" style="border-radius: 0">YOLO (darknet)</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'yolovXSettings' ? 'active' : '' %>" href="/yolo/yolovXSettings?IDX=<%= IDX %>" style="border-radius: 0">YOLO (ultralytics)</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'training' ? 'active' : '' %>" href="/customTraining?IDX=<%= IDX %>" style="border-radius: 0">Custom Training</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <%= activePage === 'servstats' ? 'active' : '' %>" href="/servstats?IDX=<%= IDX %>" style="border-radius: 0">Server Stats</a>
+        </li>
+    </ul>
+</div>

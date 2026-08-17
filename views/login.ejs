@@ -5,23 +5,23 @@
 	<table cellpadding="1" cellspacing="1" align="center" class="loginTable unsegmented">
 		<tbody>
 			<tr>
-				<td class="label" colspan="2" id="usernameLabel">
-					Username
+				<td class="label" colspan="2">
+					<label for="username" id="usernameLabel">Username</label>
 				</td>
 			</tr>
 			<tr>
 				<td colspan="2">
-					<input type="text" name="username" id="username" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Username" required>
+					<input type="text" name="username" id="username" required aria-required="true" value size="20" maxlength="80" class="textInput" fvtype="Text" fvrequired="true" fvname="Username" required>
 				</td>
 			</tr>
 			<tr>
-				<td class="label" colspan="2" id="passwordLabel">
-					Password
+				<td class="label" colspan="2">
+					<label for="password" id="passwordLabel">Password</label>
 				</td>
 			</tr>
 			<tr>
 				<td colspan="2">
-					<input type="password" name="password" id="password" value size="20" maxlength="40" class="textInput" fvtype="Text" fvrequired="true" fvname="Password" required>
+					<input type="password" name="password" id="password" required aria-required="true" value size="20" maxlength="40" class="textInput" fvtype="Text" fvrequired="true" fvname="Password" required>
 				</td>
 			</tr>
 			<tr>
@@ -40,8 +40,8 @@
 				</td>
 			</tr>
 			<tr>
-				<td class="label" colspan="2" id="captchaLabel">
-					Captcha
+				<td class="label" colspan="2" >
+					<label for="inputCaptcha"id="captchaLabel" aria-live="polite">Captcha</label>
 				</td>
 			</tr>
 			<tr>
@@ -58,7 +58,7 @@
 <script>
 	document.cookie = "Username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 	var form = document.getElementById("Login");
-	
+
 
 	document.getElementById("newCaptcha").style.display = "none";
 	document.getElementById("captchaLabel").style.display = "none";
@@ -98,13 +98,13 @@
 		};
 		let options = {
 			method: 'POST',
-			headers: { 
-                'Content-Type':  
-                    'application/json;charset=utf-8' 
-            }, 
+			headers: {
+                'Content-Type':
+                    'application/json;charset=utf-8'
+            },
 			body: JSON.stringify(user)
 		}
-		
+
 		let cred = await fetch('/login', options);
 		cred = await cred.json();
 		console.log(cred);
@@ -127,10 +127,10 @@
 			alert("Wrong Username or Password");
 			window.location.replace("/");
 		}
-		
+
 	}
 	form.addEventListener("submit", handleForm);
-	
+
 	console.log(sessionStorage.getItem("test"));
 </script>
 <%- include('includes/footer') %>

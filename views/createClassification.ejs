@@ -1,0 +1,102 @@
+<%- include('includes/header', {activePage: null}) %>
+<div id="classification">
+    <div class="container">
+        <div class="contact">
+            <%- include('includes/createNav', {activePage}) %>
+            <h3>Add New Classification Project</h3>
+            <form id="import-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="import-type">Import Type</label>
+                    <select class="form-control" id="import-type" name="import-type">
+                        <option value="classification">Classification</option>
+                        <option value="inference-classification">Inference + Classification</option>
+                        <option value="inference">Inference</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="project-name">Project Name</label>
+                    <input type="text" class="form-control" id="project-name" name="projectName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="dataset-file">Dataset (zip file)</label>
+                    <input type="file" class="form-control-file" id="dataset-file" name="dataset" accept=".zip" required>
+                </div>
+
+                <div id="inference-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="weights-file">Weights File (.pt)</label>
+                        <input type="file" class="form-control-file" id="weights-file" name="weights" accept=".pt">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Import</button>
+            </form>
+            <div id="response-message" class="mt-3"></div>
+        </div>  
+    </div>
+</div>
+
+<script>
+    document.getElementById('import-type').addEventListener('change', function() {
+        var inferenceFields = document.getElementById('inference-fields');
+        var weightsFileInput = document.getElementById('weights-file');
+
+        if (this.value === 'classification') {
+            inferenceFields.style.display = 'none';
+            weightsFileInput.required = false;
+        } else if (this.value === 'inference-classification') {
+            inferenceFields.style.display = 'block';
+            weightsFileInput.required = true;
+        } else if (this.value === 'inference') {
+            inferenceFields.style.display = 'block';
+            weightsFileInput.required = true;
+        }
+    });
+    // Set initial state
+    document.getElementById('import-type').dispatchEvent(new Event('change'));
+
+    document.getElementById('import-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        var PNames = "<%= PNames %>".split(',');
+        var projectName = document.getElementById('project-name').value;
+
+        if(projectName.includes('/') || projectName.includes('@') || projectName.includes("\\") || projectName.includes('.') || projectName.includes("'") || projectName.includes(" ")) {
+			alert("Invalid Project Name!\\n Project Name Cannot Contain: /@.\\\\' or 'spaces'");
+            return;
+		}
+		if(PNames.includes(projectName)) {
+			alert("That Project Name Already Exists!");
+            return;
+		}
+
+        var formData = new FormData(this);
+        const importType = document.getElementById('import-type').value;
+        if (importType === 'classification' || importType === 'inference-classification') {
+            formData.append('dbName', projectName);
+        }
+
+        var messageDiv = document.getElementById('response-message');
+        messageDiv.innerHTML = '<div class="alert alert-info">Importing... Please wait.</div>';
+
+
+        fetch('/api/projects/import-dataset', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                messageDiv.innerHTML = '<div class="alert alert-success">Import successful! Redirecting to home...</div>';
+                setTimeout(() => window.location.replace("/home"), 2000);
+            } else {
+                messageDiv.innerHTML = '<div class="alert alert-danger">Error: ' + data.message + '</div>';
+            }
+        })
+        .catch(error => {
+            messageDiv.innerHTML = '<div class="alert alert-danger">Error: ' + error + '</div>';
+        });
+    });
+</script>

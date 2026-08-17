@@ -1,0 +1,439 @@
+<%- include('../includes/header') %>
+	<%- include('../includes/processingNav', { activePage }) %>
+		<script>
+			// console.log("<%= access.Username%>");
+			if ("<%= access.includes(user)%>" == "false") {
+				window.location.replace("/home");
+			}
+		</script>
+		<h1 style="text-align: center;">
+			<%= PName %>
+		</h1>
+		<div id="training" style="width: 100%">
+			<div class="container">
+				<h3>Process Ultralytics YOLO</h3>
+				<div class="col-12">
+					<table class="table table-striped">
+						<thead class="thead-dark">
+							<tr>
+								<th scope="col">
+									<h4>Ultralytics YOLO Base Files</h4>
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<form class="add-darknet" action="/yolovx" enctype="multipart/form-data"
+										id="yolovxForm">
+										<div class="form-row">
+											<div class="form-group col-md-6">
+												<h5><label for="project-name">Input YOLO Binary Path</label></h5>
+												<input id="yolovx_path" aria-label="Input YOLO file path" name="yolovx_path" type="text"
+													class="form-control" id="yolovx_path" placeholder="YOLO Path"
+													required>
+											</div>
+										</div>
+										<div class="col text-left">
+											<button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+												value="submit" style="border-radius: 0">ADD PATH</button>
+										</div>
+									</form>
+									<br>
+									<br>
+									<form class="add-weights" action="/upload_pre_weights" method="post"
+										enctype="multipart/form-data" id="add-weights">
+										<input type="hidden" name="PName" value="<%= PName %>">
+										<input type="hidden" name="Admin" value="<%= Admin %>">
+										<div class="form-row">
+											<div class="form-group col-md-6">
+												<h5><label for="upload-weights" style="width: 200%;">Upload
+														model/weights file (.pt, .weights)</label></h5>
+												<input id="upload-weights" name="upload_weights" type="file"
+													class="form-control-file" required>
+											</div>
+										</div>
+										<div class="col text-left">
+											<button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+												value="submit" style="border-radius: 0">ADD FILE</button>
+										</div>
+									</form>
+									<br>
+									<br>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<div id="training" style="width: 100%">
+			<div class="container">
+				<div class="col-12">
+					<table class="table table-striped">
+						<thead class="thead-dark">
+							<tr>
+								<th scope="col">
+									<h4>Ultralytics YOLO Training</h4>
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<form class="Configure Project For YOLO" action="/yolo-run" method="post"
+										enctype="multipart/form-data" id="yolo-run">
+										<input type="hidden" name="PName" value="<%= PName %>">
+										<input type="hidden" name="Admin" value="<%= Admin %>">
+										<input type="hidden" name="weights" value="<%= weights %>">
+										<h2><b>Ultralytics YOLO Training</b></h2>
+										<input type="hidden" id="subdiv" name="subdiv" value="1">
+										<input type="hidden" id="width" name="width" value="1">
+										<input type="hidden" id="height" name="height" value="1">
+										<input type="hidden" id="yolo_version" name="height" value="5">
+										<input type="hidden" id="yolo_mode" name="height" value="train">
+
+										<div class="form-row">
+											<div class="form-group col-md-2">
+												<h5><label for="yolo_task">YOLO TASK:</label></h5>
+												<select id="yolo_task" name="yolo_task" style="width: 200%;">
+													<option value="detect">Use Label Data (detect)</option>
+													<option value="classify">Use Annotation Data (classify)</option>
+													<option value="pose">Use Pose Data (pose)</option>
+													<option value="segment">Use Segment Data (segment)</option>
+													<option value="obb">Oriented Bounding Boxes (obb)</option>
+												</select>
+											</div>
+										</div>
+										<div class="form-row">
+											<div class="form-group col-md-2">
+												<h5><label for="YOLO">YOLO Path:</label></h5>
+												<select name="Yolo" id="Yolo" style="width:100%">
+													<% if(default_path !=null){%>
+														<option>
+															<%= default_path %>
+														</option>
+														<%}%>
+															<% for(var i=0; i<paths.length; i++) {%>
+																<option>
+																	<%= paths[i] %>
+																</option>
+																<% } %>
+												</select>
+											</div>
+											<div class="form-group col-md-3">
+												<h5><label for="upload-command">Model/Weights File:</label></h5>
+												<select name="Weights" id="Weights" aria-label="Select weights file" style="width:100%">
+													<% for(var i=0; i<global_weights.length; i++) {%>
+														<option>
+															<%= global_weights[i]%>
+														</option>
+														<% } %>
+												</select>
+											</div>
+										</div>
+										<div class="form-row">
+											<div class="form-group col-md-2">
+												<h5><label for="batch">Batch size:</label></h5>
+												<input type="number" id="batch" name="batch" min="16" value="16"
+													step="16" style="width: 75%;">
+											</div>
+											<div class="form-group col-md-2">
+												<h5><label for="epochs">EPOCHS:</label></h5>
+												<input type="number" id="epochs" name="epochs" min="10" value="10"
+													style="width: 75%;">
+											</div>
+											<div class="form-group col-md-2">
+												<h5><label for="imgsz">Image Size:</label></h5>
+												<input type="number" id="imgsz" name="imgsz" min="640" value="640"
+													step="640" style="width: 75%;">
+											</div>
+											<div class="form-group col-md-2">
+												<h5><label for="device">Device:</label></h5>
+												<input type="text" id="device" name="device" value="1"
+													style="width: 100%;">
+												<p>(cpu,gpu#,mps)</p>
+											</div>
+										</div>
+										<!-- Class Subset Selection -->
+										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
+											<h5><label>Class Subset Selection</label></h5>
+											<p class="text-muted small">Select which classes to include in training:</p>
+											<div class="mb-2">
+												<button type="button" class="btn btn-sm btn-outline-primary" id="selectAllClasses">Select All</button>
+												<button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllClasses">Deselect All</button>
+												<span class="d-inline-block ml-3">
+													<label for="minClassImages" class="mr-1 mb-0">Minimum Images per Class:</label>
+													<input type="number" id="minClassImages" name="min_class_images" min="0" placeholder="0" class="form-control form-control-sm d-inline-block" style="width: 100px;">
+												</span>
+											</div>
+											<div class="class-selection-container" style="max-height: 150px; overflow-y: auto;">
+												<% if (typeof classes !== 'undefined' && classes.length > 0) { %>
+													<% for (var i = 0; i < classes.length; i++) { %>
+														<div class="form-check form-check-inline mr-3 my-1">
+															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].imageCount || 0 %>" checked>
+															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
+														</div>
+													<% } %>
+												<% } else { %>
+													<span class="text-muted">No classes defined in project.</span>
+												<% } %>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-group col-md-3">
+												<h5><label for="max_images">Max Image Clamping:</label></h5>
+												<input type="number" id="max_images" name="max_images" min="0" placeholder="Unlimited (all images)" class="form-control" style="width: 100%;">
+												<small class="form-text text-muted">Limit max total images (0 or empty = all)</small>
+											</div>
+										</div>
+
+										<!-- Train : Validate : Test Split Ratio Controls -->
+										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
+											<h5><label>Dataset Split Ratio (Train : Validate : Test)</label></h5>
+											<div class="form-row align-items-center">
+												<div class="form-group col-md-3">
+													<label for="TrainingRange">Train %</label>
+													<input type="number" min="0" max="100" value="70" class="form-control split-ratio-input" id="TrainingRange" name="TrainingPercent">
+												</div>
+												<div class="form-group col-md-3">
+													<label for="ValRange">Validate %</label>
+													<input type="number" min="0" max="100" value="20" class="form-control split-ratio-input" id="ValRange" name="ValPercent">
+												</div>
+												<div class="form-group col-md-3">
+													<label for="TestRange">Test %</label>
+													<input type="number" min="0" max="100" value="10" class="form-control split-ratio-input" id="TestRange" name="TestPercent">
+												</div>
+												<div class="form-group col-md-3 pt-3">
+													<span id="ratioSummary" class="badge badge-info p-2" style="font-size: 0.95rem;">Ratio: 70 : 20 : 10 %</span>
+												</div>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-group col-md-6">
+												<h5><label for="upload-command">YOLO Advanced Arguments:</label></h5>
+												<input id="options" aria-label="Advanced YOLO options" name="options" size="50" type="text"
+													class="form-control-file" style="width: 130%;">
+												<p><a href="https://docs.ultralytics.com/usage/cfg/#train-settings">Docs
+														on Training Arguments</a></p>
+											</div>
+										</div>
+										<div class="col text-left">
+											<button id="Configbtn" type="submit" class="btn btn-primary btn-lg"
+												value="submit" style="border-radius: 0">TRAIN NEW MODEL</button>
+										</div>
+									</form>
+									<br>
+									<br>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<% for(var i=0; i<logs.length; i++) {%>
+			<div class="modal fade" id="log_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+				<div class="modal-dialog modal-lg" role="document">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h4 class="modal-title" id="myModalLabel">
+								<%= logs[i]%>
+							</h4>
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+									aria-hidden="true">&times;</span></button>
+						</div>
+						<pre><%=log_contents[i]%></pre>
+					</div>
+				</div>
+			</div>
+			<div class="modal fade" id="error_modal<%= i%>" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+				<div class="modal-dialog modal-lg" role="document">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h4 class="modal-title" id="myModalLabel">
+								<%= logs[i]%>
+							</h4>
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+									aria-hidden="true">&times;</span></button>
+						</div>
+						<pre><%=err_contents[i]%></pre>
+					</div>
+				</div>
+			</div>
+			<% } %>
+				<script>
+					document.forms['add-weights'].addEventListener('submit', (event) => {
+						event.preventDefault();
+
+						console.log("handleImport");
+						var formData = new FormData();
+						const upload_project = document.getElementById('upload-weights');
+						const files = upload_project.files[0];
+						console.log(files.size)
+						if (!files.size > 0) {
+							alert("File must have a size > 0")
+						}
+						else {
+							formData.append('upload_weights', files);
+
+							formData.append("PName", "<%= PName %>");
+							formData.append("Admin", "<%= Admin %>");
+
+
+							fetch(event.target.action, {
+								method: 'POST',
+								body: formData
+							}).then((resp) => {
+								return resp.json();
+							}).then((body) => {
+								console.log(body);
+								alert(body.Success);
+								window.location.replace("/yolo/yolovXSettings?IDX=<%= IDX %>");
+
+							}).catch((error) => {
+								console.log(error);
+							});
+						}
+					});
+
+					document.forms['yolovxForm'].addEventListener('submit', (event) => {
+						event.preventDefault();
+
+						console.log("handleImport");
+						var formData = new FormData();
+
+						formData.append("yolovx_path", document.getElementById("yolovx_path").value);
+						formData.append("PName", "<%= PName %>");
+						formData.append("Admin", "<%= Admin %>");
+
+
+						fetch(event.target.action, {
+							method: 'POST',
+							body: formData
+						}).then((resp) => {
+							return resp.json();
+						}).then((body) => {
+							console.log(body);
+
+							alert(body.Success);
+							window.location.replace("/yolo/yolovXSettings?IDX=<%= IDX %>");
+
+						}).catch((error) => {
+							console.log(error);
+						});
+					});
+
+					// Class selection helper buttons
+					var selectAllBtn = document.getElementById("selectAllClasses");
+					var deselectAllBtn = document.getElementById("deselectAllClasses");
+					var minClassImagesInput = document.getElementById("minClassImages");
+
+					// Unchecks any class checkbox whose image count is below the configured minimum,
+					// so Select All (or manually re-checking a box) can't bypass the clamp.
+					function applyMinClassImagesClamp() {
+						var threshold = parseInt(minClassImagesInput && minClassImagesInput.value, 10) || 0;
+						if (threshold <= 0) {
+							return;
+						}
+
+						document.querySelectorAll(".class-checkbox").forEach(function(cb) {
+							var count = parseInt(cb.getAttribute("data-image-count"), 10) || 0;
+							if (count < threshold) {
+								cb.checked = false;
+							}
+						});
+					}
+
+					if (selectAllBtn) {
+						selectAllBtn.addEventListener("click", function() {
+							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = true; });
+							applyMinClassImagesClamp();
+						});
+					}
+					if (deselectAllBtn) {
+						deselectAllBtn.addEventListener("click", function() {
+							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = false; });
+						});
+					}
+					if (minClassImagesInput) {
+						minClassImagesInput.addEventListener("input", applyMinClassImagesClamp);
+					}
+
+					// Split ratio summary update
+					function updateRatioSummary() {
+						var train = parseInt(document.getElementById("TrainingRange").value) || 0;
+						var val = parseInt(document.getElementById("ValRange").value) || 0;
+						var test = parseInt(document.getElementById("TestRange").value) || 0;
+						var summary = document.getElementById("ratioSummary");
+						if (summary) {
+							summary.innerText = "Ratio: " + train + " : " + val + " : " + test + " %";
+						}
+					}
+					["TrainingRange", "ValRange", "TestRange"].forEach(function(id) {
+						var el = document.getElementById(id);
+						if (el) {
+							el.addEventListener("input", updateRatioSummary);
+						}
+					});
+
+					document.forms['yolo-run'].addEventListener('submit', (event) => {
+						event.preventDefault();
+						console.log('Form for yolo-run handler')
+
+						var yolovx_path = document.getElementById("Yolo").value;
+						var weights_file = document.getElementById("Weights").value;
+
+						console.log("weights_file: ", weights_file)
+						if (weights_file == "") {
+							alert("Must select a weights file")
+							return;
+						}
+
+						var selectedClasses = [];
+						document.querySelectorAll(".class-checkbox:checked").forEach(function(cb) {
+							selectedClasses.push(cb.value);
+						});
+
+						var formData = new FormData();
+						formData.append("PName", "<%= PName %>");
+						formData.append("Admin", "<%= Admin %>");
+						formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+						formData.append("ValPercent", document.getElementById("ValRange").value);
+						formData.append("TestPercent", document.getElementById("TestRange").value);
+						formData.append("max_images", document.getElementById("max_images").value);
+						formData.append("selected_classes", JSON.stringify(selectedClasses));
+						formData.append("batch", document.getElementById("batch").value);
+						formData.append("subdiv", document.getElementById("subdiv").value);
+						formData.append("yolovx_path", document.getElementById("Yolo").value);
+						formData.append("weights", document.getElementById("Weights").value);
+						formData.append("width", document.getElementById("width").value);
+						formData.append("height", document.getElementById("height").value);
+						formData.append("yolo_version", document.getElementById("yolo_version").value);
+						formData.append("yolo_task", document.getElementById("yolo_task").value);
+						formData.append("yolo_mode", document.getElementById("yolo_mode").value);
+						formData.append("epochs", document.getElementById("epochs").value);
+						formData.append("options", document.getElementById("options").value);
+						formData.append("imgsz", document.getElementById("imgsz").value);
+						formData.append("device", document.getElementById("device").value);
+
+						fetch(event.target.action, {
+							method: 'POST',
+							body: formData
+						}).then((resp) => {
+							return resp.json();
+						}).then((body) => {
+							console.log(body);
+
+							alert(body.Success);
+							window.location.replace("/training?IDX=<%= IDX %>");
+
+						}).catch((error) => {
+							console.log(error);
+						});
+					});
+
+				</script>
+		<%- include('../includes/footer') %>

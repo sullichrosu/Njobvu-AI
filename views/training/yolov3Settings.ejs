@@ -1,0 +1,256 @@
+<%- include('../includes/header') %>
+	<%- include('../includes/processingNav', { activePage }) %>
+		<script>
+			// console.log("<%= access.Username%>");
+			if ("<%= access.includes(user)%>" == "false") {
+				window.location.replace("/home");
+			}
+		</script>
+		<h1 style="text-align: center;">
+			<%= PName %>
+		</h1>
+		<div id="training" style="width: 100%">
+			<div class="container">
+				<h3>Process Darknet YOLOv3</h3>
+				<div class="col-12">
+					<table class="table table-striped">
+						<thead class="thead-dark">
+							<tr>
+								<th scope="col">
+									<h4>Add a New Darknet/YOLOv3 Training</h4>
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<br>
+									<form class="add-darknet" action="/darknet" enctype="multipart/form-data"
+										id="darknetForm">
+										<div class="form-row">
+											<div class="form-group col-md-6">
+												<h5><label for="project-name">Darknet/YOLOv3 Directory Path</label></h5>
+												<input id="darknet_path" aria-label="Input Darknet Path" name="darknet_path" type="text"
+													class="form-control" id="darknet_path" placeholder="Darknet Path"
+													required>
+											</div>
+										</div>
+										<div class="col text-left">
+											<button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+												value="submit" style="border-radius: 0">ADD PATH</button>
+											<hr class="my-4">
+										</div>
+									</form>
+
+									<form class="add-weights" action="/upload_pre_weights" enctype="multipart/form-data"
+										id="add-weights">
+										<div class="form-row">
+											<div class="form-group col-md-6">
+												<h5><label for="upload-weights">Upload weights file (.74, .137,
+														.weights)</label></h5>
+												<input id="upload-weights" name="upload-weights" type="file"
+													class="form-control-file" required>
+											</div>
+										</div>
+										<div class="col text-left">
+											<button id="Createbtn" type="submit" class="btn btn-primary btn-lg"
+												value="submit" style="border-radius: 0">ADD FILE</button>
+											<hr class="my-4">
+										</div>
+									</form>
+
+									<h4><b>Darknet/YOLOv3 Training</b></h4>
+
+									<form class="Configure Project For YOLO" action="/darknet-run"
+										enctype="multipart/form-data" id="darknet-run" method="post">
+										<input type="hidden" id="yolo_version" name="yolo_version" value="3">
+										<input type="hidden" id="yolo_run_type" name="yolo_run_type" value="detect">
+										<input type="hidden" id="epochs" name="epochs" value="1">
+										<input type="hidden" id="imgsz" name="imgsz" value="320">
+										<input type="hidden" id="device" name="device" value="cpu">
+
+										<div class="form-row">
+											<div class="form-group col-md-2">
+												<label for="Darknet">Darknet Path</label>
+												<select name="Darknet" id="Darknet" style="width:100%">
+													<% if(default_path !=null){%>
+														<option>
+															<%= default_path %>
+														</option>
+														<%}%>
+															<% for(var i=0; i<paths.length; i++) {%>
+																<option>
+																	<%= paths[i] %>
+																</option>
+																<% } %>
+												</select>
+											</div>
+											<div class="form-group col-md-3">
+												<label for="upload-command">Weights File</label>
+												<select name="Weights" id="Weights" aria-label="Select weights file" style="width:100%">
+													<% for(var i=0; i<global_weights.length; i++) {%>
+														<option>
+															<%= global_weights[i]%>
+														</option>
+														<% } %>
+												</select>
+											</div>
+											<div class="slidecontainer form-group col-md-2">
+												<label for="TrainingRange">% Training Data</label>
+												<input type="range" min="50" max="100" value="80" class="slider"
+													id="TrainingRange">
+												<p>Value: <span id="demo"></span>%</p>
+											</div>
+										</div>
+										<div class="form-row">
+											<div class="form-group col-md-2">
+												<label for="batch">Batch size:</label>
+												<input type="number" id="batch" name="batch" min="1" value="64"
+													style="width: 75%;">
+											</div>
+											<div class="form-group col-md-2">
+												<label for="subdiv">Subdivisions:</label>
+												<input type="number" id="subdiv" name="subdiv" min="1" value="16"
+													style="width: 75%;">
+											</div>
+											<div class="form-group col-md-2">
+												<label for="width">Width:</label>
+												<input type="number" id="width" name="width" min="32" value="416"
+													step="32" style="width: 75%;">
+											</div>
+											<div class="form-group col-md-2">
+												<label for="height">Height:</label>
+												<input type="number" id="height" name="height" min="32" value="416"
+													step="32" style="width: 75%;">
+											</div>
+										</div>
+										<div class="col text-left">
+											<button id="Configbtn" type="submit" class="btn btn-primary btn-lg"
+												value="submit" style="border-radius: 0">TRAIN NEW LIBRARY</button>
+											<hr class="my-4">
+										</div>
+									</form>
+
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<script>
+			document.forms['add-weights'].addEventListener('submit', (event) => {
+				event.preventDefault();
+
+				console.log("handleImport");
+				var formData = new FormData();
+				const upload_project = document.getElementById('upload-weights');
+				const files = upload_project.files[0];
+				console.log(files.size)
+				if (!files.size > 0) {
+					alert("File must have a size > 0")
+				}
+				else {
+					formData.append('upload_weights', files);
+
+					formData.append("PName", "<%= PName %>");
+					formData.append("Admin", "<%= Admin %>");
+
+
+					fetch(event.target.action, {
+						method: 'POST',
+						body: formData
+					}).then((resp) => {
+						return resp.json();
+					}).then((body) => {
+						console.log(body);
+						alert(body.Success);
+						window.location.replace("/yolo/yolov3Settings?IDX=<%= IDX %>");
+
+					}).catch((error) => {
+						console.log(error);
+					});
+				}
+			});
+
+			document.forms['darknetForm'].addEventListener('submit', (event) => {
+				console.log("handleImport");
+				event.preventDefault();
+
+				console.log("handleImport");
+				var formData = new FormData();
+
+				formData.append("darknet_path", document.getElementById("darknet_path").value);
+				formData.append("PName", "<%= PName %>");
+				formData.append("Admin", "<%= Admin %>");
+
+
+				fetch(event.target.action, {
+					method: 'POST',
+					body: formData
+				}).then((resp) => {
+					return resp.json();
+				}).then((body) => {
+					console.log(body);
+
+					alert(body.Success);
+					window.location.replace("/yolo/yolov3Settings?IDX=<%= IDX %>");
+
+				}).catch((error) => {
+					console.log(error);
+				});
+			});
+
+			var slider = document.getElementById("TrainingRange");
+			var sliderval = document.getElementById("demo");
+			sliderval.innerHTML = slider.value;
+			slider.oninput = function () {
+				sliderval.innerHTML = this.value;
+			}
+
+			document.forms['darknet-run'].addEventListener('submit', (event) => {
+				event.preventDefault();
+				console.log('darknet-run handler')
+
+				var darknet_path = document.getElementById("Darknet").value;
+				var weights_file = document.getElementById("Weights").value;
+
+				console.log("weights_file: ", weights_file)
+				if (weights_file == "") {
+					alert("Must select a weights file")
+					return;
+				}
+
+				var formData = new FormData();
+				formData.append("PName", "<%= PName %>");
+				formData.append("Admin", "<%= Admin %>");
+				formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+				formData.append("batch", document.getElementById("batch").value);
+				formData.append("subdiv", document.getElementById("subdiv").value);
+				formData.append("darknet_path", document.getElementById("Darknet").value);
+				formData.append("weights", document.getElementById("Weights").value);
+				formData.append("width", document.getElementById("width").value);
+				formData.append("height", document.getElementById("height").value);
+				formData.append("yolo_version", document.getElementById("yolo_version").value);
+				formData.append("epochs", document.getElementById("epochs").value);
+				formData.append("imgsz", document.getElementById("imgsz").value);
+				formData.append("device", document.getElementById("device").value);
+
+				fetch(event.target.action, {
+					method: 'POST',
+					body: formData
+				}).then((resp) => {
+					return resp.json();
+				}).then((body) => {
+					console.log(body);
+
+					alert(body.Success);
+					window.location.replace("/yolo/yolov3Settings?IDX=<%= IDX %>");
+
+				}).catch((error) => {
+					console.log(error);
+				});
+			});
+
+		</script>
+		<%- include('../includes/footer') %>

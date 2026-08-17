@@ -1,4 +1,4 @@
-<%- include('includes/header') %>
+<%- include('includes/header', {activePage: null}) %>
 <script>
   // console.log("<%= access.Username%>");
   if("<%= access.includes(user)%>" == "false")
@@ -31,7 +31,7 @@
         <div class="mb-0 col-md-12 row text-center mx-auto nopadding" style="background-color: #262C2F; color: white">
           <% if(prev_IName != -1) { %>
                   <% if (AutoSave == 1) { %>
-                      <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-prevV" value="auto-prevV" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></button>
+                      <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-prevV" aria-label="Previous image" value="auto-prevV" style="border-radius: 0"><i class="fas fa-arrow-alt-left" aria-disable="true"></i></button>
                   <% } else { %>
 					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
                   <% } %>
@@ -41,9 +41,9 @@
           <span class="mr-0 ml-0 btn col text-center" style="cursor: default"><%= image_name %> (<b><%= curr_index %></b>/<%= images_length %>)</span>
           <% if(next_IName != -1) { %>
                   <% if (AutoSave == 1) { %>
-                      <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-nextV" value="auto-nextV" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></button>
+                      <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-nextV" aria-label="Next image" value="auto-nextV" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></button>
                   <% } else { %>
-					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right" aria-disable="true"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-primary col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
@@ -153,11 +153,11 @@
 </div>
 
 <!-- Modals -->
-<div class="modal fade" id="menu_modal" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+<div class="modal fade" style="width: 300px;" id="menu_modal" tabindex="-1" role="dialog" aria-labelledby="menuModal">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">List of Images</h4>
+                <h4 class="modal-title" id="menuModal">List of Images</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body row">
@@ -197,7 +197,7 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="myModalLabel">Hotkeys Infomation</h4>
+                <h4 class="modal-title" id="infoModal">Hotkeys Infomation</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <table class="modal-body table">

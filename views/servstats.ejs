@@ -1,0 +1,115 @@
+<%- include('includes/header') %>
+<%- include('includes/processingNav', { activePage }) %>
+
+<script>
+    if ("<%= access.includes(user) %>" == "false") {
+        window.location.replace("/home");
+    }
+</script>
+<div class="container">
+    <h1 style="text-align: center;"><%= PName %></h1>
+        <div class="card">
+            <div class="card-header">
+                <h4>CPU Summary</h4>
+            </div>
+            <div class="card-body">
+                <% if (top_stdout) { 
+                    let lines = top_stdout.split("\n").slice(0, 5); // Extract the first 5 lines
+                %>
+                    <pre>
+                    <% lines.forEach(line => { %>
+                        <%= line %>
+                    <% }); %>
+                    </pre>
+                <% } else { %>
+                    <p>No CPU data available.</p>
+                <% } %>
+            </div>
+        </div>
+    <div id="training" style="width: 100%">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>GPU Stats</h4>
+                    </div>
+                    <div class="card-body">
+                        <% if (gpu_info.length > 0) { %>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>GPU Name</th>
+                                            <th>Temperature</th>
+                                            <th>Power Usage</th>
+                                            <th>Power Cap</th>
+                                            <th>Memory Used</th>
+                                            <th>Memory Total</th>
+                                            <th>Utilization</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% gpu_info.forEach(gpu => { %>
+                                            <tr>
+                                                <td><%= gpu.name %></td>
+                                                <td><%= gpu.temp %></td>
+                                                <td><%= gpu.power_usage %></td>
+                                                <td><%= gpu.power_cap %></td>
+                                                <td><%= gpu.memory_used %></td>
+                                                <td><%= gpu.memory_total %></td>
+                                                <td><%= gpu.utilization %></td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <% } else { %>
+                            <p>No GPU data available.</p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>CPU Stats</h4>
+                    </div>
+                    <div class="card-body">
+                        <% if (top_stdout) { %>
+                            <% 
+                                let lines = top_stdout.split("\n"); 
+                                let headers = lines[lines.findIndex(line => line.includes("PID"))].split(/\s+/);
+                                let rows = lines.slice(lines.findIndex(line => line.includes("PID")) + 1).filter(row => row.trim() !== "");
+                            %>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <% headers.forEach(header => { %>
+                                                <th><%= header %></th>
+                                            <% }); %>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% rows.forEach(row => { 
+                                            let cols = row.split(/\s+/); 
+                                        %>
+                                            <tr>
+                                                <% cols.forEach(col => { %>
+                                                    <td><%= col %></td>
+                                                <% }); %>
+                                            </tr>
+                                        <% }); %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <% } else { %>
+                            <p>No CPU data available.</p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<%- include('includes/footer') %>

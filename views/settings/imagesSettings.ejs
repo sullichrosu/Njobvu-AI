@@ -1,0 +1,220 @@
+<%- include('../includes/header') %>
+<%- include('../includes/configNav', { activePage }) %>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Import Images</h1>
+            <p>
+                This page allow you to import images to the Njobvu AI platform. Upload multiple images at once by zipping them into a single file.
+            </p>
+            <hr>
+            <div>
+                <h3>
+                    Add Images
+                </h3>
+                <p>
+                    Upload Images(.zip)
+                </p>
+                <form action="/addImages" method="POST" enctype="multipart/form-data" id="addImagesForm">
+                    <div class="mb-3">
+                        <input id = "upload_images" aria-label="Select file" name="upload_images" class="form-control" type="file" required>
+                    </div>
+                    <div>
+                        <label class="mb-2" for="improgress" id="improgress" aria-live="polite" aria-atomic="true"></label>
+                    </div>
+                    <button class="btn btn-primary" type="submit">Submit File</button>
+                </form>
+            </div>
+            <hr>
+            <div>
+                <h3>
+                    Add Images From S3 Bucket
+                </h3>
+                <p>
+                    Attach an S3 bucket to this project. Njobvu downloads a local working copy of the bucket's images into the project, so existing labeling, training, and inference tools work unchanged. Re-syncing later only pulls in new objects.
+                </p>
+                <form id="s3BucketForm" onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="s3_bucket_name">Bucket Name</label>
+                            <input id="s3_bucket_name" class="form-control" type="text" placeholder="my-image-bucket" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="s3_region">Region</label>
+                            <input id="s3_region" class="form-control" type="text" placeholder="us-east-1" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="s3_prefix">Prefix (Optional)</label>
+                            <input id="s3_prefix" class="form-control" type="text" placeholder="images/">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="s3_endpoint">S3 Endpoint</label>
+                            <input id="s3_endpoint" name="endpoint" aria-label="S3 Endpoint URL" type="text" class="form-control" autocomplete="off">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="s3_access_key_id">Access Key ID</label>
+                            <input id="s3_access_key_id" class="form-control" type="text" autocomplete="off">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="s3_secret_access_key">Secret Access Key</label>
+                            <input id="s3_secret_access_key" class="form-control" type="password" autocomplete="off">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mb-2" id="s3progress" aria-live="polite" aria-atomic="true"></label>
+                    </div>
+                    <button class="btn btn-primary" id="s3SubmitBtn" type="button" onclick="attachAndSyncS3Bucket()">Attach &amp; Sync Bucket</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.forms['addImagesForm'].addEventListener('submit', (event) => {
+
+		event.preventDefault();
+
+        console.log("handleImport");
+			
+		console.log("handleImport");
+		var formData = new FormData();
+		const upload_images = document.getElementById('upload_images');
+		const files = upload_images.files[0];
+		formData.append('upload_images', files);
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+		formData.append("IDX", "<%= IDX %>");
+		// 
+
+		
+		var request = new XMLHttpRequest();
+		request.upload.addEventListener('progress', function (e) {
+			var file1Size = $('#upload_images')[0].files[0].size;
+			if (e.loaded <= file1Size) {
+				var percent = Math.round(e.loaded / file1Size * 100);
+				console.log(percent);
+				$('#improgress').text("Percent Uploaded: " + percent)
+
+			} 
+			if(e.loaded == e.total){
+				$('#improgress').text("Uploaded Finished. Server processing upload. Please wait for the closing prompt.")
+				document.getElementById("Importbtn").style.display = "none";
+				alert("Uploaded Finished. Server processing upload. Please wait for the closing prompt.");
+			}
+		}, true);   
+
+		request.open("post", event.target.action, true);
+		request.onreadystatechange = function receiveResponse() {
+			if(this.readyState == 4)
+			{
+				if(this.status == 200)
+				{
+					var mssg = this.response
+					console.log("mssg: ", mssg)
+					console.log('mssg["Success"]: ', mssg["Success"]);
+					alert(this.response);
+					window.location.reload();
+				}
+				else
+				{
+					alert("Something went wrong! ", this.response);
+				}
+			}
+		}
+		request.send(formData);
+		console.log(formData);
+	});
+
+	async function attachAndSyncS3Bucket() {
+		const bucketName = document.getElementById('s3_bucket_name').value;
+		const region = document.getElementById('s3_region').value;
+		const prefix = document.getElementById('s3_prefix').value;
+		const accessKeyId = document.getElementById('s3_access_key_id').value;
+		const secretAccessKey = document.getElementById('s3_secret_access_key').value;
+        const endpoint = document.getElementById("s3_endpoint").value;
+
+		if (!bucketName || !region) {
+			alert("Bucket Name and Region are required.");
+			return;
+		}
+
+		const submitBtn = document.getElementById('s3SubmitBtn');
+		const progress = document.getElementById('s3progress');
+		submitBtn.style.display = "none";
+
+		try {
+			progress.textContent = "Attaching S3 bucket...";
+
+			const attachRes = await fetch(`/api/v2/projects/<%= Admin %>/<%= PName %>/s3-bucket`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					BucketName: bucketName,
+					Region: region,
+					Prefix: prefix,
+					AccessKeyId: accessKeyId,
+					SecretAccessKey: secretAccessKey,
+                    Endpoint: endpoint,
+				}),
+			});
+
+			const attachBody = await attachRes.json();
+			if (!attachRes.ok || !attachBody.success) {
+				throw new Error(attachBody.error || "Could not attach S3 bucket");
+			}
+
+			progress.textContent = "Syncing images from S3...";
+
+			const syncRes = await fetch(`/api/v2/projects/<%= Admin %>/<%= PName %>/s3-bucket/sync`, {
+				method: 'POST',
+			});
+
+			const syncBody = await syncRes.json();
+			if (!syncRes.ok || !syncBody.success) {
+				throw new Error(syncBody.error || "Could not sync images from S3 bucket");
+			}
+
+			progress.textContent = "";
+			alert(`Synced ${syncBody.syncedCount} new image(s) from S3 (skipped ${syncBody.skippedCount} already present).`);
+			window.location.replace("/config/imageSettings?IDX=<%= IDX %>");
+		} catch (err) {
+			progress.textContent = "";
+			submitBtn.style.display = "inline-block";
+			alert("Something went wrong attaching/syncing the S3 bucket.\nReason: " + err.message);
+		}
+	}
+
+
+
+	async function newImages(){
+		console.log("newImages");
+		var form = document.getElementById('addImagesForm');
+		var formData = new FormData(form);
+		
+		formData.append("PName", "<%= PName %>");
+		formData.append("Admin", "<%= Admin %>");
+		formData.append("IDX", "<%= IDX %>");
+		// 
+		
+		let options = {
+			method: form.method, 
+			body: formData
+		}
+		
+		let cred = await fetch('/addImages', options);
+		cred = await cred.json();
+		
+		if(cred.Success == "Yes"){
+			alert("New Images added to project");
+			window.location.replace("/config/imageSettings?IDX=<%= IDX %>");
+		}
+		else{
+			alert("There was an error adding images to the project: "+cred.Success);
+			window.location.replace("/config/imageSettings?IDX=<%= IDX %>");
+		}
+	}
+</script>

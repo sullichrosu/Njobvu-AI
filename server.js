@@ -1,242 +1,154 @@
-////////////////////////////////////////////////////////
-// Set up:
-////////////////////////////////////////////////////////
+global.logger = require('./utils/logger');
+const app = require('./app');
+const { Client } = require("./queries/client");
 
-//Read in config
-global.configFile = require('./controllers/training/config.json');
-//console.log(configFile)
-//console.log("default_python_Path: ", configFile.default_python_path);
-//console.log("ssl_key_path: ", configFile.ssl_key_path);
-//console.log("ssl_cert_path: ", configFile.ssl_cert_path);
+global.configFile = require("./config.json");
 
-// set port number and hostname
-const port = configFile.port,
-      hostname = configFile.hostname; // change to ip address when on server
-//const port = 8080,
-//      hostname = "http://localhost"; // change to ip address when on server
-
-
+const port = configFile.port;
+const hostname = configFile.hostname;
 
 // global imported libraries
-global.fs = require('fs');
-global.unzip = require('unzip-stream');
-global.StreamZip = require('node-stream-zip');
-//global.DecompressZip = require('decompress-zip');
+global.fs = require("fs");
+global.unzip = require("unzip-stream");
+global.StreamZip = require("node-stream-zip");
 global.glob = require("glob");
-global.probe = require('probe-image-size');
-global.csv = require('csvtojson');
-global.rimraf = require('./public/libraries/rimraf');
-global.util = require('util');
-global.archiver = require('archiver');
-global.sqlite3 = require('sqlite3').verbose(),
-global.readline = require('readline'),
-global.path = require('path');
-global.bcrypt = require('bcryptjs');
-// const ConvertTiff = require('tiff-to-png');
-// global.converter = new ConvertTiff({logLevel: 1});
-
-//global.readdirAsync = util.promisify(fs.readdir);
+global.probe = require("probe-image-size");
+global.csv = require("csvtojson");
+global.rimraf = require("./public/libraries/rimraf");
+global.util = require("util");
+global.archiver = require("archiver");
+(global.sqlite3 = require("sqlite3").verbose()),
+    (global.readline = require("readline")),
+    (global.path = require("path"));
 global.readdirAsync = util.promisify(fs.readdir);
 global.removeDir = util.promisify(fs.rmdir);
 
+global.projectDbClients = {};
+global.managedDbClient = new Client(path.join(__dirname, "db", "manage.db"));
 
-// set ssl certificates
-var ssl_key_path = configFile.ssl_key_path;
-var ssl_cert_path = configFile.ssl_cert_path;
+managedDbClient.migrate();
 
-var secure = false;
-if(ssl_key_path && ssl_cert_path){
-	// console.log("secure True");
-	secure = true;
-	var https = require('https');
-	var options = {
-		key: fs.readFileSync(ssl_key_path),
-		cert: fs.readFileSync(ssl_cert_path),
-	};
+const allProjectsPath = path.join(__dirname, "public", "projects");
+
+try {
+    if (!fs.existsSync(allProjectsPath)) {
+        fs.mkdirSync(allProjectsPath, { recursive: true });
+        global.logger.info(`Directory '${allProjectsPath}' created.`);
+    } else {
+        global.logger.debug(`Directory '${allProjectsPath}' already exists.`);
+    }
+} catch (err) {
+    global.logger.error(`Error creating directory: ${err.message}`);
 }
 
+for (const project of fs.readdirSync(allProjectsPath)) {
+    const projectPath = path.join(allProjectsPath, project);
 
-// local imported libraries
-const express = require('express'),
-    //session = require('express-session'),
-    //bodyParser = require('body-parser'),
-    path = require('path'),
-    sys  = require('util'),
-    cookieParser = require('cookie-parser'),
-    upload = require('express-fileupload'),
-    app = express();
-    // sqlite3 = require('sqlite3').verbose(),
-// get path
-global.currentPath = process.cwd();
-global.dataFolder = currentPath + '/data/';
+    for (const file of fs.readdirSync(projectPath)) {
+        if (file.endsWith(".db")) {
+            const dbFile = path.join(projectPath, file);
 
-// read files
-global.colorsJSON = JSON.parse(fs.readFileSync(dataFolder + 'colors.json', 'utf8'));
-
-// create connection to database:
-global.db = new sqlite3.Database('./db/manage.db', (err) => {
-    if (err) {
-        return console.error(err.message);
+            global.projectDbClients[projectPath] = new Client(dbFile);
+        }
     }
-    console.log('Connected to the main database.');
+}
+
+let ssl_key_path = configFile.ssl_key_path;
+let ssl_cert_path = configFile.ssl_cert_path;
+let secure = false;
+
+if (ssl_key_path && ssl_cert_path) {
+    secure = true;
+    var https = require("https");
+    var options = {
+        key: fs.readFileSync(ssl_key_path),
+        cert: fs.readFileSync(ssl_cert_path),
+    };
+}
+
+sys = require("util"),
+    // cookieParser = require("cookie-parser"),
+    // upload = require("express-fileupload"),
+    // app = express();
+
+    global.currentPath = process.cwd() + "/";
+global.dataFolder = currentPath + "/data/";
+
+global.colorsJSON = JSON.parse(
+    fs.readFileSync(dataFolder + "colors.json", "utf8"),
+);
+
+global.db = new sqlite3.Database("./db/manage.db", (err) => {
+    if (err) {
+        return global.logger.error(err.message);
+    }
+
+    global.logger.info("Connected to the main database.");
 });
-// customized asnc classes
-global.db.getAsync = function (sql) {
+
+global.db.getAsync = function(sql) {
     var that = this;
     return new Promise((resolve, reject) => {
-        that.get(sql, function (err, row) {
-            if (err)
-            {
-                console.log("getAsync ERROR! ", err);
+        that.get(sql, function(err, row) {
+            if (err) {
                 reject(err);
-            }
-            else
-                resolve(row);
+            } else resolve(row);
         });
-    }).catch(err => {
-		console.error(err)
-	});
+    }).catch((err) => {
+        global.logger.error("getAsync ERROR!", { sql, error: err.message, stack: err.stack });
+    });
 };
-global.db.allAsync = function (sql) {
+
+global.db.allAsync = function(sql) {
     var that = this;
-    return new Promise(function (resolve, reject) {
-        that.all(sql, function (err, row) {
-            if (err)
-            {
-                console.log("allAsync ERROR! ", err);
+    return new Promise(function(resolve, reject) {
+        that.all(sql, function(err, row) {
+            if (err) {
                 reject(err);
-            }
-            else
-                resolve(row);
+            } else resolve(row);
         });
-    }).catch(err => {
-		console.error(err)
-	});
+    }).catch((err) => {
+        global.logger.error("allAsync ERROR!", { sql, error: err.message, stack: err.stack });
+    });
 };
-global.db.runAsync = function (sql) {
+
+global.db.runAsync = function(sql) {
     var that = this;
-    return new Promise(function (resolve, reject) {
-        that.run(sql, function (err, row) {
-            if (err)
-            {
-                console.log("runAsync ERROR! ", err);
+    return new Promise(function(resolve, reject) {
+        that.run(sql, function(err, row) {
+            if (err) {
                 reject(err);
-            }
-            else
-                resolve(row);
+            } else resolve(row);
         });
-    }).catch(err => {
-		console.error("runAsync error: ",err)
-	});
+    }).catch((err) => {
+        global.logger.error("runAsync ERROR!", { sql, error: err.message, stack: err.stack });
+    });
 };
-global.db.execAsync = function (sql) {
-	var that = this;
-	return new Promise(function (resolve, reject) {
-		that.exec(sql, function(err, row) {
-			if (err)
-			{
-				console.log("execAsync ERROR! ", err);
-				reject(err);
-			}
-			else
-			{
-				resolve(row);
-			}
-		})
-	}).catch(err => {
-		console.error(err)
-	});
+
+global.db.execAsync = function(sql) {
+    var that = this;
+    return new Promise(function(resolve, reject) {
+        that.exec(sql, function(err, row) {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(row);
+            }
+        });
+    }).catch((err) => {
+        global.logger.error("execAsync ERROR!", { sql, error: err.message, stack: err.stack });
+    });
+};
+
+
+app.set("port", process.env.port || port);
+app.set("views", __dirname + "/views");
+app.set("view engine", "ejs"); // template engine
+
+if (secure) {
+    https.createServer(options, app).listen(port);
+} else {
+    app.listen(port, () => {
+        global.logger.info(`Server started on ${hostname}:${port}`);
+    });
 }
-const fileUpload = require('express-fileupload');
-// api
-const api = require('./routes/api');
-
-// console.log(typeof(Storage));
-// pages
-const {
-    getLoginPage,
-    getSignupPage,
-    getHomePage,
-    getCreatePage,
-    getProjectPage,
-	getConfigPage,
-	getDownloadPage,
-	getLabelingPage,
-	getStatsPage,
-    getTrainingPage,
-	getYoloPage,
-	getUserPage,
-  get404Page,
-  getValidationHomePage,
-  getValidationProjectPage,
-  getValidationLabelingPage,
-  getValidationConfigPage,
-  getValidationStatsPage
-} = require('./routes/pages');
-// configure middlewares
-// set
-app.set('port', process.env.port || port); // set express to use this port
-app.set('views', __dirname + '/views'); // set express to look in this folder to render our view
-app.set('view engine', 'ejs'); // configure template engine
-
-// use
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json()); // parse form data client
-app.use(express.static(path.join(__dirname, 'public'))); // configure express to use public folder
-app.use(cookieParser());
-//app.use(session({secret:"Secret Code Don't Tell Anyone", cookie: { maxAge: 30 * 1000 }})); // configure fileupload
-app.use(upload({
-    useTempFiles: true,
-    tempFileDir: "./tmp/"
-}));
-app.use("/",api);
-
-////////////////////////////////////////////////////////
-// Routes for the App:
-////////////////////////////////////////////////////////
-
-// get
-app.get('/', getLoginPage);
-app.get('/signup', getSignupPage);
-app.get('/home', getHomePage);
-app.get('/create', getCreatePage);
-app.get('/project', getProjectPage);
-app.get('/config', getConfigPage);
-app.get('/download', getDownloadPage);
-app.get('/labeling', getLabelingPage);
-app.get('/stats', getStatsPage);
-app.get('/training', getTrainingPage);
-app.get('/yolo', getYoloPage);
-app.get('/user', getUserPage);
-app.get('/homeV', getValidationHomePage);
-app.get('/projectV', getValidationProjectPage);
-app.get('/labelingV', getValidationLabelingPage);
-app.get('/configV', getValidationConfigPage);
-app.get('/statsV', getValidationStatsPage);
-// everything else -> 404
-app.get('*', get404Page);
-
-////////////////////////////////////////////////////////
-// Start Server:
-////////////////////////////////////////////////////////
-if(secure)
-{
-	https.createServer(options, app).listen(port);
-}
-else
-{
-	var server = app.listen(port, () => {
-    	console.log(hostname+':'+port);
-	});
-}
-////////////////////////////////////////////////////////
-// Web-socket:
-////////////////////////////////////////////////////////
-//var io = require('socket.io').listen(server);
-
-
-// web-socket
-//require("./controllers/training/main")(io);
-
-
-
