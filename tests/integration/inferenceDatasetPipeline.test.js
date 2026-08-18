@@ -172,6 +172,7 @@ describe("Inference Dataset Pipeline & S3 Max Image Limit", () => {
                 "",
                 undefined,
                 undefined,
+                "",
                 50,
             );
         });

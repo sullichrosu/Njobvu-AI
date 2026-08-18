@@ -25,7 +25,7 @@ async function uploadInferenceFile(req, res) {
     if (!validFileNames.includes(ext)) {
         res.send({
             Success:
-                "ERROR: Wrong filetype. Must be type .png, .jpg, .jpeg, .tif, .gif, .mp4, .mov, .zip, or .7z",
+                "ERROR: Wrong filetype. Must be type .png, .jpg, .jpeg, .tif, .gif, .mp4, .mov, or .zip",
         });
     } else {
         if (!fs.existsSync(inferencePath)) {
@@ -68,8 +68,6 @@ async function uploadInferenceFile(req, res) {
 
         res.send({
             Success: "Your inference file has been uploaded and saved",
-            filename: inferenceFile.name,
-            extractedPath,
         });
     }
 }
