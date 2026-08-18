@@ -4,6 +4,9 @@ const unzipFile = require("./unzipFile");
 const queries = require("../queries/queries");
 const { buildS3Client, listImageObjects, downloadObjectToFile } = require("./s3Client");
 
+const DEFAULT_MAX_IMAGES = 100;
+const SAFETY_CEILING_MAX_IMAGES = 5000;
+
 async function prepareInferenceDataset(options) {
     const {
         PName,
@@ -17,11 +20,15 @@ async function prepareInferenceDataset(options) {
         inferenceUploadPath,
     } = options;
 
-    const effectiveMaxImages = max_images || maxImages || limit;
+    const rawLimit = max_images || maxImages || limit;
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : null;
+    const maxLimit = parsedLimit && Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, SAFETY_CEILING_MAX_IMAGES)
+        : DEFAULT_MAX_IMAGES;
 
     let targetFilePath = inference_file;
 
-    // S3 Bucket stream mode
+    // S3 Bucket stream mode (JIT fetch right before inference run execution)
     if (use_s3_bucket || inference_file === "s3" || inference_file === "s3_bucket") {
         const bucketResult = await queries.managed.getBucket(PName, Admin);
         const bucket = bucketResult && bucketResult.row;
@@ -30,8 +37,6 @@ async function prepareInferenceDataset(options) {
             throw new Error("No S3 bucket attached to this project");
         }
 
-        const rawLimit = effectiveMaxImages || bucket.MaxImages || 100;
-        const maxLimit = parseInt(rawLimit, 10);
         const dateStamp = Date.now();
         const s3StreamFolder = path.join(inferenceUploadPath, `s3_stream_${dateStamp}`);
 
@@ -46,7 +51,8 @@ async function prepareInferenceDataset(options) {
             endpoint: bucket.Endpoint,
         });
 
-        const objectKeys = await listImageObjects(s3Client, bucket.BucketName, bucket.Prefix);
+        // Pass maxLimit directly to listImageObjects so S3 listing stops early
+        const objectKeys = await listImageObjects(s3Client, bucket.BucketName, bucket.Prefix, maxLimit);
         let downloaded = 0;
 
         for (const key of objectKeys) {

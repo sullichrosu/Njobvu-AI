@@ -86,7 +86,7 @@ async function verifyBucketAccess(s3Client, bucketName) {
     );
 }
 
-async function listImageObjects(s3Client, bucketName, prefix = "") {
+async function listImageObjects(s3Client, bucketName, prefix = "", maxKeys = null) {
     const objects = [];
     let continuationToken;
 
@@ -106,6 +106,9 @@ async function listImageObjects(s3Client, bucketName, prefix = "") {
 
             if (IMAGE_EXTENSIONS.has(path.extname(object.Key).toLowerCase())) {
                 objects.push(object.Key);
+                if (maxKeys && objects.length >= maxKeys) {
+                    return objects;
+                }
             }
         }
 
