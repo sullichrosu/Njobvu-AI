@@ -134,9 +134,25 @@ async function downloadObjectToFile(s3Client, bucketName, key, destPath) {
     });
 }
 
+// For "stream" sync mode: fetch an object's bytes live for a single request
+// instead of persisting them to disk. Caller is responsible for piping
+// response.Body to the outgoing HTTP response.
+async function getObjectStream(s3Client, bucketName, key) {
+    const response = await s3Client.send(
+        new GetObjectCommand({ Bucket: bucketName, Key: key }),
+    );
+
+    return {
+        body: response.Body,
+        contentType: response.ContentType,
+        contentLength: response.ContentLength,
+    };
+}
+
 module.exports = {
     buildS3Client,
     verifyBucketAccess,
     listImageObjects,
     downloadObjectToFile,
+    getObjectStream,
 };
