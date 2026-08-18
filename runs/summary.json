@@ -1,0 +1,56 @@
+{
+  "runName": "all_runs_summary",
+  "runDir": "/home/fc/code/njobvu-ai/runs",
+  "runType": "aggregated",
+  "isAggregated": true,
+  "projectName": null,
+  "generatedAt": "2026-08-17T21:26:41.634Z",
+  "totalRuns": 1,
+  "trainingRunCount": 1,
+  "inferenceRunCount": 0,
+  "aggregateMetrics": {
+    "totalEpochsTrained": 0,
+    "bestOverallMap50": 0,
+    "bestRunName": "None"
+  },
+  "findings": [
+    "Aggregated analysis for 1 run(s).",
+    "Training runs: 1, Inference runs: 0.",
+    "Total epochs trained across all runs: 0."
+  ],
+  "recommendations": [
+    "Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy."
+  ],
+  "runs": [
+    {
+      "runName": "detect_summary_run",
+      "runDir": "/home/fc/code/njobvu-ai/runs/detect/train/detect_summary_run",
+      "runType": "training",
+      "isAggregated": false,
+      "generatedAt": "2026-08-17T21:26:41.633Z",
+      "artifactCount": 1,
+      "imageCount": 0,
+      "config": {
+        "model": "yolo11n.pt",
+        "epochs": 10
+      },
+      "metrics": {},
+      "performanceAnalysis": {},
+      "logDiagnostics": {
+        "detectedHardware": "N/A",
+        "durationSeconds": null,
+        "warnings": [],
+        "errors": [],
+        "completionStatus": "Unknown"
+      },
+      "weightsInfo": [],
+      "visualPlots": [],
+      "findings": [],
+      "recommendations": [],
+      "markdownSummary": "# Run Summary: detect_summary_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-17T21:26:41.633Z\n- **Artifact Count**: 1 files (0 images)\n\n## Executive Summary & Findings\n- No summary findings recorded.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"model\": \"yolo11n.pt\",\n  \"epochs\": 10\n}\n```\n",
+      "summaryMd": "# Run Summary: detect_summary_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-17T21:26:41.633Z\n- **Artifact Count**: 1 files (0 images)\n\n## Executive Summary & Findings\n- No summary findings recorded.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"model\": \"yolo11n.pt\",\n  \"epochs\": 10\n}\n```\n"
+    }
+  ],
+  "markdownSummary": "# Run Summary: all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: All Projects\n- **Generated At**: 2026-08-17T21:26:41.634Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s).\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 0.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 0\n- **Best Overall mAP@50**: 0.00%\n- **Top Performing Run**: `None`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `detect_summary_run` | training | 0 | N/A | N/A |\n\n## AI Recommendations & Next Steps\n- 💡 Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.\n",
+  "summaryMd": "# Run Summary: all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: All Projects\n- **Generated At**: 2026-08-17T21:26:41.634Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s).\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 0.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 0\n- **Best Overall mAP@50**: 0.00%\n- **Top Performing Run**: `None`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `detect_summary_run` | training | 0 | N/A | N/A |\n\n## AI Recommendations & Next Steps\n- 💡 Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.\n"
+}
