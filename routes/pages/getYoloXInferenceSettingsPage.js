@@ -1,3 +1,5 @@
+const queries = require("../../queries/queries");
+
 async function getYoloXInferencePage(req, res) {
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
@@ -48,12 +50,12 @@ async function getYoloXInferencePage(req, res) {
         fs.mkdirSync(log_path);
         fs.mkdirSync(python_path);
         fs.mkdirSync(weights_path);
-        fs.writeFile(python_path_file, "", function (err) {
+        fs.writeFile(python_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
         });
-        fs.writeFile(yolovx_path_file, "", function (err) {
+        fs.writeFile(yolovx_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
@@ -61,7 +63,7 @@ async function getYoloXInferencePage(req, res) {
     } else if (!fs.existsSync(weights_path)) {
         fs.mkdirSync(weights_path);
     } else if (!fs.existsSync(yolovx_path_file)) {
-        fs.writeFile(yolovx_path_file, "", function (err) {
+        fs.writeFile(yolovx_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
@@ -77,10 +79,10 @@ async function getYoloXInferencePage(req, res) {
     });
 
     // create async database object functions
-    tdb.getAsync = function (sql) {
+    tdb.getAsync = function(sql) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.get(sql, function(err, row) {
                 if (err) {
                     global.logger.error("runAsync ERROR!", err)
                     reject(err);
@@ -90,10 +92,10 @@ async function getYoloXInferencePage(req, res) {
             global.logger.error(err);
         });
     };
-    tdb.allAsync = function (sql) {
+    tdb.allAsync = function(sql) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.all(sql, function(err, row) {
                 if (err) {
                     global.logger.error("runAsync ERROR!", err)
                     reject(err);
@@ -106,19 +108,19 @@ async function getYoloXInferencePage(req, res) {
 
     var results1 = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
+        PName +
+        "' AND Admin = '" +
+        admin +
+        "'",
     );
     var results2 = await tdb.allAsync("SELECT * FROM `Classes`");
 
     var acc = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
+        PName +
+        "' AND Admin = '" +
+        admin +
+        "'",
     );
     var access = [];
     for (var i = 0; i < acc.length; i++) {
@@ -223,7 +225,7 @@ async function getYoloXInferencePage(req, res) {
     }
 
     // close the database
-    tdb.close(function (err) {
+    tdb.close(function(err) {
         if (err) {
             global.logger.error(err);
         } else {
