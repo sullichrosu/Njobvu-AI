@@ -148,8 +148,8 @@ describe("Inference Dataset Pipeline & S3 Max Image Limit", () => {
         });
     });
 
-    describe("attachS3Bucket with MaxImages field", () => {
-        it("saves MaxImages when configuring bucket", async () => {
+    describe("attachS3Bucket without MaxImages column", () => {
+        it("attaches bucket successfully without MaxImages in DB", async () => {
             const projectDir = path.join(tmpDir, "public/projects/testuser-test-project");
             fs.mkdirSync(projectDir, { recursive: true });
 
@@ -160,7 +160,6 @@ describe("Inference Dataset Pipeline & S3 Max Image Limit", () => {
                 .send({
                     BucketName: "test-bucket",
                     Region: "us-east-1",
-                    MaxImages: 50,
                 });
 
             expect(res.statusCode).toBe(200);
@@ -173,7 +172,6 @@ describe("Inference Dataset Pipeline & S3 Max Image Limit", () => {
                 undefined,
                 undefined,
                 "",
-                50,
             );
         });
     });

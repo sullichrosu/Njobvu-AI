@@ -38,8 +38,6 @@ async function attachS3Bucket(req, res) {
     const AccessKeyId = trimOrUndefined(body.AccessKeyId);
     const SecretAccessKey = trimOrUndefined(body.SecretAccessKey);
     const Endpoint = trimOrUndefined(body.Endpoint);
-    const rawMaxImages = body.MaxImages !== undefined ? body.MaxImages : (body.maxImages !== undefined ? body.maxImages : body.max_images);
-    const MaxImages = (rawMaxImages !== undefined && rawMaxImages !== null && rawMaxImages !== "") ? parseInt(rawMaxImages, 10) : null;
 
     if (!isOwner(req, admin)) {
         return res.status(403).json({ success: false, error: "Not authorized for this project" });
@@ -72,8 +70,7 @@ async function attachS3Bucket(req, res) {
             Prefix || "",
             AccessKeyId,
             SecretAccessKey,
-            Endpoint || "",
-            MaxImages
+            Endpoint || ""
         );
 
         return res.status(200).json({ success: true });
@@ -105,8 +102,6 @@ async function getS3Bucket(req, res) {
             return res.status(404).json({ success: false, error: "No S3 bucket attached" });
         }
 
-        const maxImg = row.MaxImages != null ? Number(row.MaxImages) : null;
-
         return res.status(200).json({
             success: true,
             bucket: {
@@ -114,8 +109,6 @@ async function getS3Bucket(req, res) {
                 Region: row.Region,
                 Prefix: row.Prefix,
                 Endpoint: row.Endpoint,
-                MaxImages: maxImg,
-                max_images: maxImg,
                 LastSyncedAt: row.LastSyncedAt,
                 hasCredentials: !!row.AccessKeyId,
             },
@@ -166,7 +159,7 @@ async function syncS3Bucket(req, res) {
 
         const rawMaxLimit = (req.body && (req.body.maxImages || req.body.MaxImages || req.body.max_images || req.body.limit)) || (req.query && req.query.limit);
         const parsedMaxLimit = rawMaxLimit !== undefined && rawMaxLimit !== null && rawMaxLimit !== "" ? parseInt(rawMaxLimit, 10) : null;
-        const maxImages = parsedMaxLimit !== null ? parsedMaxLimit : (bucket.MaxImages != null ? Number(bucket.MaxImages) : null);
+        const maxImages = parsedMaxLimit !== null ? parsedMaxLimit : null;
 
         const s3Client = buildS3Client({
             region: bucket.Region,
