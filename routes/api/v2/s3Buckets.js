@@ -38,6 +38,7 @@ async function attachS3Bucket(req, res) {
     const AccessKeyId = trimOrUndefined(body.AccessKeyId);
     const SecretAccessKey = trimOrUndefined(body.SecretAccessKey);
     const Endpoint = trimOrUndefined(body.Endpoint);
+    const MaxImages = body.MaxImages !== undefined ? body.MaxImages : body.maxImages;
 
     if (!isOwner(req, admin)) {
         return res.status(403).json({ success: false, error: "Not authorized for this project" });
@@ -71,6 +72,7 @@ async function attachS3Bucket(req, res) {
             AccessKeyId,
             SecretAccessKey,
             ...(Endpoint ? [Endpoint] : []),
+            ...(MaxImages !== undefined && MaxImages !== null ? [MaxImages] : []),
         );
 
         return res.status(200).json({ success: true });
@@ -110,6 +112,7 @@ async function getS3Bucket(req, res) {
                 Prefix: row.Prefix,
                 Endpoint: row.Endpoint,
                 LastSyncedAt: row.LastSyncedAt,
+                MaxImages: row.MaxImages || null,
                 hasCredentials: !!row.AccessKeyId,
             },
         });
@@ -159,6 +162,9 @@ async function syncS3Bucket(req, res) {
 
         console.log(bucket);
 
+        const rawMaxLimit = req.body.maxImages || req.body.MaxImages || req.body.limit || (req.query && req.query.limit) || bucket.MaxImages;
+        const maxImagesLimit = rawMaxLimit !== undefined && rawMaxLimit !== null ? parseInt(rawMaxLimit, 10) : Infinity;
+
         const s3Client = buildS3Client({
             region: bucket.Region,
             accessKeyId: bucket.AccessKeyId,
@@ -173,6 +179,10 @@ async function syncS3Bucket(req, res) {
         let skippedCount = 0;
 
         for (const key of objectKeys) {
+            if (syncedImages.length >= maxImagesLimit) {
+                break;
+            }
+
             const fileName = sanitizeFileName(path.basename(key));
 
             if (!fileName || existingImages.has(fileName)) {

@@ -1,37 +1,61 @@
+const path = require("path");
+const fs = require("fs");
+const unzipFile = require("../../utils/unzipFile");
+
 async function uploadInferenceFile(req, res) {
     var PName = req.body.PName,
         Admin = req.body.Admin,
-        user = req.cookies.Username,
-        inferenceFile = req.files.upload_inference;
+        user = req.cookies && req.cookies.Username,
+        inferenceFile = req.files && req.files.upload_inference;
+
+    if (!inferenceFile) {
+        return res.status(400).send({ Success: "ERROR: No file uploaded" });
+    }
 
     var publicPath = currentPath,
-        mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
-        projectPath = mainPath + Admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
-        trainingPath = projectPath + "/training",
+        mainPath = publicPath + "public/projects/",
+        projectPath = mainPath + Admin + "-" + PName,
         inferencePath = projectPath + "/inference/",
         inferenceUploadPath = inferencePath + "/uploads/",
         inferenceFilePath = inferenceUploadPath + inferenceFile.name;
 
-    const validFileNames = ["png", "tif", "jpg", "jpeg", "gif", "mp4", "mov"];
+    const validFileNames = ["png", "tif", "jpg", "jpeg", "gif", "mp4", "mov", "zip", "7z"];
+    const ext = inferenceFile.name.split(".").pop().toLowerCase();
 
-    if (!validFileNames.includes(inferenceFile.name.split(".").pop())) {
+    if (!validFileNames.includes(ext)) {
         res.send({
             Success:
-                "ERROR: Wrong filetype. Must be type .png, .jpg, jpeg, tif or .gif",
+                "ERROR: Wrong filetype. Must be type .png, .jpg, jpeg, tif, .gif, .mp4, .mov, .zip, or .7z",
         });
     } else {
         if (!fs.existsSync(inferencePath)) {
-            fs.mkdirSync(inferencePath);
+            fs.mkdirSync(inferencePath, { recursive: true });
         }
 
         if (!fs.existsSync(inferenceUploadPath)) {
-            fs.mkdir(inferenceUploadPath);
+            fs.mkdirSync(inferenceUploadPath, { recursive: true });
         }
 
         await inferenceFile.mv(inferenceFilePath);
 
+        let extractedPath = null;
+        if (ext === "zip" || ext === "7z") {
+            const folderName = path.parse(inferenceFile.name).name;
+            const outputDir = path.join(inferenceUploadPath, folderName);
+            try {
+                await unzipFile(inferenceFilePath, outputDir);
+                extractedPath = outputDir;
+            } catch (err) {
+                if (global.logger) {
+                    global.logger.error(err);
+                }
+            }
+        }
+
         res.send({
             Success: "Your inference file has been uploaded and saved",
+            filename: inferenceFile.name,
+            extractedPath,
         });
     }
 }
