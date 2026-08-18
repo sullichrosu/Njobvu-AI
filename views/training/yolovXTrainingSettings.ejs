@@ -163,16 +163,16 @@
 												<button type="button" class="btn btn-sm btn-outline-primary" id="selectAllClasses">Select All</button>
 												<button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllClasses">Deselect All</button>
 												<span class="d-inline-block ml-3">
-													<label for="minClassImages" class="mr-1 mb-0">Minimum Images per Class:</label>
-													<input type="number" id="minClassImages" name="min_class_images" min="0" placeholder="0" class="form-control form-control-sm d-inline-block" style="width: 100px;">
+													<label for="minClassLabels" class="mr-1 mb-0">Minimum Images per Class:</label>
+													<input type="number" id="minClassLabels" name="min_class_images" min="0" placeholder="0" class="form-control form-control-sm d-inline-block" style="width: 100px;">
 												</span>
 											</div>
 											<div class="class-selection-container" style="max-height: 150px; overflow-y: auto;">
 												<% if (typeof classes !== 'undefined' && classes.length > 0) { %>
 													<% for (var i = 0; i < classes.length; i++) { %>
 														<div class="form-check form-check-inline mr-3 my-1">
-															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].imageCount || 0 %>" checked>
-															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
+															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].labelCount || 0 %>" checked>
+															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].labelCount || 0 %> labels)</span></label>
 														</div>
 													<% } %>
 												<% } else { %>
@@ -335,12 +335,12 @@
 					// Class selection helper buttons
 					var selectAllBtn = document.getElementById("selectAllClasses");
 					var deselectAllBtn = document.getElementById("deselectAllClasses");
-					var minClassImagesInput = document.getElementById("minClassImages");
+					var minClassLabelsInput = document.getElementById("minClassLabels");
 
 					// Unchecks any class checkbox whose image count is below the configured minimum,
 					// so Select All (or manually re-checking a box) can't bypass the clamp.
 					function applyMinClassImagesClamp() {
-						var threshold = parseInt(minClassImagesInput && minClassImagesInput.value, 10) || 0;
+						var threshold = parseInt(minClassLabelsInput && minClassLabelsInput.value, 10) || 0;
 						if (threshold <= 0) {
 							return;
 						}
@@ -364,8 +364,8 @@
 							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = false; });
 						});
 					}
-					if (minClassImagesInput) {
-						minClassImagesInput.addEventListener("input", applyMinClassImagesClamp);
+					if (minClassLabelsInput) {
+						minClassLabelsInput.addEventListener("input", applyMinClassImagesClamp);
 					}
 
 					// Split ratio summary update
