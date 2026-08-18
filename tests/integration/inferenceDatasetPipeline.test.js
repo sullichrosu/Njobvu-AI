@@ -18,6 +18,7 @@ jest.mock("../../queries/queries", () => ({
     },
     project: {
         addImages: jest.fn().mockResolvedValue({ success: true }),
+        getAllImages: jest.fn().mockResolvedValue({ success: true, rows: [] }),
     },
 }));
 
@@ -172,6 +173,7 @@ describe("Inference Dataset Pipeline & S3 Max Image Limit", () => {
                 undefined,
                 undefined,
                 "",
+                "download",
             );
         });
     });

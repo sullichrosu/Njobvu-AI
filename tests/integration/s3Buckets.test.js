@@ -113,15 +113,6 @@ describe('S3 Bucket Routes', () => {
                 'AKIA...',
                 'secret',
                 '',
-            expect(queries.managed.attachBucket).toHaveBeenCalledWith(
-                'test-project',
-                'testuser',
-                'my-bucket',
-                'us-east-1',
-                'images/',
-                'AKIA...',
-                'secret',
-                '',
                 'download',
             );
         });

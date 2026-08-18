@@ -23,15 +23,22 @@
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group col-md-4">
+                    <div class="form-group col-md-3">
                         <label for="s3_prefix">Prefix (Optional)</label>
                         <input id="s3_prefix" class="form-control" type="text" placeholder="images/">
                     </div>
-                    <div class="form-group col-md-4">
+                    <div class="form-group col-md-3">
                         <label for="s3_endpoint">S3 Endpoint (Optional)</label>
                         <input id="s3_endpoint" type="text" class="form-control" placeholder="https://s3.amazonaws.com">
                     </div>
-                    <div class="form-group col-md-4">
+                    <div class="form-group col-md-3">
+                        <label for="s3_sync_mode">Sync Mode</label>
+                        <select id="s3_sync_mode" class="form-control">
+                            <option value="stream" selected>Stream on demand</option>
+                            <option value="download">Download all</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-3">
                         <label for="s3_max_images">Max Image Limit (Optional)</label>
                         <input id="s3_max_images" name="max_images" type="number" min="1" class="form-control" placeholder="Unlimited (e.g. 100)">
                     </div>
@@ -68,12 +75,14 @@
                     if (statusEl) {
                         statusEl.classList.remove('d-none');
                         let limitText = b.MaxImages ? ` (Max Images: ${b.MaxImages})` : ' (Unlimited images)';
-                        statusEl.innerHTML = `<strong>Attached S3 Bucket:</strong> <code>${b.BucketName}</code> [Region: <code>${b.Region}</code>]${limitText}`;
+                        let modeText = b.SyncMode ? ` [Mode: ${b.SyncMode}]` : '';
+                        statusEl.innerHTML = `<strong>Attached S3 Bucket:</strong> <code>${b.BucketName}</code> [Region: <code>${b.Region}</code>]${modeText}${limitText}`;
                     }
                     if (document.getElementById('s3_bucket_name')) document.getElementById('s3_bucket_name').value = b.BucketName || '';
                     if (document.getElementById('s3_region')) document.getElementById('s3_region').value = b.Region || '';
                     if (document.getElementById('s3_prefix')) document.getElementById('s3_prefix').value = b.Prefix || '';
                     if (document.getElementById('s3_endpoint')) document.getElementById('s3_endpoint').value = b.Endpoint || '';
+                    if (document.getElementById('s3_sync_mode')) document.getElementById('s3_sync_mode').value = b.SyncMode || 'stream';
                     if (b.MaxImages && document.getElementById('s3_max_images')) {
                         document.getElementById('s3_max_images').value = b.MaxImages;
                     }
@@ -93,6 +102,7 @@
         const accessKeyId = document.getElementById('s3_access_key_id').value;
         const secretAccessKey = document.getElementById('s3_secret_access_key').value;
         const endpoint = document.getElementById("s3_endpoint").value;
+        const syncMode = document.getElementById("s3_sync_mode").value;
         const maxImages = document.getElementById("s3_max_images").value;
 
         if (!bucketName || !region) {
@@ -117,6 +127,7 @@
                     AccessKeyId: accessKeyId,
                     SecretAccessKey: secretAccessKey,
                     Endpoint: endpoint,
+                    SyncMode: syncMode,
                 }),
             });
 
