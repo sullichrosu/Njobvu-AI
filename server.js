@@ -52,6 +52,20 @@ for (const project of fs.readdirSync(allProjectsPath)) {
             global.projectDbClients[projectPath] = new Client(dbFile);
 
             queries.project.migrateProjectDb(projectPath).catch((err) => {
+                // Every statement in migrateProjectDb is DDL (even a no-op
+                // CREATE TABLE IF NOT EXISTS), so SQLite opens the file for
+                // write regardless of whether a change is actually needed.
+                // A read-only project database - by design, or a permissions
+                // quirk of wherever it's deployed - can't be migrated, but
+                // that's expected and not a failure worth an error-level log
+                // on every server start.
+                if (err && err.error && err.error.code === "SQLITE_READONLY") {
+                    global.logger.warn(
+                        `Project database at ${projectPath} is read-only; skipping schema migration.`,
+                    );
+                    return;
+                }
+
                 global.logger.error(
                     `Failed to migrate project database at ${projectPath}: ${err}`,
                 );
