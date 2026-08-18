@@ -492,6 +492,8 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     import re
 
+    IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif')
+
     # helper function to extract trailing digits from a filename stem, used only
     # as a fallback when no file on disk has the exact name the JSON expects
     def get_digits_suffix(filename):
@@ -499,6 +501,28 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
         match = re.search(r'(\d+)\s*$', stem)
 
         return int(match.group(1)) if match else None
+
+    # mirrors the sanitization createProject.js applies to a video's original
+    # file name before using it as the prefix for that video's extracted
+    # frames (`<prefix>_<n>.jpg`), so the two stay in sync
+    def sanitize_frame_token(name):
+        return name.strip().replace(' ', '_').replace('+', '_')
+
+    # KW Coco (unlike plain COCO) can attach each image to a source video via
+    # a top-level `videos` list plus `video_id`/`frame_index` on the image
+    # entry. When a project's frames were extracted per-video, the on-disk
+    # name is `<video_prefix>_<frame_index + 1>.jpg` (1-indexed, matching
+    # ffmpeg's `_%d` numbering) -- not whatever `file_name` the archive's
+    # exporter happened to write. Build that video_id -> sanitized name map
+    # up front so images from different videos that reused the same
+    # exporter-side frame numbering (e.g. both videos' frame 1) don't collide.
+    video_id_to_prefix = {}
+    for video in coco_data.get('videos', []):
+        video_id = video.get('id')
+        video_name = video.get('name') or video.get('file_name')
+        if video_id is not None and video_name:
+            prefix = sanitize_frame_token(os.path.splitext(os.path.basename(video_name))[0])
+            video_id_to_prefix[video_id] = prefix
 
     # index files on disk both by exact basename (matches what the KW COCO
     # exporter writes as `file_name`) and by trailing frame number (fallback
@@ -510,7 +534,7 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
             continue
 
         for file in files:
-            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif')):
+            if file.lower().endswith(IMAGE_EXTENSIONS):
                 full_path = os.path.join(root, file)
                 files_by_name[file] = full_path
 
@@ -525,7 +549,25 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
         file_name = img_entry.get('file_name')
 
         base_filename = os.path.basename(file_name)
-        found_path = files_by_name.get(base_filename)
+        found_path = None
+
+        # prefer the video-aware match when this image is tied to a known
+        # video: it is the only strategy that can't be fooled by two videos
+        # whose frame numbering both restart at 1
+        video_id = img_entry.get('video_id')
+        frame_index = img_entry.get('frame_index')
+        if video_id in video_id_to_prefix and frame_index is not None:
+            prefix = video_id_to_prefix[video_id]
+            for ext in IMAGE_EXTENSIONS:
+                candidate = f"{prefix}_{frame_index + 1}{ext}"
+                if candidate in files_by_name:
+                    found_path = files_by_name[candidate]
+                    if candidate != base_filename:
+                        print(f"Matched '{base_filename}' to '{candidate}' via video '{prefix}' frame {frame_index + 1}.")
+                    break
+
+        if found_path is None:
+            found_path = files_by_name.get(base_filename)
 
         if found_path is None:
             # fall back to matching on the trailing numeric frame number
@@ -536,8 +578,13 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
                 print(f"No exact filename match for '{base_filename}'; matched via frame number {target_frame_num} instead.")
 
         if found_path is not None:
-            # use the actual filename from the JSON so the bounding boxes stay consistent
-            new_image_name = base_filename
+            # Use the true on-disk (Njobvu) name, not the JSON's file_name --
+            # those diverge whenever the archive's own exporter renamed
+            # frames per-video, and two videos can each expect a file_name
+            # like "frame_000001.jpg" for their own frame 1. Reusing the
+            # JSON's name here would silently collide two different videos'
+            # images onto one IName.
+            new_image_name = os.path.basename(found_path)
 
             shutil.copy(found_path, os.path.join(images_path, new_image_name))
             print(f"Successfully copied: {os.path.basename(found_path)} -> {new_image_name}")

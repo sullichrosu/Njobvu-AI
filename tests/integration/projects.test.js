@@ -295,6 +295,54 @@ describe('Project Routes - Basic Tests', () => {
   });
 
   /*
+  * CEO-46: uploading multiple videos used to make every video's frames
+  * start over at frame001.jpg, so the second video's frames silently
+  * overwrote the first video's on disk. Each video should now get its own
+  * ffmpeg extraction call with a distinct frame file_name prefix.
+  */
+  it('extracts frames from each uploaded video with a distinct name prefix', async () => {
+    global.mockFiles = {
+      upload_images: null,
+      upload_video: [
+        { name: 'video.mp4', mv: jest.fn().mockResolvedValue(true) },
+        { name: 'video.mp4', mv: jest.fn().mockResolvedValue(true) },
+      ],
+      upload_bootstrap: null,
+    };
+
+    const extractFrameCalls = [];
+    const ffmpeg = require('ffmpeg');
+    ffmpeg.mockImplementation(() => Promise.resolve({
+      fnExtractFrameToJPG: jest.fn((destination, options) => {
+        extractFrameCalls.push(options);
+        return Promise.resolve();
+      }),
+    }));
+
+    const res = await request(app)
+      .post('/createP')
+      .send({
+        project_name: 'test-project-multi-video',
+        input_classes: 'class1,class2',
+        frame_rate: '1',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(extractFrameCalls).toHaveLength(2);
+
+    const prefixes = extractFrameCalls.map((options) => options.file_name);
+    expect(new Set(prefixes).size).toBe(2);
+    expect(prefixes[0]).toBe('video');
+    expect(prefixes[1]).toBe('video_1');
+
+    // jest.clearAllMocks() (afterEach) keeps a mock's implementation, only
+    // its call history is wiped -- reset it fully so this test's fake ffmpeg
+    // doesn't leak into later tests in this file.
+    ffmpeg.mockReset();
+  });
+
+  /*
   * this tests if the createProject route handles PyTorch (.pt) bootstrap zip uploads correctly.
   */
   it('should accept and save PyTorch (.pt) bootstrap models during project creation', async () => {

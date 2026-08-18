@@ -5,6 +5,7 @@ const StreamZip = require("node-stream-zip");
 const queries = require("../../queries/queries");
 const rimraf = require("../../public/libraries/rimraf");
 const { Client } = require("../../queries/client");
+const { nextVideoFramePrefix } = require("../../utils/videoFramePrefix");
 
 async function createProject(req, res) {
     const files = req.files || {};
@@ -162,19 +163,32 @@ async function createProject(req, res) {
     }
 
     if (uploadVideo) {
-        var videoPath = imagesPath + "/" + uploadVideo.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
+        // A single <input> submits one file, but the API also accepts several
+        // videos in one request (express-fileupload gives back an array in
+        // that case) -- each gets its own frame prefix below so frame numbers
+        // restarting at 1 per video never collide across videos.
+        const uploadVideos = Array.isArray(uploadVideo) ? uploadVideo : [uploadVideo];
         frameRate *= 30;
 
-        await uploadVideo.mv(videoPath);
+        const usedFramePrefixes = new Set();
 
         try {
-            const video = await new ffmpeg(videoPath);
+            for (const video of uploadVideos) {
+                var videoPath = imagesPath + "/" + video.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
 
-            await video.fnExtractFrameToJPG(imagesPath, {
-                every_n_frames: frameRate,
-            });
+                await video.mv(videoPath);
 
-            cleanFiles();
+                const framePrefix = nextVideoFramePrefix(video.name, usedFramePrefixes);
+
+                const videoHandle = await new ffmpeg(videoPath);
+
+                await videoHandle.fnExtractFrameToJPG(imagesPath, {
+                    every_n_frames: frameRate,
+                    file_name: framePrefix,
+                });
+            }
+
+            await cleanFiles();
         } catch (e) {
             global.logger.debug("ERROR " + e);
         }
@@ -184,9 +198,6 @@ async function createProject(req, res) {
 
             for (let i = 0; i < files.length; i++) {
                 if (files[i] == "__MACOSX") {
-                    if (i + 1 == files.length) {
-                        res.send("Project creation successful");
-                    }
                     continue;
                 }
 
@@ -196,6 +207,7 @@ async function createProject(req, res) {
                     files[i].endsWith(".mov")
                 ) {
                     fs.unlink(imagesPath + "/" + files[i], () => { });
+                    continue;
                 }
 
                 if (files[i] === "blob") {

@@ -44,9 +44,9 @@
                     </div>
                     <div class="form-group col-md-6">
                         <label for="blank_upload_images">
-                            Upload Images or Videos (.zip or .mp4/.avi/.mov) (Optional) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Upload zip containing images or video files to automatically extract frames">?</span>
+                            Upload Images or Videos (.zip, or one or more .mp4/.avi/.mov) (Optional) <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Upload a zip containing images, or one or more video files to automatically extract frames from each">?</span>
                         </label>
-                        <input id="blank_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file">
+                        <input id="blank_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file" multiple>
                     </div>
                 </div>
                 <div class="form-row">
@@ -152,9 +152,9 @@
                     </div>
                     <div class="form-group col-md-6">
                         <label for="bootstrap_upload_images">
-                            Upload Images or Videos (.zip or .mp4/.avi/.mov) (Optional)
+                            Upload Images or Videos (.zip, or one or more .mp4/.avi/.mov) (Optional)
                         </label>
-                        <input id="bootstrap_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file">
+                        <input id="bootstrap_upload_images" name="upload_images" aria-label="Choose file" type="file" class="form-control-file" multiple>
                     </div>
                 </div>
                 <div class="form-row">
@@ -356,6 +356,39 @@
         }
     }
 
+    const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi'];
+    function isVideoFile(file) {
+        return VIDEO_EXTENSIONS.some(ext => file.name.endsWith(ext));
+    }
+
+    // Swaps a selected `upload_images` file list for one or more `upload_video`
+    // entries when the user picked raw video files instead of an images zip.
+    // Each video is appended separately so the server extracts frames from
+    // every video (prefixed per-video to avoid frame-name collisions) rather
+    // than only the first file selected. Returns false if the user cancelled
+    // the frame-rate prompt, so the caller can abort the submit.
+    function applyVideoUploads(formData, uploadImagesInput) {
+        const files = Array.from(uploadImagesInput.files);
+        if (files.length === 0 || !files.some(isVideoFile)) {
+            return true;
+        }
+
+        const frameRate = prompt("Please enter a number for the framerate the video(s) should be split by. (ex: 30)");
+        if (!frameRate) {
+            return false;
+        }
+
+        formData.delete('upload_images');
+        for (const file of files) {
+            if (isVideoFile(file)) {
+                formData.append('upload_video', file);
+            }
+        }
+        formData.append('frame_rate', frameRate);
+
+        return true;
+    }
+
     document.querySelectorAll('.flow-content:not(.s3-flow)').forEach(form => {
         form.addEventListener('submit', function(event) {
             event.preventDefault();
@@ -415,44 +448,20 @@
             if (formId === 'blankForm') {
                 const uploadImages = document.getElementById('blank_upload_images');
 
-                if (uploadImages.files.length > 0) {
-                    const file = uploadImages.files[0];
-
-                    if (file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.avi')) {
-                        const frameRate = prompt("Please enter a number for the framerate the video should be split by. (ex: 30)");
-
-                        if (frameRate) {
-                            formData.delete('upload_images');
-                            formData.append('upload_video', file);
-                            formData.append('frame_rate', frameRate);
-                        } else {
-                            progress.textContent = "";
-                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
-                            return;
-                        }
-                    }
+                if (!applyVideoUploads(formData, uploadImages)) {
+                    progress.textContent = "";
+                    document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                    return;
                 }
             }
 
             if (formId === 'bootstrapForm') {
                 const uploadImages = document.getElementById('bootstrap_upload_images');
 
-                if (uploadImages.files.length > 0) {
-                    const file = uploadImages.files[0];
-
-                    if (file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.avi')) {
-                        const frameRate = prompt("Please enter a number for the framerate the video should be split by. (ex: 30)");
-
-                        if (frameRate) {
-                            formData.delete('upload_images');
-                            formData.append('upload_video', file);
-                            formData.append('frame_rate', frameRate);
-                        } else {
-                            progress.textContent = "";
-                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
-                            return;
-                        }
-                    }
+                if (!applyVideoUploads(formData, uploadImages)) {
+                    progress.textContent = "";
+                    document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                    return;
                 }
             }
 
