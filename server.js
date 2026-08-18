@@ -1,6 +1,7 @@
 global.logger = require('./utils/logger');
 const app = require('./app');
 const { Client } = require("./queries/client");
+const queries = require("./queries/queries");
 
 global.configFile = require("./utils/config");
 
@@ -49,6 +50,12 @@ for (const project of fs.readdirSync(allProjectsPath)) {
             const dbFile = path.join(projectPath, file);
 
             global.projectDbClients[projectPath] = new Client(dbFile);
+
+            queries.project.migrateProjectDb(projectPath).catch((err) => {
+                global.logger.error(
+                    `Failed to migrate project database at ${projectPath}: ${err}`,
+                );
+            });
         }
     }
 }

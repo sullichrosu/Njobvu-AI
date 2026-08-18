@@ -202,7 +202,7 @@ module.exports = {
                 "CREATE TABLE IF NOT EXISTS Classes (CName VARCHAR NOT NULL PRIMARY KEY)",
             );
             await db.run(
-                "CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0, Source VARCHAR DEFAULT NULL)",
             );
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Labels (LID INTEGER PRIMARY KEY, CName VARCHAR NOT NULL, X VARCHAR NOT NULL, Y VARCHAR NOT NULL, W INTEGER NOT NULL, H INTEGER NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(CName) REFERENCES Classes(CName), FOREIGN KEY(IName) REFERENCES Images(IName))",
@@ -210,6 +210,20 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
+
+            // Images predates the Source column, so CREATE TABLE IF NOT EXISTS above is a
+            // no-op on any project database created before this change. Back-fill it here,
+            // guarded by a PRAGMA check since SQLite has no ADD COLUMN IF NOT EXISTS.
+            const imageColumns = await db.all("PRAGMA table_info(Images)");
+            const hasSourceColumn = (imageColumns.rows || []).some(
+                (column) => column.name === "Source",
+            );
+
+            if (!hasSourceColumn) {
+                await db.run(
+                    "ALTER TABLE Images ADD COLUMN Source VARCHAR DEFAULT NULL",
+                );
+            }
         },
         addImages: async function(
             projectPath,
