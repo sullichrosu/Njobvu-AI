@@ -38,6 +38,8 @@ async function attachS3Bucket(req, res) {
     const AccessKeyId = trimOrUndefined(body.AccessKeyId);
     const SecretAccessKey = trimOrUndefined(body.SecretAccessKey);
     const Endpoint = trimOrUndefined(body.Endpoint);
+    const rawMaxImages = body.MaxImages !== undefined ? body.MaxImages : (body.maxImages !== undefined ? body.maxImages : body.max_images);
+    const MaxImages = (rawMaxImages !== undefined && rawMaxImages !== null && rawMaxImages !== "") ? parseInt(rawMaxImages, 10) : null;
 
     if (!isOwner(req, admin)) {
         return res.status(403).json({ success: false, error: "Not authorized for this project" });
@@ -70,7 +72,8 @@ async function attachS3Bucket(req, res) {
             Prefix || "",
             AccessKeyId,
             SecretAccessKey,
-            ...(Endpoint ? [Endpoint] : []),
+            Endpoint || "",
+            MaxImages
         );
 
         return res.status(200).json({ success: true });
@@ -102,6 +105,8 @@ async function getS3Bucket(req, res) {
             return res.status(404).json({ success: false, error: "No S3 bucket attached" });
         }
 
+        const maxImg = row.MaxImages != null ? Number(row.MaxImages) : null;
+
         return res.status(200).json({
             success: true,
             bucket: {
@@ -109,6 +114,8 @@ async function getS3Bucket(req, res) {
                 Region: row.Region,
                 Prefix: row.Prefix,
                 Endpoint: row.Endpoint,
+                MaxImages: maxImg,
+                max_images: maxImg,
                 LastSyncedAt: row.LastSyncedAt,
                 hasCredentials: !!row.AccessKeyId,
             },
@@ -157,8 +164,6 @@ async function syncS3Bucket(req, res) {
             return res.status(404).json({ success: false, error: "No S3 bucket attached to this project" });
         }
 
-        console.log(bucket);
-
         const s3Client = buildS3Client({
             region: bucket.Region,
             accessKeyId: bucket.AccessKeyId,
@@ -166,6 +171,7 @@ async function syncS3Bucket(req, res) {
             endpoint: bucket.Endpoint,
         });
 
+        const maxImages = bucket.MaxImages != null ? Number(bucket.MaxImages) : null;
         const objectKeys = await listImageObjects(s3Client, bucket.BucketName, bucket.Prefix);
         const existingImages = new Set(await global.readdirAsync(imagesPath));
 
@@ -173,6 +179,10 @@ async function syncS3Bucket(req, res) {
         let skippedCount = 0;
 
         for (const key of objectKeys) {
+            if (Number.isFinite(maxImages) && maxImages > 0 && existingImages.size >= maxImages) {
+                break;
+            }
+
             const fileName = sanitizeFileName(path.basename(key));
 
             if (!fileName || existingImages.has(fileName)) {

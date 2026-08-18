@@ -84,10 +84,10 @@
                                         <div class="form-row">
                                             <div class="form-group col-md-6">
                                                 <h5><label for="upload-inference" style="width: 200%;">Upload inference
-                                                        file (.jpg, .png, .gif, .tif, .mp4)</label></h5>
+                                                        file (.jpg, .png, .gif, .tif, .mp4, .mov, .zip)</label></h5>
                                                 <input id="upload-inference" name="upload-inference" type="file"
-                                                    class="form-control-file" required>
-                                                <p>This is for doing predict or track for the YOLO MODE.</p>
+                                                    class="form-control-file" accept=".jpg,.jpeg,.png,.gif,.tif,.tiff,.mp4,.mov,.zip" required>
+                                                <p>This is for doing predict or track for the YOLO MODE. You can also upload a .zip archive containing images or videos.</p>
                                             </div>
                                         </div>
                                         <div class="col text-left">
@@ -96,6 +96,7 @@
                                         </div>
                                     </form>
                                     <br>
+                                    <%- include('../includes/s3BucketForm') %>
                                     <br>
                                     <form class="Configure Project For YOLO" action="/yolo-inf"
                                         enctype="multipart/form-data" id="yolo-inf" method=post>

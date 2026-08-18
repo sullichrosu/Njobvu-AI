@@ -46,15 +46,19 @@
                         </div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-3">
                             <label for="s3_prefix">Prefix (Optional)</label>
                             <input id="s3_prefix" class="form-control" type="text" placeholder="images/">
                         </div>
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-3">
                             <label for="s3_endpoint">S3 Endpoint</label>
                             <input id="s3_endpoint" name="endpoint" aria-label="S3 Endpoint URL" type="text" class="form-control" autocomplete="off">
                         </div>
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-3">
+                            <label for="s3_max_images">Max Image Limit (Optional)</label>
+                            <input id="s3_max_images" name="max_images" type="number" min="1" class="form-control" placeholder="Unlimited (e.g. 100)">
+                        </div>
+                        <div class="form-group col-md-3">
                             <label for="s3_access_key_id">Access Key ID</label>
                             <input id="s3_access_key_id" class="form-control" type="text" autocomplete="off">
                         </div>
@@ -136,6 +140,7 @@
 		const accessKeyId = document.getElementById('s3_access_key_id').value;
 		const secretAccessKey = document.getElementById('s3_secret_access_key').value;
         const endpoint = document.getElementById("s3_endpoint").value;
+        const maxImages = document.getElementById("s3_max_images").value;
 
 		if (!bucketName || !region) {
 			alert("Bucket Name and Region are required.");
@@ -159,6 +164,7 @@
 					AccessKeyId: accessKeyId,
 					SecretAccessKey: secretAccessKey,
                     Endpoint: endpoint,
+                    MaxImages: maxImages ? parseInt(maxImages, 10) : null,
 				}),
 			});
 

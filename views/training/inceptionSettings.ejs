@@ -108,7 +108,7 @@
                                     <div class="form-group col-md-6">
                                         <h5>
                                             <label for="upload-inference">
-                                                Upload inference file (.jpg, .png, .gif, .tif, .mp4)
+                                                Upload inference file (.jpg, .png, .gif, .tif, .mp4, .mov, .zip)
                                             </label>
                                         </h5>
 
@@ -117,8 +117,10 @@
                                             name="upload-inference"
                                             type="file"
                                             class="form-control-file"
+                                            accept=".jpg,.jpeg,.png,.gif,.tif,.tiff,.mp4,.mov,.zip"
                                             required
                                         >
+                                        <p class="text-muted small">Upload single images/videos or a .zip archive containing images/videos.</p>
                                     </div>
                                 </div>
 
@@ -134,7 +136,9 @@
                                 </div>
                             </form>
 
-                            <br><br>
+                            <br>
+                            <%- include('../includes/s3BucketForm') %>
+                            <br>
 
                             <!-- Inception Inference Config -->
                             <form
