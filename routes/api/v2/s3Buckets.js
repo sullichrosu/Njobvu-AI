@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const queries = require("../../../queries/queries");
 const {
     buildS3Client,
@@ -23,6 +24,18 @@ function sanitizeFileName(name) {
         .join("_")
         .split("+")
         .join("_");
+}
+
+// Two distinct S3 keys can share a basename (e.g. "2024/img.jpg" and
+// "2025/img.jpg"), so a plain basename can't be assumed unique across a
+// bucket. Disambiguate deterministically from the full key so re-running a
+// sync never renames or duplicates a file that was already given a suffix.
+function disambiguateFileName(fileName, key) {
+    const ext = path.extname(fileName);
+    const base = fileName.slice(0, fileName.length - ext.length);
+    const hash = crypto.createHash("sha1").update(key).digest("hex").slice(0, 8);
+
+    return `${base}_${hash}${ext}`;
 }
 
 function trimOrUndefined(value) {
@@ -167,24 +180,59 @@ async function syncS3Bucket(req, res) {
         });
 
         const objectKeys = await listImageObjects(s3Client, bucket.BucketName, bucket.Prefix);
-        const existingImages = new Set(await global.readdirAsync(imagesPath));
+
+        // Snapshot of what's on disk *before* this run - unrelated to what this run
+        // itself assigns. A basename already present here (a prior sync from before
+        // SourceKey existed, or an unrelated local file) is treated as already covered,
+        // same as before. `assignedNames` starts from this snapshot and grows as this
+        // run hands out names, so it also catches two keys *from this same bucket
+        // listing* colliding with each other.
+        const preExistingImages = new Set(await global.readdirAsync(imagesPath));
+        const assignedNames = new Set(preExistingImages);
+
+        const existingImageRows = await queries.project.getAllImages(projectPath);
+        const existingSourceKeys = new Set(
+            (existingImageRows.rows || [])
+                .map((row) => row.SourceKey)
+                .filter(Boolean),
+        );
 
         const syncedImages = [];
         let skippedCount = 0;
 
         for (const key of objectKeys) {
-            const fileName = sanitizeFileName(path.basename(key));
-
-            if (!fileName || existingImages.has(fileName)) {
+            // Already synced this exact object in a prior run - never re-download or
+            // re-disambiguate a key we've already assigned a name to.
+            if (existingSourceKeys.has(key)) {
                 skippedCount += 1;
                 continue;
             }
 
+            const baseName = sanitizeFileName(path.basename(key));
+
+            if (!baseName) {
+                skippedCount += 1;
+                continue;
+            }
+
+            if (preExistingImages.has(baseName)) {
+                skippedCount += 1;
+                continue;
+            }
+
+            // A different key from this same bucket listing already claimed this
+            // basename - these are genuinely distinct objects, so disambiguate instead
+            // of dropping this one.
+            const fileName = assignedNames.has(baseName)
+                ? disambiguateFileName(baseName, key)
+                : baseName;
+
             const destPath = path.join(imagesPath, fileName);
             await downloadObjectToFile(s3Client, bucket.BucketName, key, destPath);
-            await queries.project.addImages(projectPath, fileName, 0, 0);
+            await queries.project.addImages(projectPath, fileName, 0, 0, "s3", key);
 
-            existingImages.add(fileName);
+            assignedNames.add(fileName);
+            existingSourceKeys.add(key);
             syncedImages.push(fileName);
         }
 

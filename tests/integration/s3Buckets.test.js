@@ -11,6 +11,7 @@ jest.mock('../../queries/queries', () => ({
     },
     project: {
         addImages: jest.fn().mockResolvedValue({ success: true }),
+        getAllImages: jest.fn().mockResolvedValue({ success: true, rows: [] }),
     },
 }));
 
@@ -231,8 +232,96 @@ describe('S3 Bucket Routes', () => {
                 'cat.jpg',
                 0,
                 0,
+                's3',
+                'images/cat.jpg',
             );
             expect(queries.managed.touchBucketSyncedAt).toHaveBeenCalled();
+        });
+
+        it('skips an object already synced by key, even if its name is no longer the only file on disk', async () => {
+            queries.managed.getBucket.mockResolvedValueOnce({
+                row: {
+                    BucketName: 'my-bucket',
+                    Region: 'us-east-1',
+                    Prefix: 'images/',
+                    AccessKeyId: 'AKIA...',
+                    SecretAccessKey: 'secret',
+                },
+            });
+            s3Client.listImageObjects.mockResolvedValueOnce(['images/cat.jpg']);
+            global.readdirAsync.mockResolvedValueOnce(['cat.jpg']);
+            queries.project.getAllImages.mockResolvedValueOnce({
+                success: true,
+                rows: [{ IName: 'cat.jpg', Source: 's3', SourceKey: 'images/cat.jpg' }],
+            });
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/s3-bucket/sync')
+                .set('Cookie', ['Username=testuser']);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.syncedCount).toBe(0);
+            expect(res.body.skippedCount).toBe(1);
+            expect(s3Client.downloadObjectToFile).not.toHaveBeenCalled();
+            expect(queries.project.addImages).not.toHaveBeenCalled();
+        });
+
+        it('disambiguates two different keys that sanitize to the same basename instead of dropping one', async () => {
+            queries.managed.getBucket.mockResolvedValueOnce({
+                row: {
+                    BucketName: 'my-bucket',
+                    Region: 'us-east-1',
+                    Prefix: 'images/',
+                    AccessKeyId: 'AKIA...',
+                    SecretAccessKey: 'secret',
+                },
+            });
+            s3Client.listImageObjects.mockResolvedValueOnce([
+                '2024/img.jpg',
+                '2025/img.jpg',
+            ]);
+            global.readdirAsync.mockResolvedValueOnce([]);
+            queries.project.getAllImages.mockResolvedValueOnce({ success: true, rows: [] });
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/s3-bucket/sync')
+                .set('Cookie', ['Username=testuser']);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.syncedCount).toBe(2);
+            expect(res.body.skippedCount).toBe(0);
+            expect(res.body.images[0]).toBe('img.jpg');
+            expect(res.body.images[1]).not.toBe('img.jpg');
+            expect(res.body.images[1]).toMatch(/^img_[0-9a-f]{8}\.jpg$/);
+
+            expect(queries.project.addImages).toHaveBeenNthCalledWith(
+                1,
+                expect.stringContaining('testuser-test-project'),
+                'img.jpg',
+                0,
+                0,
+                's3',
+                '2024/img.jpg',
+            );
+            expect(queries.project.addImages).toHaveBeenNthCalledWith(
+                2,
+                expect.stringContaining('testuser-test-project'),
+                res.body.images[1],
+                0,
+                0,
+                's3',
+                '2025/img.jpg',
+            );
+
+            // Deterministic: re-running sync against the same key must reproduce the
+            // same disambiguated name, not draw a fresh suffix each time.
+            const crypto = require('crypto');
+            const expectedHash = crypto
+                .createHash('sha1')
+                .update('2025/img.jpg')
+                .digest('hex')
+                .slice(0, 8);
+            expect(res.body.images[1]).toBe(`img_${expectedHash}.jpg`);
         });
 
         it('returns 404 when the project has no attached bucket', async () => {
