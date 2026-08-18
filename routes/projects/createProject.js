@@ -5,6 +5,24 @@ const StreamZip = require("node-stream-zip");
 const queries = require("../../queries/queries");
 const rimraf = require("../../public/libraries/rimraf");
 const { Client } = require("../../queries/client");
+const path = require("path");
+const { execFile } = require("child_process");
+
+function extractFramesEveryN(videoPath, outputDir, everyNFrames) {
+    return new Promise((resolve, reject) => {
+		const outputPattern = path.join(outputDir, "frame_%d.jpg");
+        
+        execFile("ffmpeg", [
+            "-i", videoPath,
+            "-vf", `select='not(mod(n\\,${everyNFrames}))'`,
+            "-fps_mode", "vfr",
+            outputPattern
+        ], (err, stdout, stderr) => {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
 
 async function createProject(req, res) {
     const files = req.files || {};
@@ -165,18 +183,17 @@ async function createProject(req, res) {
         var videoPath = imagesPath + "/" + uploadVideo.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
         frameRate *= 30;
 
-        await uploadVideo.mv(videoPath);
+		await uploadVideo.mv(videoPath);
 
-        try {
-            const video = await new ffmpeg(videoPath);
+		global.logger.debug("video path", videoPath);
 
-            await video.fnExtractFrameToJPG(imagesPath, {
-                every_n_frames: frameRate,
-            });
+		try {
+			await extractFramesEveryN(videoPath, imagesPath, frameRate);
 
-            cleanFiles();
+            await cleanFiles();
         } catch (e) {
             global.logger.debug("ERROR " + e);
+            return res.status(500).send("Error extracting video frames");
         }
 
         async function cleanFiles() {
@@ -206,9 +223,11 @@ async function createProject(req, res) {
 
                 files[i] = files[i].trim();
                 files[i] = files[i].split(" ").join("_");
-                files[i] = files[i].split("+").join("_");
+				files[i] = files[i].split("+").join("_");
 
-                fs.rename(temp, imagesPath + "/" + files[i], () => { });
+				global.logger.debug("image "+i+" path", temp);
+
+				fs.rename(temp, imagesPath + "/" + files[i], () => { });
 
                 await queries.project.addImages(projectPath, files[i], 0, 0);
             }
