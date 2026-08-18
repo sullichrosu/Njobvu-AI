@@ -1,0 +1,128 @@
+<%- include('includes/header', { activePage }) %>
+
+<div id="video-labeling">
+    <div class="container">
+        <h3>Video Labeling: <span style="color: black;"><%= PName %></span></h3>
+        <p>Load a video, scrub to the frames you want, capture them, then stitch your selection into a single
+            image for labeling.</p>
+
+        <div class="row">
+            <div class="col-md-8">
+                <input type="file" id="video-file-input" accept="video/*" class="form-control-file mb-2">
+                <video id="video-player" controls style="width: 100%; background: #000;"></video>
+                <div class="mt-2">
+                    <button id="step-back-btn" class="btn btn-secondary btn-sm">&laquo; Frame</button>
+                    <button id="step-fwd-btn" class="btn btn-secondary btn-sm">Frame &raquo;</button>
+                    <button id="capture-frame-btn" class="btn btn-primary btn-sm">Capture Frame</button>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <h5>Selected Frames (<span id="selected-count">0</span>)</h5>
+                <div id="selected-frames" class="d-flex flex-wrap"></div>
+
+                <div class="form-group mt-3">
+                    <label for="layout-select">Layout</label>
+                    <select id="layout-select" class="form-control">
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
+                        <option value="grid">Grid</option>
+                    </select>
+                </div>
+
+                <button id="stitch-btn" class="btn btn-success btn-block">Stitch Selected Frames</button>
+                <div id="stitch-result" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/v2/videoPlayerController.js"></script>
+<script src="/js/v2/frameStitchPanel.js"></script>
+<script>
+    (function () {
+        var admin = "<%= admin %>";
+        var projectName = "<%= PName %>";
+        var IDX = "<%= IDX %>";
+
+        var videoEl = document.getElementById("video-player");
+        var controller = new VideoPlayerController(videoEl, { fps: 30 });
+        var panel = new FrameStitchPanel({ admin: admin, projectName: projectName });
+
+        document.getElementById("video-file-input").addEventListener("change", function (e) {
+            var file = e.target.files[0];
+            if (file) {
+                controller.loadFile(file);
+            }
+        });
+
+        document.getElementById("step-back-btn").addEventListener("click", function () {
+            controller.stepFrame(-1);
+        });
+        document.getElementById("step-fwd-btn").addEventListener("click", function () {
+            controller.stepFrame(1);
+        });
+
+        function renderSelectedFrames() {
+            var container = document.getElementById("selected-frames");
+            container.innerHTML = "";
+            panel.selectedFrames.forEach(function (frame, index) {
+                var wrapper = document.createElement("div");
+                wrapper.style.position = "relative";
+                wrapper.style.margin = "4px";
+
+                var img = document.createElement("img");
+                img.src = frame.dataUrl;
+                img.style.width = "80px";
+                img.style.height = "60px";
+                img.style.objectFit = "cover";
+                img.style.border = "1px solid #ccc";
+
+                var removeBtn = document.createElement("button");
+                removeBtn.textContent = "x";
+                removeBtn.className = "btn btn-danger btn-sm";
+                removeBtn.style.position = "absolute";
+                removeBtn.style.top = "0";
+                removeBtn.style.right = "0";
+                removeBtn.style.padding = "0 4px";
+                removeBtn.addEventListener("click", function () {
+                    panel.removeFrame(index);
+                    renderSelectedFrames();
+                });
+
+                wrapper.appendChild(img);
+                wrapper.appendChild(removeBtn);
+                container.appendChild(wrapper);
+            });
+            document.getElementById("selected-count").textContent = panel.selectedFrames.length;
+        }
+
+        document.getElementById("capture-frame-btn").addEventListener("click", function () {
+            try {
+                var frame = controller.captureCurrentFrame();
+                panel.addFrame(frame);
+                renderSelectedFrames();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        document.getElementById("stitch-btn").addEventListener("click", function () {
+            var layout = document.getElementById("layout-select").value;
+            var resultEl = document.getElementById("stitch-result");
+            resultEl.textContent = "Stitching...";
+
+            panel.stitch(layout).then(function (result) {
+                resultEl.innerHTML = 'Saved as <strong>' + result.fileName +
+                    '</strong> (' + result.width + 'x' + result.height + '). ' +
+                    '<a href="/labeling?IDX=' + encodeURIComponent(IDX) + '">Go label it</a>';
+                panel.clear();
+                renderSelectedFrames();
+            }).catch(function (err) {
+                resultEl.textContent = "Error: " + err.message;
+            });
+        });
+    })();
+</script>
+
+<%- include('includes/footer') %>

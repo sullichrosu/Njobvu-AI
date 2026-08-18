@@ -72,6 +72,7 @@ const {
     deleteS3Bucket,
     syncS3Bucket,
 } = require("./api/v2/s3Buckets");
+const { stitchFrames } = require("./api/v2/videoStitch");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -188,6 +189,10 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket", attachS3Bucket);
 api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
 api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
 api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
+
+// VIDEO FRAME STITCH ROUTE (strangler-fig v2, combines selected video frames
+// into a single labelable image)
+api.post("/api/v2/projects/:admin/:projectName/videos/stitch", stitchFrames);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);

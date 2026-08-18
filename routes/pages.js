@@ -19,6 +19,7 @@ const getConfigPage = require("./pages/getConfigPage");
 const getValidationConfigPage = require("./pages/getValidationConfigPage");
 const getDownloadPage = require("./pages/getDownloadPage");
 const getLabelingPage = require("./pages/getLabelingPage");
+const getVideoLabelingPage = require("./pages/getVideoLabelingPage");
 const getValidationLabelingPage = require("./pages/getValidationLabelingPage");
 const getCustomTrainingPage = require("./pages/getCustomTrainingPage");
 const getServerStatsPage = require("./pages/getServerStatsPage");
@@ -57,6 +58,7 @@ module.exports = {
     getValidationConfigPage: getValidationConfigPage,
     getDownloadPage: getDownloadPage,
     getLabelingPage: getLabelingPage,
+    getVideoLabelingPage: getVideoLabelingPage,
     getValidationLabelingPage: getValidationLabelingPage,
     getCustomTrainingPage: getCustomTrainingPage,
     getServerStatsPage: getServerStatsPage,

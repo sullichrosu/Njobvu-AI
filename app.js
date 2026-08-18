@@ -19,6 +19,7 @@ const {
     getConfigPage,
     getDownloadPage,
     getLabelingPage,
+    getVideoLabelingPage,
     getStatsPage,
     getTrainingPage,
     getProcessingPage,
@@ -56,7 +57,9 @@ app.set("view engine", "ejs");
 app.use(global.logger.requestMiddleware);
 app.use(express.urlencoded({ extended: false }));
 app.use(fileUpload());
-app.use(express.json());
+// 20mb: the v2 video frame-stitch endpoint accepts several base64-encoded
+// PNG frames per request, which comfortably exceeds express's 100kb default.
+app.use(express.json({ limit: "20mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use(cookieParser());
 app.use("/", api);
@@ -80,6 +83,7 @@ app.get("/config/imageSettings", getImageSettingsPage);
 app.get("/config/mergeSettings", getMergeSettingsPage);
 app.get("/download", getDownloadPage);
 app.get("/labeling", getLabelingPage);
+app.get("/videoLabeling", getVideoLabelingPage);
 app.get("/stats", getStatsPage);
 app.get("/customTraining", getCustomTrainingPage);
 app.get("/training", getTrainingPage);
