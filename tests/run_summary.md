@@ -2,7 +2,7 @@
 
 - **Type**: AGGREGATED ALL-RUNS REPORT
 - **Project**: tmp_test_run
-- **Generated At**: 2026-08-18T23:44:50.477Z
+- **Generated At**: 2026-08-18T23:51:04.138Z
 - **Total Runs Analyzed**: 1 (1 training, 0 inference)
 
 ## Executive Summary & Findings

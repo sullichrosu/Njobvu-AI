@@ -131,6 +131,11 @@ async function getYoloXInferencePage(req, res) {
     var global_inference_upload = await readdirAsync(inference_upload_path);
     global_inference_upload.push(project_path + "/images");
 
+    const attachedBucket = await queries.managed.getBucket(PName, admin);
+    if (attachedBucket && attachedBucket.row) {
+        global_inference_upload.push("s3");
+    }
+
     // get runs
     var runs = await readdirAsync(log_path);
     runs = runs.reverse();

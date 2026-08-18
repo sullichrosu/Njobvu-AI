@@ -28,11 +28,37 @@ async function prepareInferenceDataset(options) {
 
     let targetFilePath = inference_file;
 
-    // S3 Bucket stream mode (JIT fetch right before inference run execution)
-    if (use_s3_bucket || inference_file === "s3" || inference_file === "s3_bucket") {
-        const bucketResult = await queries.managed.getBucket(PName, Admin);
-        const bucket = bucketResult && bucketResult.row;
+    const isS3Selection = use_s3_bucket ||
+        inference_file === "s3" ||
+        inference_file === "s3_bucket" ||
+        inference_file === "S3 Bucket" ||
+        inference_file === "[Attached S3 Bucket]";
 
+    const isImagesFolder = targetFilePath && (
+        targetFilePath.endsWith("/images") || targetFilePath.endsWith("\\images")
+    );
+
+    let useS3 = isS3Selection;
+    let bucket = null;
+
+    try {
+        if (queries && queries.managed && typeof queries.managed.getBucket === "function") {
+            const bucketResult = await queries.managed.getBucket(PName, Admin);
+            bucket = bucketResult && bucketResult.row;
+        }
+    } catch (e) {
+        // Ignore error if getBucket is unmocked or fails
+    }
+
+    if (!useS3 && isImagesFolder && bucket) {
+        const localImages = fs.existsSync(targetFilePath) ? fs.readdirSync(targetFilePath) : [];
+        if (localImages.length === 0) {
+            useS3 = true;
+        }
+    }
+
+    // S3 Bucket stream mode (JIT fetch right before inference run execution)
+    if (useS3) {
         if (!bucket) {
             throw new Error("No S3 bucket attached to this project");
         }

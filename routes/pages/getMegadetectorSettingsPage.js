@@ -56,6 +56,11 @@ async function getMegadetectorSettingsPage(req, res) {
     var global_inference_upload = await readdirAsync(inference_upload_path);
     global_inference_upload.push(project_path + "/images");
 
+    const attachedBucket = await queries.managed.getBucket(PName, admin);
+    if (attachedBucket && attachedBucket.row) {
+        global_inference_upload.push("s3");
+    }
+
     res.render("training/megadetectorSettings", {
         title: "megadetectorSettings",
         user: req.cookies.Username,

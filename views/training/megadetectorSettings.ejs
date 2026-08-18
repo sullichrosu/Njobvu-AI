@@ -85,8 +85,8 @@
                                                 <h5><label for="Inference_md">Inference Files:</label></h5>
                                                 <select name="Inference_md" id="Inference_md" style="width:100%">
                                                     <% for(var i=0; i<global_inference_upload.length; i++) {%>
-                                                        <option>
-                                                            <%= global_inference_upload[i]%>
+                                                        <option value="<%= global_inference_upload[i] %>">
+                                                            <%= global_inference_upload[i] === 's3' || global_inference_upload[i] === 's3_bucket' ? '[Attached S3 Bucket]' : global_inference_upload[i] %>
                                                         </option>
                                                         <% } %>
                                                 </select>
