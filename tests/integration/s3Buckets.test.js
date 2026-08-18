@@ -96,6 +96,32 @@ describe('S3 Bucket Routes', () => {
                 'images/',
                 'AKIA...',
                 'secret',
+                '',
+                null,
+            );
+        });
+
+        it('attaches a bucket with MaxImages limit', async () => {
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/s3-bucket')
+                .set('Cookie', ['Username=testuser'])
+                .send({
+                    ...validBody,
+                    MaxImages: 50,
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(queries.managed.attachBucket).toHaveBeenCalledWith(
+                'test-project',
+                'testuser',
+                'my-bucket',
+                'us-east-1',
+                'images/',
+                'AKIA...',
+                'secret',
+                '',
+                50,
             );
         });
 

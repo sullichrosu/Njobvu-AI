@@ -11,10 +11,11 @@ module.exports = {
             endpoint,
             maxImages
         ) {
-            const parsedMaxImages =
+            const parsedMax =
                 maxImages !== undefined && maxImages !== null && maxImages !== ""
                     ? parseInt(maxImages, 10)
                     : null;
+            const validMax = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : null;
 
             try {
                 const queryWithMax =
@@ -34,7 +35,7 @@ module.exports = {
                     accessKeyId || null,
                     secretAccessKey || null,
                     endpoint || "",
-                    parsedMaxImages,
+                    validMax,
                 ]);
             } catch (err) {
                 const queryBase =

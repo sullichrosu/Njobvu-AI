@@ -20,12 +20,12 @@ async function uploadInferenceFile(req, res) {
         inferenceFilePath = inferenceUploadPath + inferenceFile.name;
 
     const validFileNames = ["png", "tif", "jpg", "jpeg", "gif", "mp4", "mov", "zip", "7z"];
-    const ext = inferenceFile.name.split(".").pop().toLowerCase();
+    const ext = (inferenceFile.name.split(".").pop() || "").toLowerCase();
 
     if (!validFileNames.includes(ext)) {
         res.send({
             Success:
-                "ERROR: Wrong filetype. Must be type .png, .jpg, jpeg, tif, .gif, .mp4, .mov, .zip, or .7z",
+                "ERROR: Wrong filetype. Must be type .png, .jpg, .jpeg, .tif, .gif, .mp4, .mov, .zip, or .7z",
         });
     } else {
         if (!fs.existsSync(inferencePath)) {
@@ -36,7 +36,21 @@ async function uploadInferenceFile(req, res) {
             fs.mkdirSync(inferenceUploadPath, { recursive: true });
         }
 
-        await inferenceFile.mv(inferenceFilePath);
+        if (inferenceFile && typeof inferenceFile.mv === "function") {
+            await new Promise((resolve, reject) => {
+                try {
+                    const ret = inferenceFile.mv(inferenceFilePath, (err) => {
+                        if (err) return reject(err);
+                        resolve();
+                    });
+                    if (ret && typeof ret.then === "function") {
+                        ret.then(resolve).catch(reject);
+                    }
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
 
         let extractedPath = null;
         if (ext === "zip" || ext === "7z") {
