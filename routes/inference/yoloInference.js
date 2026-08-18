@@ -79,9 +79,12 @@ async function yoloInference(req, res) {
         var dictImagesLabels = {};
 
         for (var i = 0; i < existingImages.rows.length; i++) {
-            var img = fs.readFileSync(
-                `${imagesPath}/${existingImages.rows[i].IName}`,
-            ),
+            const imgPath = path.join(imagesPath, existingImages.rows[i].IName);
+            if (!fs.existsSync(imgPath)) {
+                continue;
+            }
+
+            var img = fs.readFileSync(imgPath),
                 imgData = probe.sync(img),
                 imgW = imgData.width,
                 imgH = imgData.height;
