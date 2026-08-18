@@ -166,14 +166,20 @@ async function createProject(req, res) {
         // A single <input> submits one file, but the API also accepts several
         // videos in one request (express-fileupload gives back an array in
         // that case) -- each gets its own frame prefix below so frame numbers
-        // restarting at 1 per video never collide across videos.
+        // restarting at 1 per video never collide across videos. frame_rate
+        // is submitted once per video, in the same order as upload_video, so
+        // each video is split at the fps the user picked for it specifically.
         const uploadVideos = Array.isArray(uploadVideo) ? uploadVideo : [uploadVideo];
-        frameRate *= 30;
+        const frameRates = Array.isArray(frameRate) ? frameRate : [frameRate];
 
         const usedFramePrefixes = new Set();
 
         try {
-            for (const video of uploadVideos) {
+            for (let i = 0; i < uploadVideos.length; i++) {
+                const video = uploadVideos[i];
+                // fall back to the last rate provided if fewer rates than videos were sent
+                const videoFrameRate = frameRates[i] ?? frameRates[frameRates.length - 1];
+
                 var videoPath = imagesPath + "/" + video.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
 
                 await video.mv(videoPath);
@@ -183,7 +189,7 @@ async function createProject(req, res) {
                 const videoHandle = await new ffmpeg(videoPath);
 
                 await videoHandle.fnExtractFrameToJPG(imagesPath, {
-                    every_n_frames: frameRate,
+                    every_n_frames: videoFrameRate * 30,
                     file_name: framePrefix,
                 });
             }
