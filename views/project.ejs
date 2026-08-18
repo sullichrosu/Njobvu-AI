@@ -159,12 +159,15 @@
 			formData.append("PName", "<%= PName %>");
 			formData.append("Admin", "<%= Admin %>");
 
+			if (window.LoadingSpinner) LoadingSpinner.showOverlay("Deleting image...");
+
 			fetch('/deleteImage', {
 					method: 'POST',
 					body: formData 
 			}).then(() => {
 				window.location.reload();
 			}).catch((error) => {
+				if (window.LoadingSpinner) LoadingSpinner.hideOverlay();
 				console.log(error);
 			});
 		}

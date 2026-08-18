@@ -156,6 +156,8 @@
 					formData.append("PName", "<%= PName %>");
 					formData.append("Admin", "<%= Admin %>");
 
+					const submitBtn = event.target.querySelector('button[type="submit"]');
+					if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading weights...");
 
 					fetch(event.target.action, {
 						method: 'POST',
@@ -168,6 +170,7 @@
 						window.location.replace("/yolo/yolov3Settings?IDX=<%= IDX %>");
 
 					}).catch((error) => {
+						if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 						console.log(error);
 					});
 				}
@@ -184,6 +187,8 @@
 				formData.append("PName", "<%= PName %>");
 				formData.append("Admin", "<%= Admin %>");
 
+				const submitBtn = event.target.querySelector('button[type="submit"]');
+				if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Adding path...");
 
 				fetch(event.target.action, {
 					method: 'POST',
@@ -197,6 +202,7 @@
 					window.location.replace("/yolo/yolov3Settings?IDX=<%= IDX %>");
 
 				}).catch((error) => {
+					if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 					console.log(error);
 				});
 			});
@@ -236,6 +242,9 @@
 				formData.append("imgsz", document.getElementById("imgsz").value);
 				formData.append("device", document.getElementById("device").value);
 
+				const submitBtn = document.getElementById("Configbtn");
+				if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Starting training...");
+
 				fetch(event.target.action, {
 					method: 'POST',
 					body: formData
@@ -248,6 +257,7 @@
 					window.location.replace("/yolo/yolov3Settings?IDX=<%= IDX %>");
 
 				}).catch((error) => {
+					if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 					console.log(error);
 				});
 			});
