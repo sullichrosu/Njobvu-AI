@@ -175,7 +175,7 @@ async function syncS3Bucket(req, res) {
         let skippedCount = 0;
 
         for (const key of objectKeys) {
-            if (Number.isFinite(maxImages) && maxImages > 0 && (syncedImages.length >= maxImages || existingImages.size >= maxImages)) {
+            if (Number.isFinite(maxImages) && maxImages > 0 && syncedImages.length >= maxImages) {
                 break;
             }
 

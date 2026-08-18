@@ -4,7 +4,7 @@
   "runType": "aggregated",
   "isAggregated": true,
   "projectName": null,
-  "generatedAt": "2026-08-18T23:29:21.412Z",
+  "generatedAt": "2026-08-18T23:35:12.022Z",
   "totalRuns": 1,
   "trainingRunCount": 1,
   "inferenceRunCount": 0,
@@ -27,7 +27,7 @@
       "runDir": "/home/fc/multica_workspaces/09feba42-72e2-4319-888e-970a8e60ff21/b772ab26/workdir/Njobvu-AI/runs/detect/train/detect_summary_run",
       "runType": "training",
       "isAggregated": false,
-      "generatedAt": "2026-08-18T23:29:21.412Z",
+      "generatedAt": "2026-08-18T23:35:12.021Z",
       "artifactCount": 1,
       "imageCount": 0,
       "config": {
@@ -47,10 +47,10 @@
       "visualPlots": [],
       "findings": [],
       "recommendations": [],
-      "markdownSummary": "# Run Summary: detect_summary_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-18T23:29:21.412Z\n- **Artifact Count**: 1 files (0 images)\n\n## Executive Summary & Findings\n- No summary findings recorded.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"model\": \"yolo11n.pt\",\n  \"epochs\": 10\n}\n```\n",
-      "summaryMd": "# Run Summary: detect_summary_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-18T23:29:21.412Z\n- **Artifact Count**: 1 files (0 images)\n\n## Executive Summary & Findings\n- No summary findings recorded.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"model\": \"yolo11n.pt\",\n  \"epochs\": 10\n}\n```\n"
+      "markdownSummary": "# Run Summary: detect_summary_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-18T23:35:12.021Z\n- **Artifact Count**: 1 files (0 images)\n\n## Executive Summary & Findings\n- No summary findings recorded.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"model\": \"yolo11n.pt\",\n  \"epochs\": 10\n}\n```\n",
+      "summaryMd": "# Run Summary: detect_summary_run\n\n- **Run Type**: TRAINING\n- **Execution Status**: Unknown\n- **Generated At**: 2026-08-18T23:35:12.021Z\n- **Artifact Count**: 1 files (0 images)\n\n## Executive Summary & Findings\n- No summary findings recorded.\n\n## Configuration & Hyperparameters\n```json\n{\n  \"model\": \"yolo11n.pt\",\n  \"epochs\": 10\n}\n```\n"
     }
   ],
-  "markdownSummary": "# Run Summary: all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: All Projects\n- **Generated At**: 2026-08-18T23:29:21.412Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s).\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 0.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 0\n- **Best Overall mAP@50**: 0.00%\n- **Top Performing Run**: `None`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `detect_summary_run` | training | 0 | N/A | N/A |\n\n## AI Recommendations & Next Steps\n- 💡 Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.\n",
-  "summaryMd": "# Run Summary: all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: All Projects\n- **Generated At**: 2026-08-18T23:29:21.412Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s).\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 0.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 0\n- **Best Overall mAP@50**: 0.00%\n- **Top Performing Run**: `None`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `detect_summary_run` | training | 0 | N/A | N/A |\n\n## AI Recommendations & Next Steps\n- 💡 Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.\n"
+  "markdownSummary": "# Run Summary: all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: All Projects\n- **Generated At**: 2026-08-18T23:35:12.022Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s).\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 0.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 0\n- **Best Overall mAP@50**: 0.00%\n- **Top Performing Run**: `None`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `detect_summary_run` | training | 0 | N/A | N/A |\n\n## AI Recommendations & Next Steps\n- 💡 Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.\n",
+  "summaryMd": "# Run Summary: all_runs_summary\n\n- **Type**: AGGREGATED ALL-RUNS REPORT\n- **Project**: All Projects\n- **Generated At**: 2026-08-18T23:35:12.022Z\n- **Total Runs Analyzed**: 1 (1 training, 0 inference)\n\n## Executive Summary & Findings\n- Aggregated analysis for 1 run(s).\n- Training runs: 1, Inference runs: 0.\n- Total epochs trained across all runs: 0.\n\n## Aggregate Metrics\n- **Total Epochs Trained**: 0\n- **Best Overall mAP@50**: 0.00%\n- **Top Performing Run**: `None`\n\n## Individual Run Breakdown\n| Run Name | Type | Images | Best mAP@50 | Total Epochs |\n| --- | --- | --- | --- | --- |\n| `detect_summary_run` | training | 0 | N/A | N/A |\n\n## AI Recommendations & Next Steps\n- 💡 Consider increasing training epochs or fine-tuning hyperparameters for improved accuracy.\n"
 }
