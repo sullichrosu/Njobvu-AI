@@ -79,7 +79,7 @@
 			<tbody>
 				<% for(var i=0; i<images.length; i++) {%>
 				<tr>
-					<td scope="row"><a href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true"><%= images[i].IName %></a></td>
+					<td scope="row"><a href="/validation/labeling?IDX=<%= IDX %>&IName=<%= images[i].IName %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true"><%= images[i].IName %></a></td>
 					<!-- input checkbox for review here -->
 					<% if(images[i].reviewImage != 0) {%>
 						<td class="text-center"><h4 style="border-radius: 0; color: red;">Needs Review</h4></td>
@@ -100,7 +100,7 @@
 					<td class="text-center"><%= list_counter[i] %></td>
 					<td></td>
 					<td class="text-center"> <%= Math.round(Number(imageConf[i])) %></td>
-					<td class="text-right"><a class="btn btn-primary" href="/labelingV?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true" role="button" style="border-radius: 0">View</a></td>
+					<td class="text-right"><a class="btn btn-primary" href="/validation/labeling?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true" role="button" style="border-radius: 0">View</a></td>
 					<td onclick="deleteImage('<%= String(images[i].IName) %>')" class="text-right"><a class="btn btn-danger" role="button" style="border-radius: 0">X</a></td>
 				</tr>
 				<% } %>
@@ -117,7 +117,7 @@
 				</li>
 				<% } else { %>
 				<li class="page-item">
-					<a class="page-link" href="/projectV?IDX=<%= IDX %>&page=1&perPage=<%= perPage %>&sort=<%= sortFilter %>&class=<%= imageClass %>" tabindex="-1">First</a>
+					<a class="page-link" href="/validation/project?IDX=<%= IDX %>&page=1&perPage=<%= perPage %>&sort=<%= sortFilter %>&class=<%= imageClass %>" tabindex="-1">First</a>
 				</li>
 				<% } %>
 				<% var i = (Number(current) > 6 ? Number(current) - 5 : 1) %>
@@ -134,7 +134,7 @@
 						</li>
 					<% } else { %>
 						<li class="page-item">
-							<a class="page-link" href="/projectV?IDX=<%= IDX %>&page=<%= i %>&perPage=<%= perPage %>&sort=<%= sortFilter %>&class=<%= imageClass %>"><%= i %></a>
+							<a class="page-link" href="/validation/project?IDX=<%= IDX %>&page=<%= i %>&perPage=<%= perPage %>&sort=<%= sortFilter %>&class=<%= imageClass %>"><%= i %></a>
 						</li>
 					<% } %>
 					<% if (i == j && i < pages) { %>
@@ -149,7 +149,7 @@
 					</li>
 				<% } else { %>
 					<li class="page-item">
-						<a class="page-link" href="/projectV?IDX=<%= IDX %>&page=<%= pages %>&perPage=<%= perPage %>&sort=<%= sortFilter %>&class=<%= imageClass %>">Last</a>
+						<a class="page-link" href="/validation/project?IDX=<%= IDX %>&page=<%= pages %>&perPage=<%= perPage %>&sort=<%= sortFilter %>&class=<%= imageClass %>">Last</a>
 					</li>
 				<% } %>
 			</ul>
@@ -166,7 +166,7 @@
 		if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
 		{
 			
-			window.location.href = `/projectV?IDX=<%= IDX %>&page=${pgnum.value}&perPage=<%=perPage%>&sort=<%= sortFilter %>&class=<%= imageClass %>`;
+			window.location.href = `/validation/project?IDX=<%= IDX %>&page=${pgnum.value}&perPage=<%=perPage%>&sort=<%= sortFilter %>&class=<%= imageClass %>`;
 		}
 	}
 </script>
@@ -175,7 +175,7 @@
 	perpage.oninput = function(){
 		if(perpage.value > 0)
 		{
-			window.location.href = `/projectV?IDX=<%= IDX %>&page=<%=pages%>&perPage=${perpage.value}&sort=<%= sortFilter %>&class=<%= imageClass %>`;
+			window.location.href = `/validation/project?IDX=<%= IDX %>&page=<%=pages%>&perPage=${perpage.value}&sort=<%= sortFilter %>&class=<%= imageClass %>`;
 		}
 	}
 </script>
@@ -190,7 +190,7 @@
 			selectedFilter = "<%= sortFilter %>"
 		}
 
-        var url = "/projectV?IDX=<%= IDX %>&page=1&perPage=10&sort=" + selectedFilter + "&class=" + selectedClass;
+        var url = "/validation/project?IDX=<%= IDX %>&page=1&perPage=10&sort=" + selectedFilter + "&class=" + selectedClass;
 
         // Navigate to the URL
         window.location.href = url;
@@ -204,7 +204,7 @@
 			selectedClass = "<%= imageClass %>";
 		}
 
-        var url = "/projectV?IDX=<%= IDX %>&page=1&perPage=10&sort=" + selectedFilter + "&class=" + selectedClass;
+        var url = "/validation/project?IDX=<%= IDX %>&page=1&perPage=10&sort=" + selectedFilter + "&class=" + selectedClass;
 
         // Navigate to the URL
         window.location.href = url;
