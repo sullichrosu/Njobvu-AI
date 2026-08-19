@@ -112,7 +112,7 @@ async function getYoloXSettingsPage(req, res) {
         const countsResult = await queries.project.getClassLabelCounts(projectDir);
         if (countsResult && countsResult.rows) {
             countsResult.rows.forEach((row) => {
-                classLabelCounts[row.CName] = row.imageCount || row.labelCount || 0;
+                classLabelCounts[row.CName] = row.labelCount || 0;
             });
         }
     } catch (err) {}

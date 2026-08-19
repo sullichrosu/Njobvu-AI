@@ -19,7 +19,7 @@ module.exports = {
         },
         getClassLabelCounts: async function (projectPath) {
             const db = getDbClient(projectPath);
-            const query = "SELECT CName, COUNT(DISTINCT IName) as imageCount FROM Labels GROUP BY CName";
+            const query = "SELECT CName, COUNT(DISTINCT LID) as labelCount FROM Labels GROUP BY CName";
             const result = await db.all(query);
 
             return result;
