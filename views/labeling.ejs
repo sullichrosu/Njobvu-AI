@@ -16,7 +16,7 @@
                         <tr class="unlabeled-row">
                             <!-- Unlabeled bucket: images with zero rows in Labels, not a Classes row -->
                             <td scope="row">
-                                <a href="/review?class=<%= encodeURIComponent(unlabeledClass) %>&IDX=<%= IDX %>">
+                                <a href="/project/review?class=<%= encodeURIComponent(unlabeledClass) %>&IDX=<%= IDX %>">
                                     Unlabeled
                                 </a>
                             </td>
@@ -26,7 +26,7 @@
                         <tr>
                             <!-- Class Name as clickable link -->
                             <td scope="row">
-                                <a href="/review?class=<%= encodeURIComponent(classes[i].CName) %>&IDX=<%= IDX %>">
+                                <a href="/project/review?class=<%= encodeURIComponent(classes[i].CName) %>&IDX=<%= IDX %>">
                                     <%= classes[i].CName %>
                                 </a>
                             </td>

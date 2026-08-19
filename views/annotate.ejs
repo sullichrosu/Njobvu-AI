@@ -9,7 +9,7 @@
 </script>
 <body style="background-color: #4C4C4C;">
 <div id="annotate" class="row" style="margin-left: 0; margin-right: 0;">
-    <form action ="updateLabels" method="post" id="submit-project">
+    <form action="/updateLabels" method="post" id="submit-project">
         <!--Classes bar -->
         <div id="class-list" class="col-md-12 mr-0 ml-0 row justify-content-md-center nopadding" style="background-color: #262C2F">
               <% for(var i=0; i<classes.length; i++) {%>
@@ -30,7 +30,7 @@
                   <% if (AutoSave == 1) { %>
                       <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-prev" value="auto-prev" style="border-radius: 0" aria-label="Previous image"><i class="fas fa-arrow-alt-left" aria-hidden="true" aria-label="Previous image}"></i></button>
                   <% } else { %>
-					  <a href="/annotate?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
+					  <a href="/project/annotate?IDX=<%= IDX %>&IName=<%= encodeURIComponent(prev_IName) %>&curr_class=<%= curr_class %>" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-dark col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-left" aria-hidden="true" aria-label="Previous image"></i></a>
@@ -40,7 +40,7 @@
                   <% if (AutoSave == 1) { %>
                       <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-next" value="auto-next" style="border-radius: 0" aria-label="Next image"><i class="fas fa-arrow-alt-right" aria-hidden="true" aria-label="Next image"></i></button>
                   <% } else { %>
-					  <a href="/annotate?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
+					  <a href="/project/annotate?IDX=<%= IDX %>&IName=<%= encodeURIComponent(next_IName) %>&curr_class=<%= curr_class %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-primary col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
@@ -133,7 +133,7 @@
                                 <%} else {%>
                                 <td></td>
                                 <%}%>
-                                <td class="text-right"><a class="btn btn-primary pass-class" href="/annotate?IDX=<%= IDX %>&IName=<%= images[i].IName %>&curr_class=<%= curr_class %>" role="button">Annotate</a></td>
+                                <td class="text-right"><a class="btn btn-primary pass-class" href="/project/annotate?IDX=<%= IDX %>&IName=<%= encodeURIComponent(images[i].IName) %>&curr_class=<%= curr_class %>" role="button">Annotate</a></td>
                             </tr>
                             <% } %>
                         </tbody>

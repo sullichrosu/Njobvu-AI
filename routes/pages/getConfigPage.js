@@ -1,218 +1,219 @@
-async function getConfigPage(req, res) {
-    // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+const path = require("path");
+const fs = require("fs");
+const queries = require("../../queries/queries");
 
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+async function getConfigPage(req, res) {
+    let idx = parseInt(req.query.IDX, 10);
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
 
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    var num = IDX;
 
-    if (num >= projects.length) {
-        valid = 1;
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading config page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
+    }
+
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
+    const PName = projects[idx].PName;
+    const admin = projects[idx].Admin;
 
-    var mergeProjects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" +
-            user +
-            "' AND NOT PName = '" +
-            PName +
-            "'",
-    );
+    let mergeProjects = [];
+    try {
+        const mergeRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE Username = ? AND NOT PName = ?",
+            [user, PName]
+        );
 
-    var public_path = currentPath,
-        main_path = public_path + "public/projects/",
-        project_path = main_path + admin + "-" + PName,
-        path = project_path + "/" + PName + ".db",
-        training_path = project_path + "/training",
-        log_path = training_path + "/logs/",
-        python_path = training_path + "/python",
-        python_path_file = training_path + "/Paths.txt",
-        darknet_path_file = training_path + "/darknetPaths.txt",
-        weights_path = training_path + "/weights";
-
-    if (!fs.existsSync(training_path)) {
-        fs.mkdirSync(training_path);
-        fs.mkdirSync(log_path);
-        fs.mkdirSync(python_path);
-        fs.mkdirSync(weights_path);
-        fs.writeFile(python_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-        fs.writeFile(darknet_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-    }
-    if (!fs.existsSync(weights_path)) {
-        fs.mkdirSync(weights_path);
-    }
-    if (!fs.existsSync(darknet_path_file)) {
-        fs.writeFile(darknet_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-    }
-    if (!fs.existsSync(python_path_file)) {
-        fs.writeFile(python_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
+        mergeProjects = mergeRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error fetching merge project candidates:", err);
     }
 
-    var cfdb = new sqlite3.Database(path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+    const trainingPath = path.join(projectDir, "training");
+    const logPath = path.join(trainingPath, "logs");
+    const pythonPath = path.join(trainingPath, "python");
+    const pythonPathFile = path.join(trainingPath, "Paths.txt");
+    const darknetPathFile = path.join(trainingPath, "darknetPaths.txt");
+    const weightsPath = path.join(trainingPath, "weights");
+
+    const fsObj = global.fs || fs;
+
+    if (!fsObj.existsSync(trainingPath)) {
+        try {
+            fsObj.mkdirSync(trainingPath, { recursive: true });
+            fsObj.mkdirSync(logPath, { recursive: true });
+            fsObj.mkdirSync(pythonPath, { recursive: true });
+            fsObj.mkdirSync(weightsPath, { recursive: true });
+            fsObj.writeFileSync(pythonPathFile, "");
+            fsObj.writeFileSync(darknetPathFile, "");
+        } catch (e) { }
+    }
+
+    if (!fsObj.existsSync(weightsPath)) {
+        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) { }
+    }
+
+    if (!fsObj.existsSync(darknetPathFile)) {
+        try { fsObj.writeFileSync(darknetPathFile, ""); } catch (e) { }
+    }
+
+    if (!fsObj.existsSync(pythonPathFile)) {
+        try { fsObj.writeFileSync(pythonPathFile, ""); } catch (e) { }
+    }
+
+    let projRecord = null;
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
+    }
+
+    let classes = [];
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
+    }
+
+    let accessOtherUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ? AND Username != ?",
+            [PName, admin, user]
+        );
+
+        accessOtherUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
+    }
+
+    let otherAdminProjects = [];
+    try {
+        const otherProjRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin != ?",
+            [PName, user]
+        );
+
+        otherAdminProjects = (otherProjRes.rows || []).map((r) => r.Admin);
+    } catch (err) {
+        global.logger.error("Error querying other admin projects:", err);
+    }
+
+    let allAccessUsers = [];
+    try {
+        const allAccRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        allAccessUsers = (allAccRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying full access list:", err);
+    }
+
+    const colors = [];
+    let colorIdx = 0;
+    const colorList = global.colorsJSON || [];
+
+    while (colors.length < classes.length) {
+        if (colorIdx >= colorList.length) {
+            colorIdx = 0;
         }
-        global.logger.info("Connected to cfdb.")
-    });
 
-    // create async database object functions
-    cfdb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    cfdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
+        colors.push(colorList[colorIdx]);
+        colorIdx++;
+    }
 
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var results2 = await cfdb.allAsync("SELECT * FROM `Classes`");
-    var results3 = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName= '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "' AND Username != '" +
-            user +
-            "'",
-    );
-    var results4 = await db.allAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin != '" +
-            user +
-            "'",
-    );
-    var acc1 = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var acc = [];
-    for (var i = 0; i < acc1.length; i++) {
-        acc.push(acc1[i].Username);
-    }
-    var access = [];
-    for (var i = 0; i < results3.length; i++) {
-        access.push(results3[i].Username);
-    }
-    var DAdmin = [];
-    for (var i = 0; i < results4.length; i++) {
-        DAdmin.push(results4[i].Admin);
-    }
-    // close the database
-    cfdb.close(function (err) {
-        if (err) {
-            global.logger.error(err);
-        } else {
+    let scripts = [];
+    if (global.readdirAsync) {
+        try {
+            scripts = await global.readdirAsync(pythonPath);
+        } catch (e) {
+            scripts = [];
         }
-    });
-
-    var colors = [];
-    var i = 0;
-
-    global.logger.debug(colors);
-    global.logger.debug("this is colors", colorsJSON);
-
-    while (colors.length < results2.length) {
-        if (i >= colorsJSON.length) {
-            i = 0;
+    } else {
+        try {
+            scripts = fsObj.readdirSync(pythonPath);
+        } catch (e) {
+            scripts = [];
         }
-        colors.push(colorsJSON[i]);
-        i++;
     }
 
-    var scripts = [];
-    scripts = await readdirAsync(python_path);
+    let weights = [];
+    if (global.readdirAsync) {
+        try {
+            weights = await global.readdirAsync(weightsPath);
+        } catch (e) {
+            weights = [];
+        }
+    } else {
+        try {
+            weights = fsObj.readdirSync(weightsPath);
+        } catch (e) {
+            weights = [];
+        }
+    }
 
-    var weights = [];
-    weights = await readdirAsync(weights_path);
+    let paths = [];
+    try {
+        paths = fsObj
+            .readFileSync(pythonPathFile, "utf-8")
+            .split("\n")
+            .filter(Boolean);
+    } catch (e) {
+        paths = [];
+    }
 
-    var paths = fs
-        .readFileSync(python_path_file, "utf-8")
-        .split("\n")
-        .filter(Boolean);
-
-    var darknet_paths = fs
-        .readFileSync(darknet_path_file, "utf-8")
-        .split("\n")
-        .filter(Boolean);
+    let darknetPaths = [];
+    try {
+        darknetPaths = fsObj
+            .readFileSync(darknetPathFile, "utf-8")
+            .split("\n")
+            .filter(Boolean);
+    } catch (e) {
+        darknetPaths = [];
+    }
 
     res.render("config", {
         title: "config",
-        user: user,
-        Admin: results1.Admin,
-        DAdmin: DAdmin,
-        access: access,
-        acc: acc,
-        PName: PName,
-        IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
-        weights: weights,
-        scripts: scripts,
-        paths: paths,
-        darknet_paths: darknet_paths,
-        classes: results2,
-        colors: colors,
+        user,
+        Admin: projRecord ? projRecord.Admin : admin,
+        DAdmin: otherAdminProjects,
+        access: accessOtherUsers,
+        acc: allAccessUsers,
+        PName,
+        IDX: idx,
+        PDescription: projRecord ? projRecord.PDescription : "",
+        AutoSave: projRecord ? projRecord.AutoSave : 0,
+        weights,
+        scripts,
+        paths,
+        darknet_paths: darknetPaths,
+        classes,
+        colors,
         logged: req.query.logged,
-        mergeProjects: mergeProjects,
+        mergeProjects,
         activePage: "Configuration",
     });
 }
