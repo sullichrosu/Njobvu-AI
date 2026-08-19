@@ -58,6 +58,7 @@ const importProject = require("./projects/importProject");
 const importDataset = require("./projects/importDataset");
 const importYolo = require("./projects/importYolo");
 const importKwCoco = require("./projects/importKwCoco");
+const importKwCocoClassification = require("./projects/importKwCocoClassification");
 const importIfcb = require("./projects/importIfcb");
 const mergeLocal = require("./projects/mergeLocal");
 const removeAccess = require("./projects/removeAccess");
@@ -168,7 +169,15 @@ api.post("/deleteImage", deleteImage);
 api.post("/import", importProject);
 api.post("/api/projects/import-dataset", importDataset);
 api.post("/api/projects/import-yolo", importYolo);
-api.post("/api/projects/import-kwcoco", importKwCoco);
+// Strangler-pattern router switch: the detection path keeps calling the
+// original, untouched importKwCoco handler; only the classification
+// dataset_type is routed to the new isolated handler.
+api.post("/api/projects/import-kwcoco", (req, res, next) => {
+    if (req.body && req.body.dataset_type === "classification") {
+        return importKwCocoClassification(req, res, next);
+    }
+    return importKwCoco(req, res, next);
+});
 api.post("/api/projects/import-ifcb", importIfcb);
 api.post("/mergeLocal", mergeLocal);
 api.post("/removeAccess", removeAccess);

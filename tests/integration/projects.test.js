@@ -495,6 +495,44 @@ describe('Project Routes - Basic Tests', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  /* * this tests that the KW Coco Archive form's detection dataset_type
+  * (the default/legacy behavior) is still handled by the original,
+  * untouched detection import handler.
+  */
+  it('should keep the detection dataset_type on the legacy KW Coco import handler', async () => {
+    const res = await request(app)
+      .post('/api/projects/import-kwcoco')
+      .send({
+        project_name: 'test-coco-detection-project',
+        dataset_type: 'detection',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('KW Coco Import process completed.');
+  });
+
+  /* * this tests that selecting Classification in the KW Coco Archive
+  * dropdown routes the request to the new, isolated classification
+  * handler (strangler pattern) instead of the legacy detection handler.
+  */
+  it('should route the classification dataset_type to the isolated classification handler', async () => {
+    const res = await request(app)
+      .post('/api/projects/import-kwcoco')
+      .send({
+        project_name: 'test-coco-classification-project',
+        dataset_type: 'classification',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('KW Coco classification import process completed.');
+  });
+
   /* * this tests if the import-dataset route responds to YOLO archive import requests.
   * This test expects a status code 200.
   */

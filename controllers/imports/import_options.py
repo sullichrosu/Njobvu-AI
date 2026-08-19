@@ -577,6 +577,172 @@ def coco_archive_import(db_name, input_dir, output, weights_file=None):
 
     print(f"COCO Archive Import completed successfully. Inserted {label_id - 1} labels.")
 
+
+def coco_archive_import_classification(db_name, input_dir, output, weights_file=None):
+    # strangler-pattern sibling of coco_archive_import: same KW Coco archive
+    # shape (images + annotations + categories), but each image gets exactly
+    # one whole-image class label instead of per-annotation bounding boxes.
+    # kept fully self-contained so the detection path above stays untouched.
+    print("\n--- Starting COCO / KW COCO Archive Import (Classification) ---")
+    print(f"Input directory: {input_dir}")
+    print(f"Output project path: {output}")
+    print(f"Database name: {db_name}")
+
+    import re
+
+    json_files = []
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith('.json'):
+                json_files.append(os.path.join(root, file))
+
+    coco_json_path = None
+    coco_data = None
+    for jf in json_files:
+        try:
+            with open(jf, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict) and 'images' in data and 'annotations' in data:
+                    coco_json_path = jf
+                    coco_data = data
+                    print(f"Found COCO JSON: {jf}")
+                    break
+        except Exception:
+            pass
+
+    if not coco_data:
+        print("Error: No valid COCO JSON file found in the archive.", file=sys.stderr)
+        sys.exit(1)
+
+    weights_path = os.path.join(output, 'training', 'weights')
+    os.makedirs(weights_path, exist_ok=True)
+
+    if weights_file and os.path.exists(weights_file):
+        shutil.copy(weights_file, os.path.join(weights_path, os.path.basename(weights_file)))
+        print(f"Copied uploaded weights file: {weights_file} -> {weights_path}")
+
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith(('.pt', '.weights', '.habry', '.pipe', '.conf')):
+                src = os.path.join(root, file)
+
+                if not (weights_file and os.path.abspath(src) == os.path.abspath(weights_file)):
+                    dst = os.path.join(weights_path, file)
+                    shutil.copy(src, dst)
+                    print(f"Found model file in archive: {src} -> {dst}")
+
+    db_file_path = os.path.join(output, f'{db_name}.db')
+    conn = sqlite3.connect(db_file_path)
+    cursor = conn.cursor()
+
+    cursor.execute("CREATE TABLE IF NOT EXISTS Classes (CName VARCHAR NOT NULL PRIMARY KEY)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS Labels (LID INTEGER PRIMARY KEY, CName VARCHAR NOT NULL, X VARCHAR NOT NULL, Y VARCHAR NOT NULL, W INTEGER NOT NULL, H INTEGER NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(CName) REFERENCES Classes(CName), FOREIGN KEY(IName) REFERENCES Images(IName))")
+    cursor.execute("CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))")
+
+    conn.commit()
+
+    categories = coco_data.get('categories', [])
+    category_map = {}
+    for cat in categories:
+        cat_id = cat.get('id')
+        cat_name = cat.get('name', f"class_{cat_id}").replace(' ', '_')
+        category_map[cat_id] = cat_name
+        cursor.execute("INSERT OR IGNORE INTO Classes (CName) VALUES (?)", (cat_name,))
+
+    images_path = os.path.join(output, 'images')
+    os.makedirs(images_path, exist_ok=True)
+
+    coco_images = coco_data.get('images', [])
+    image_id_to_new_name = {}
+    image_id_to_size = {}
+
+    def get_digits_suffix(filename):
+        stem = os.path.splitext(os.path.basename(filename))[0]
+        match = re.search(r'(\d+)\s*$', stem)
+        return int(match.group(1)) if match else None
+
+    files_by_name = {}
+    files_by_frame_num = {}
+    for root, dirs, files in os.walk(input_dir):
+        if '__MACOSX' in root or '.pytest_cache' in root:
+            continue
+
+        for file in files:
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif')):
+                full_path = os.path.join(root, file)
+                files_by_name[file] = full_path
+
+                frame_num = get_digits_suffix(file)
+                if frame_num is not None:
+                    files_by_frame_num[frame_num] = full_path
+
+    print(f"Indexed {len(files_by_name)} physical image files on disk.")
+
+    for img_entry in coco_images:
+        img_id = img_entry.get('id')
+        file_name = img_entry.get('file_name')
+
+        base_filename = os.path.basename(file_name)
+        found_path = files_by_name.get(base_filename)
+
+        if found_path is None:
+            target_frame_num = get_digits_suffix(base_filename)
+            found_path = files_by_frame_num.get(target_frame_num) if target_frame_num is not None else None
+
+            if found_path is not None:
+                print(f"No exact filename match for '{base_filename}'; matched via frame number {target_frame_num} instead.")
+
+        if found_path is not None:
+            new_image_name = base_filename
+            shutil.copy(found_path, os.path.join(images_path, new_image_name))
+            print(f"Successfully copied: {os.path.basename(found_path)} -> {new_image_name}")
+
+            cursor.execute("INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", (new_image_name,))
+            image_id_to_new_name[img_id] = new_image_name
+
+            width = img_entry.get('width')
+            height = img_entry.get('height')
+            if not width or not height:
+                try:
+                    with Image.open(os.path.join(images_path, new_image_name)) as img:
+                        width, height = img.size
+                except Exception as e:
+                    print(f"Warning: could not read dimensions for {new_image_name}: {e}")
+                    width, height = 0, 0
+            image_id_to_size[img_id] = (width, height)
+        else:
+            print(f"FATAL ERROR: JSON entry '{base_filename}' cannot be matched to any file on disk.", file=sys.stderr)
+            sys.exit(1)
+
+    # one class label per image: the earliest (lowest annotation id) annotation
+    # for that image decides its class, matching the "per-image class" contract
+    # of a classification dataset rather than per-object bounding boxes
+    annotations = sorted(coco_data.get('annotations', []), key=lambda a: a.get('id', 0))
+    image_id_to_category = {}
+    for ann in annotations:
+        image_id = ann.get('image_id')
+        if image_id not in image_id_to_category:
+            image_id_to_category[image_id] = ann.get('category_id')
+
+    label_id = 1
+    print(f"Processing {len(image_id_to_category)} per-image class labels...")
+
+    for image_id, cat_id in image_id_to_category.items():
+        new_image_name = image_id_to_new_name.get(image_id)
+        cname = category_map.get(cat_id)
+        width, height = image_id_to_size.get(image_id, (0, 0))
+
+        if new_image_name and cname:
+            cursor.execute("INSERT INTO Labels (LID, CName, X, Y, W, H, IName) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           (label_id, cname, '0', '0', width, height, new_image_name))
+            label_id += 1
+
+    conn.commit()
+    conn.close()
+
+    print(f"COCO Classification Archive Import completed successfully. Inserted {label_id - 1} labels.")
+
 # main argument parsing and execution logic
 if __name__ == '__main__':
     # parse all arguments first
@@ -608,6 +774,8 @@ if __name__ == '__main__':
         yolo_archive_import(db_name, input_dir, output, weights_file)
     elif runs == 'coco':
         coco_archive_import(db_name, input_dir, output, weights_file)
+    elif runs == 'coco_class':
+        coco_archive_import_classification(db_name, input_dir, output, weights_file)
     elif runs:
         print(f"invalid run type: {runs}")
 

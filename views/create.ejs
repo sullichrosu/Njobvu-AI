@@ -100,16 +100,23 @@
             <form class="add-project-form flow-content" action="/api/projects/import-kwcoco" method='POST' enctype="multipart/form-data" id="kwcocoForm">
                 <h3>Import KW Coco Project</h3>
                 <div class="form-row">
-                    <div class="form-group col-md-12">
+                    <div class="form-group col-md-6">
                         <label for="coco_project_name">Project Name</label>
                         <input id="coco_project_name" name="project_name" aria-label="Project name" type="text" class="form-control" placeholder="Project Name" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="coco_dataset_type">Dataset Type</label>
+                        <select id="coco_dataset_type" name="dataset_type" class="form-control">
+                            <option value="detection">Object Detection</option>
+                            <option value="classification">Classification</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group col-md-6">
                         <label for="coco_archive">Upload KW Coco Archive (.zip) <span style="color: red;">*</span></label>
                         <input id="coco_archive" name="coco_archive" aria-label="KW Coco Archive" type="file" class="form-control-file" required>
-                        <p>Should contain images and input_coco.json annotations</p>
+                        <p>Should contain images and input_coco.json annotations. For classification, each image's first annotation determines its class label.</p>
                     </div>
                     <div class="form-group col-md-6">
                         <label for="viame_model">Upload VIAME Model File (Optional)</label>
