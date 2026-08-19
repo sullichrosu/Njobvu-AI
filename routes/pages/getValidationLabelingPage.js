@@ -372,7 +372,7 @@ async function getValidationLabelingPage(req, res) {
         }
 
         res.render("labelingV", {
-            title: "labeling",
+            title: "labelingV",
             user: user,
             access: access,
             image_width: image_width,

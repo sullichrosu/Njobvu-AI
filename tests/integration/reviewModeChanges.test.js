@@ -224,7 +224,10 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.text).toContain("Toggle Review All");
-      expect(res.text).toContain('/review?IDX=0&IName=image1.jpg');
+      // Review button must jump straight into the validation labeling page for
+      // that image, not the class-based review page (which shows the whole class).
+      expect(res.text).toContain('/labelingV?IDX=0&IName=image1.jpg');
+      expect(res.text).not.toContain('/review?IDX=0&IName=image1.jpg');
       expect(res.text).toContain("Review");
     });
   });
@@ -346,6 +349,35 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
       expect(res.statusCode).toBe(200);
       expect(res.text).not.toContain('class="UnlabeledImage"');
       expect(res.text).toContain('class="cropCanvas"');
+    });
+  });
+
+  describe("footer.ejs canvas-image script loading", () => {
+    // getValidationLabelingPage (labelingV.ejs) and getLabelingPage (labeling.ejs,
+    // an unrelated class-summary page with no canvas) used to both pass
+    // title: "labeling", and footer.ejs only loaded flabeling.js/tiff.js for
+    // title === "annotate" — so labelingV's fabric canvas never got the script
+    // that sets its background image, and images never rendered. Fixed by giving
+    // the validation labeling page its own "labelingV" title.
+    const ejs = require("ejs");
+    const footerPath = path.join(__dirname, "../../views/includes/footer.ejs");
+
+    it("loads the TIFF/fabric canvas scripts for the validation labeling page (labelingV)", async () => {
+      const html = await ejs.renderFile(footerPath, { title: "labelingV" });
+      expect(html).toContain("libraries/tiffjs/tiff.min.js");
+      expect(html).toContain("js/flabeling.js");
+    });
+
+    it("still loads them for the annotate page", async () => {
+      const html = await ejs.renderFile(footerPath, { title: "annotate" });
+      expect(html).toContain("libraries/tiffjs/tiff.min.js");
+      expect(html).toContain("js/flabeling.js");
+    });
+
+    it("does not load them for the unrelated class-summary labeling page (no canvas)", async () => {
+      const html = await ejs.renderFile(footerPath, { title: "labeling" });
+      expect(html).not.toContain("libraries/tiffjs/tiff.min.js");
+      expect(html).not.toContain("js/flabeling.js");
     });
   });
 });
