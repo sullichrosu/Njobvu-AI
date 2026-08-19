@@ -1,5 +1,6 @@
 const queries = require("../../queries/queries");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const { generateModelCard } = require("../../utils/runSummaryGenerator");
 
 async function run(req, res) {
     const { exec } = require("child_process");
@@ -151,7 +152,7 @@ async function run(req, res) {
     var error = "";
     process.chdir(runPath);
 
-    var child = exec(cmd, (err, stdout, stderr) => {
+    var child = exec(cmd, async (err, stdout, stderr) => {
         if (err) {
             global.logger.debug(`This is the error: ${err.message}`);
             success = err.message;
@@ -171,6 +172,18 @@ async function run(req, res) {
         fs.writeFile(`${runPath}/done.log`, success, (err) => {
             if (err) throw err;
         });
+
+        if (!err) {
+            try {
+                await generateModelCard(runPath, {
+                    runType: "training",
+                    runName: `${PName}_${date}`,
+                    projectName: PName,
+                });
+            } catch (cardErr) {
+                global.logger.error("Error generating model card:", cardErr);
+            }
+        }
     });
 
     res.send({ Success: `Training Started` });

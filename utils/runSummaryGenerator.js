@@ -1015,6 +1015,353 @@ function persistCustomSummary(runDir, customNarrative, options = {}) {
     return summaryData;
 }
 
+/**
+ * Model Card Generation (Hugging Face compatible)
+ *
+ * Builds a YAML-frontmatter README (MODEL_CARD.md) sourced entirely from a run's own
+ * artifacts - never from a Hugging Face Hub URL. Reuses generateSingleRunSummary for
+ * config/metrics/weights parsing rather than re-reading the run directory from scratch.
+ */
+
+const PIPELINE_TAG_BY_TASK = {
+    detect: "object-detection",
+    segment: "image-segmentation",
+    obb: "object-detection",
+    classify: "image-classification",
+    pose: "keypoint-detection"
+};
+
+/**
+ * Parses the "names:" class map out of a YOLO-style dataset yaml
+ * (e.g. coco_classes.yaml / data.yaml), supporting both the
+ * "  0: className" mapping form and a "  - className" list form.
+ */
+function parseClassNamesYaml(yamlStr) {
+    const lines = yamlStr.split("\n");
+    const byIndex = [];
+    const list = [];
+    let inNames = false;
+
+    for (const line of lines) {
+        if (/^names\s*:/.test(line.trim()) && !/^\s/.test(line)) {
+            inNames = true;
+            continue;
+        }
+        if (!inNames) continue;
+
+        if (line.trim() === "") continue;
+        if (!/^\s/.test(line)) break; // dedent back to top-level: names block ended
+
+        const mapMatch = line.match(/^\s+(\d+)\s*:\s*(.+)$/);
+        if (mapMatch) {
+            byIndex[parseInt(mapMatch[1], 10)] = mapMatch[2].trim();
+            continue;
+        }
+        const listMatch = line.match(/^\s+-\s*(.+)$/);
+        if (listMatch) {
+            list.push(listMatch[1].trim());
+        }
+    }
+
+    const fromMap = byIndex.filter((name) => name !== undefined);
+    return fromMap.length > 0 ? fromMap : list;
+}
+
+/**
+ * Looks for a dataset yaml directly inside the run directory and extracts its class list.
+ */
+function discoverClassNames(runDir) {
+    const candidates = ["coco_classes.yaml", "data.yaml", "dataset.yaml"];
+    for (const fileName of candidates) {
+        const filePath = path.join(runDir, fileName);
+        if (fs.existsSync(filePath)) {
+            try {
+                const names = parseClassNamesYaml(fs.readFileSync(filePath, "utf8"));
+                if (names.length > 0) {
+                    return { names, source: fileName };
+                }
+            } catch (e) {}
+        }
+    }
+    return { names: [], source: null };
+}
+
+function countImagesInDir(dir) {
+    const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".bmp"];
+    let count = 0;
+
+    function walk(currentDir) {
+        let entries;
+        try {
+            entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        } catch (e) {
+            return;
+        }
+        for (const entry of entries) {
+            const fullPath = path.join(currentDir, entry.name);
+            if (entry.isDirectory()) {
+                walk(fullPath);
+            } else if (imageExtensions.includes(path.extname(entry.name).toLowerCase())) {
+                count++;
+            }
+        }
+    }
+
+    walk(dir);
+    return count;
+}
+
+/**
+ * Counts images per train/val/test split by inspecting the run's own dataset
+ * layout (images/<split>/ for detect/segment/obb, <split>/<class>/ for classify).
+ */
+function discoverDatasetImageCounts(runDir) {
+    const splits = ["train", "val", "test"];
+    const counts = {};
+    let total = 0;
+    let found = false;
+
+    for (const split of splits) {
+        const detectSplitPath = path.join(runDir, "images", split);
+        const classifySplitPath = path.join(runDir, split);
+
+        let splitCount = 0;
+        if (fs.existsSync(detectSplitPath)) {
+            splitCount = countImagesInDir(detectSplitPath);
+            found = true;
+        } else if (fs.existsSync(classifySplitPath) && fs.statSync(classifySplitPath).isDirectory()) {
+            splitCount = countImagesInDir(classifySplitPath);
+            found = true;
+        }
+
+        counts[split] = splitCount;
+        total += splitCount;
+    }
+
+    return found ? { ...counts, total } : null;
+}
+
+function inferTask(config, datasetCounts, classifyPathHint) {
+    if (config && typeof config.task === "string" && config.task.trim()) {
+        return config.task.trim().toLowerCase();
+    }
+    if (classifyPathHint) return "classify";
+    return "detect";
+}
+
+function buildModelIndexMetrics(metrics) {
+    const results = [];
+    const seen = new Set();
+
+    const push = (type, value) => {
+        if (typeof value === "number" && Number.isFinite(value) && !seen.has(type)) {
+            seen.add(type);
+            results.push({ type, value });
+        }
+    };
+
+    push("mAP50", metrics.bestMap50);
+    push("mAP50-95", metrics.bestMap50_95);
+
+    Object.keys(metrics || {}).forEach((key) => {
+        const value = metrics[key];
+        if (typeof value !== "number" || !Number.isFinite(value)) return;
+        const lower = key.toLowerCase();
+
+        if (lower.includes("precision")) push("Precision", value);
+        else if (lower.includes("recall")) push("Recall", value);
+        else if (lower.includes("top1")) push("Top-1 Accuracy", value);
+        else if (lower.includes("top5")) push("Top-5 Accuracy", value);
+        else if (lower.includes("accuracy")) push("Accuracy", value);
+    });
+
+    return results;
+}
+
+function buildTags(config, task) {
+    const tags = new Set(["ultralytics", "yolo"]);
+    if (task) tags.add(task);
+
+    const modelRef = config && (config.model || config.weights);
+    if (typeof modelRef === "string" && modelRef.trim()) {
+        const base = path.basename(modelRef, path.extname(modelRef)).toLowerCase();
+        if (base) tags.add(base);
+    }
+
+    return Array.from(tags);
+}
+
+function yamlScalar(value) {
+    return JSON.stringify(String(value));
+}
+
+/**
+ * Hand-rolled YAML writer scoped to the fixed model-card frontmatter shape below -
+ * avoids pulling in a generic YAML dependency for a handful of known fields.
+ */
+function buildFrontmatterYaml({ pipelineTag, tags, modelIndex }) {
+    let yaml = "";
+    yaml += `library_name: ${yamlScalar("ultralytics")}\n`;
+    yaml += `pipeline_tag: ${yamlScalar(pipelineTag)}\n`;
+    yaml += `tags:\n`;
+    tags.forEach((tag) => {
+        yaml += `  - ${yamlScalar(tag)}\n`;
+    });
+
+    if (modelIndex && modelIndex.metrics.length > 0) {
+        yaml += `model-index:\n`;
+        yaml += `  - name: ${yamlScalar(modelIndex.name)}\n`;
+        yaml += `    results:\n`;
+        yaml += `      - task:\n`;
+        yaml += `          type: ${yamlScalar(modelIndex.taskType)}\n`;
+        yaml += `        dataset:\n`;
+        yaml += `          name: ${yamlScalar(modelIndex.datasetName)}\n`;
+        yaml += `          type: ${yamlScalar("custom")}\n`;
+        yaml += `        metrics:\n`;
+        modelIndex.metrics.forEach((metric) => {
+            yaml += `          - type: ${yamlScalar(metric.type)}\n`;
+            yaml += `            value: ${metric.value}\n`;
+        });
+    }
+
+    return yaml;
+}
+
+function formatMetricValue(value) {
+    return `${(value * 100).toFixed(2)}%`;
+}
+
+function buildModelCardBody({ runName, runDir, summary, classNames, classSource, datasetCounts, task, modelIndexMetrics }) {
+    const config = summary.config || {};
+    let md = `# ${runName}\n\n`;
+    md += `Auto-generated Hugging Face model card, sourced entirely from this run's own artifacts (config, results.csv, dataset files). Regenerate from the run directory rather than editing the config/metrics sections by hand.\n\n`;
+
+    md += `## Model Details\n\n`;
+    md += `- **Task**: ${task}\n`;
+    md += `- **Framework**: Ultralytics YOLO\n`;
+    md += `- **Base weights**: ${config.model || config.weights || "N/A"}\n`;
+    md += `- **Run name**: ${runName}\n`;
+    md += `- **Generated at**: ${summary.generatedAt || new Date().toISOString()}\n\n`;
+
+    md += `## Training Data\n\n`;
+    if (classNames.length > 0) {
+        md += `- **Classes (${classNames.length})**: ${classNames.map((c) => `\`${c}\``).join(", ")}\n`;
+        md += `- **Class source**: \`${classSource}\`\n`;
+    } else {
+        md += `- **Classes**: not found in run artifacts (no coco_classes.yaml/data.yaml present).\n`;
+    }
+    if (datasetCounts) {
+        md += `- **Images**: ${datasetCounts.total} total (train: ${datasetCounts.train}, val: ${datasetCounts.val}, test: ${datasetCounts.test})\n\n`;
+    } else {
+        md += `- **Images**: ${summary.imageCount || 0} image artifact(s) discovered in the run directory (train/val/test split not found).\n\n`;
+    }
+
+    if (Object.keys(config).length > 0) {
+        md += `## Training Configuration\n\n`;
+        md += `\`\`\`json\n${JSON.stringify(config, null, 2)}\n\`\`\`\n\n`;
+    }
+
+    md += `## Evaluation Results\n\n`;
+    if (modelIndexMetrics.length > 0) {
+        md += `| Metric | Value |\n| --- | --- |\n`;
+        modelIndexMetrics.forEach((metric) => {
+            md += `| ${metric.type} | ${formatMetricValue(metric.value)} |\n`;
+        });
+        md += `\n`;
+    } else {
+        md += `No evaluation metrics were found in this run's results.csv.\n\n`;
+    }
+
+    if (summary.weightsInfo && summary.weightsInfo.length > 0) {
+        md += `## Model Checkpoints\n\n`;
+        md += `| File | Size |\n| --- | --- |\n`;
+        summary.weightsInfo.forEach((weight) => {
+            md += `| \`${weight.relPath}\` | ${weight.sizeMB} |\n`;
+        });
+        md += `\n`;
+    }
+
+    md += `## Limitations\n\n`;
+    md += `- This card was generated automatically from run artifacts and has not been reviewed by a human.\n`;
+    md += `- Evaluation metrics reflect performance on this run's own validation split only; verify against held-out data before deployment.\n`;
+    if (summary.logDiagnostics && summary.logDiagnostics.errors && summary.logDiagnostics.errors.length > 0) {
+        md += `- The training log recorded errors during this run; review \`logDiagnostics\` in \`summary.json\` before use.\n`;
+    }
+    md += `\n`;
+
+    md += `## How to Use\n\n`;
+    const bestWeight = (summary.weightsInfo || []).find((w) => w.name.includes("best")) || (summary.weightsInfo || [])[0];
+    md += "```python\n";
+    md += `from ultralytics import YOLO\n\n`;
+    md += `model = YOLO("${bestWeight ? bestWeight.relPath : "best.pt"}")\n`;
+    md += `results = model.predict("path/to/image.jpg")\n`;
+    md += "```\n";
+
+    return md;
+}
+
+/**
+ * Generates a Hugging Face-compatible model card (YAML frontmatter + markdown body)
+ * for a single training run and writes it to MODEL_CARD.md inside the run directory.
+ *
+ * @param {string} runDir - Run directory to source artifacts from
+ * @param {Object} [options]
+ * @param {Object} [options.summary] - Pre-computed summary object (skips re-parsing)
+ * @param {string} [options.runName] - Custom run name/label
+ * @param {string} [options.task] - Override task type (detect/segment/obb/classify/pose)
+ * @param {string} [options.projectName] - Project name used as the dataset label
+ * @returns {Promise<Object>} { modelCardPath, frontmatter, markdown, summary }
+ */
+async function generateModelCard(runDir, options = {}) {
+    if (!runDir || !fs.existsSync(runDir)) {
+        throw new Error(`Run directory does not exist: ${runDir}`);
+    }
+
+    const summary = options.summary || await generateSingleRunSummary(runDir, options);
+    const runName = options.runName || summary.runName || path.basename(runDir);
+
+    const { names: classNames, source: classSource } = discoverClassNames(runDir);
+    const datasetCounts = discoverDatasetImageCounts(runDir);
+    const task = (options.task || inferTask(summary.config, datasetCounts)).toLowerCase();
+    const pipelineTag = PIPELINE_TAG_BY_TASK[task] || "object-detection";
+
+    const modelIndexMetrics = buildModelIndexMetrics(summary.metrics || {});
+    const tags = buildTags(summary.config, task);
+
+    const frontmatterYaml = buildFrontmatterYaml({
+        pipelineTag,
+        tags,
+        modelIndex: {
+            name: runName,
+            taskType: pipelineTag,
+            datasetName: options.projectName || (summary.config && summary.config.project) || runName,
+            metrics: modelIndexMetrics
+        }
+    });
+
+    const body = buildModelCardBody({
+        runName,
+        runDir,
+        summary,
+        classNames,
+        classSource,
+        datasetCounts,
+        task,
+        modelIndexMetrics
+    });
+
+    const markdown = `---\n${frontmatterYaml}---\n\n${body}`;
+    const modelCardPath = path.join(runDir, "MODEL_CARD.md");
+    fs.writeFileSync(modelCardPath, markdown, "utf8");
+
+    return {
+        modelCardPath,
+        frontmatter: { library_name: "ultralytics", pipeline_tag: pipelineTag, tags },
+        markdown,
+        summary
+    };
+}
+
 module.exports = {
     generateRunSummary,
     generateSingleRunSummary,
@@ -1023,6 +1370,7 @@ module.exports = {
     listAvailableRuns,
     buildRunDocumentContext,
     persistCustomSummary,
+    generateModelCard,
     parseYamlSimple,
     parseResultsCsvStream
 };

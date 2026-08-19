@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const app = require("../app");
 const { runSandboxedPython, sanitizeCode } = require("../utils/sandboxedPythonRunner");
-const { generateRunSummary, listAvailableRuns, buildRunDocumentContext, persistCustomSummary } = require("../utils/runSummaryGenerator");
+const { generateRunSummary, listAvailableRuns, buildRunDocumentContext, persistCustomSummary, generateModelCard } = require("../utils/runSummaryGenerator");
 
 describe("Sandboxed Python Execution Runner", () => {
     test("sanitizes forbidden python code patterns", () => {
@@ -193,6 +193,102 @@ describe("Run Summary Generator & Discovery", () => {
         } finally {
             fs.rmSync(fixture, { recursive: true, force: true });
         }
+    });
+});
+
+describe("Model Card Generator", () => {
+    const cardRunDir = path.join(__dirname, "tmp_model_card_run");
+
+    beforeAll(() => {
+        fs.mkdirSync(path.join(cardRunDir, "images", "train"), { recursive: true });
+        fs.mkdirSync(path.join(cardRunDir, "images", "val"), { recursive: true });
+        fs.mkdirSync(path.join(cardRunDir, "weights"), { recursive: true });
+
+        fs.writeFileSync(
+            path.join(cardRunDir, "args.yaml"),
+            "task: detect\nmode: train\nmodel: yolov8n.pt\nepochs: 50\nbatch: 16\ndata: coco_classes.yaml",
+            "utf8"
+        );
+        fs.writeFileSync(
+            path.join(cardRunDir, "coco_classes.yaml"),
+            "# Train/val/test sets\npath: /runs/example\ntrain: images/train\nval: images/val\ntest: \n\n# Classes (COCO classes)\nnames:\n  0: person\n  1: car\n  2: dog\n",
+            "utf8"
+        );
+        fs.writeFileSync(
+            path.join(cardRunDir, "results.csv"),
+            "epoch, metrics/mAP50(B), metrics/mAP50-95(B), metrics/precision(B), metrics/recall(B)\n1, 0.40, 0.20, 0.55, 0.50\n2, 0.70, 0.45, 0.75, 0.68\n3, 0.91, 0.60, 0.88, 0.80",
+            "utf8"
+        );
+
+        for (let i = 0; i < 3; i++) {
+            fs.writeFileSync(path.join(cardRunDir, "images", "train", `train_${i}.jpg`), "img", "utf8");
+        }
+        fs.writeFileSync(path.join(cardRunDir, "images", "val", "val_0.jpg"), "img", "utf8");
+        fs.writeFileSync(path.join(cardRunDir, "weights", "best.pt"), "checkpoint", "utf8");
+    });
+
+    afterAll(() => {
+        if (fs.existsSync(cardRunDir)) {
+            fs.rmSync(cardRunDir, { recursive: true, force: true });
+        }
+    });
+
+    test("generates MODEL_CARD.md with Hugging Face compatible YAML frontmatter", async () => {
+        const result = await generateModelCard(cardRunDir, { runName: "example_run" });
+
+        const modelCardPath = path.join(cardRunDir, "MODEL_CARD.md");
+        expect(result.modelCardPath).toBe(modelCardPath);
+        expect(fs.existsSync(modelCardPath)).toBe(true);
+
+        const content = fs.readFileSync(modelCardPath, "utf8");
+        expect(content.startsWith("---\n")).toBe(true);
+
+        const frontmatterEnd = content.indexOf("\n---\n", 4);
+        const frontmatter = content.slice(4, frontmatterEnd);
+        const body = content.slice(frontmatterEnd + 5);
+
+        expect(frontmatter).toContain('library_name: "ultralytics"');
+        expect(frontmatter).toContain('pipeline_tag: "object-detection"');
+        expect(frontmatter).toContain('- "yolo"');
+        expect(frontmatter).toContain('- "yolov8n"');
+        expect(frontmatter).toContain("model-index:");
+        expect(frontmatter).toContain('type: "mAP50"');
+        expect(frontmatter).toContain("value: 0.91");
+
+        expect(result.frontmatter.pipeline_tag).toBe("object-detection");
+        expect(result.frontmatter.library_name).toBe("ultralytics");
+        expect(result.frontmatter.tags).toEqual(expect.arrayContaining(["ultralytics", "yolo", "detect", "yolov8n"]));
+
+        expect(body).toContain("# example_run");
+        expect(body).toContain("**Classes (3)**: `person`, `car`, `dog`");
+        expect(body).toContain("train: 3, val: 1, test: 0");
+        expect(body).toContain("mAP50 | 91.00%");
+        expect(body).toContain("weights/best.pt");
+        expect(body).toContain("from ultralytics import YOLO");
+    });
+
+    test("falls back gracefully when no dataset yaml or split directories are present", async () => {
+        const bareDir = path.join(__dirname, "tmp_model_card_bare");
+        fs.mkdirSync(bareDir, { recursive: true });
+        fs.writeFileSync(path.join(bareDir, "args.yaml"), "task: classify\nmodel: yolov8n-cls.pt\nepochs: 5", "utf8");
+        fs.writeFileSync(path.join(bareDir, "results.csv"), "epoch, metrics/accuracy_top1\n1, 0.80\n2, 0.92", "utf8");
+
+        try {
+            const result = await generateModelCard(bareDir, { runName: "bare_run" });
+            const content = fs.readFileSync(result.modelCardPath, "utf8");
+
+            expect(content).toContain('pipeline_tag: "image-classification"');
+            expect(content).toContain("not found in run artifacts");
+            expect(content).toContain("Top-1 Accuracy");
+        } finally {
+            fs.rmSync(bareDir, { recursive: true, force: true });
+        }
+    });
+
+    test("throws for a non-existent run directory", async () => {
+        await expect(generateModelCard(path.join(__dirname, "does_not_exist_run"))).rejects.toThrow(
+            /Run directory does not exist/
+        );
     });
 });
 
