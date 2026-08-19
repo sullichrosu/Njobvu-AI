@@ -6,7 +6,24 @@ const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
-const UNLABELED_CLASS = require("../../utils/unlabeledClass");
+
+// Draws a uniform random sample of `count` images (without replacement) from `images`,
+// used to cap how many unlabeled images are pulled in as background/negative examples.
+function sampleImages(images, count) {
+    if (count >= images.length) {
+        return images.slice();
+    }
+    if (count <= 0) {
+        return [];
+    }
+
+    const pool = images.slice();
+    for (let i = pool.length - 1; i > pool.length - 1 - count; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(pool.length - count);
+}
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -480,27 +497,44 @@ async function yoloRun(req, res) {
         );
     }
 
-    // Whether unlabeled images (no rows in Labels) should be included as
-    // background/negative examples. Absent selected_classes means no filter was
-    // applied at all (legacy behavior: include everything); otherwise it's included
-    // only if the "Unlabeled" pseudo-class checkbox was checked.
-    const includeUnlabeled =
-        !selectedClassesList ||
-        selectedClassesList.length === 0 ||
-        selectedClassesList.includes(UNLABELED_CLASS);
+    // How many unlabeled images (no rows in Labels) to sample in as background/negative
+    // examples, from the "Unlabeled" range slider (0 to the project's total unlabeled
+    // image count). Absent/blank means the slider wasn't submitted at all (legacy
+    // callers/API integrations): keep the old behavior of including every unlabeled image.
+    const rawUnlabeledCount = req.body.unlabeled_count ?? req.body.unlabeledCount;
+    const unlabeledCountProvided =
+        rawUnlabeledCount !== undefined && rawUnlabeledCount !== null && rawUnlabeledCount !== "";
+    const requestedUnlabeledCount = parseInt(rawUnlabeledCount, 10);
 
     // Parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
+    let includedUnlabeledCount = 0;
 
-    if (!includeUnlabeled && ["detect", "segment", "obb"].includes(yoloTask)) {
+    if (["detect", "segment", "obb"].includes(yoloTask)) {
         try {
             const unlabeledResult = await queries.project.getUnlabeledImages(projectPath);
-            const unlabeledImageNames = new Set(
-                (unlabeledResult.rows || []).map((row) => row.IName),
-            );
+            const unlabeledImages = unlabeledResult.rows || [];
+
+            const sampledUnlabeled = unlabeledCountProvided
+                ? sampleImages(
+                      unlabeledImages,
+                      Math.max(
+                          0,
+                          Math.min(
+                              unlabeledImages.length,
+                              Number.isFinite(requestedUnlabeledCount) ? requestedUnlabeledCount : 0,
+                          ),
+                      ),
+                  )
+                : unlabeledImages;
+
+            includedUnlabeledCount = sampledUnlabeled.length;
+            const sampledNames = new Set(sampledUnlabeled.map((row) => row.IName));
+            const unlabeledImageNames = new Set(unlabeledImages.map((row) => row.IName));
+
             targetImages = targetImages.filter(
-                (img) => !unlabeledImageNames.has(img.IName),
+                (img) => !unlabeledImageNames.has(img.IName) || sampledNames.has(img.IName),
             );
         } catch (err) {
             global.logger.error(err);
@@ -913,7 +947,7 @@ async function yoloRun(req, res) {
         val_percent: valPct,
         test_percent: testPct,
         selected_classes: selectedClassesList ? selectedClassesList.join(", ") : null,
-        include_unlabeled: includeUnlabeled,
+        unlabeled_count: includedUnlabeledCount,
         max_images: Number.isFinite(maxImages) ? maxImages : null,
         batch,
         subdiv,

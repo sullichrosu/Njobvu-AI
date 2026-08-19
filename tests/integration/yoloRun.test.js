@@ -30,7 +30,8 @@ jest.mock('../../queries/queries', () => ({
 }));
 
 const app = require('../../app');
-const UNLABELED_CLASS = require('../../utils/unlabeledClass');
+
+const UNLABELED_NAMES = ['img7.jpg', 'img8.jpg', 'img9.jpg', 'img10.jpg'];
 
 describe('YOLO Run API', () => {
   beforeEach(() => {
@@ -67,7 +68,7 @@ describe('YOLO Run API', () => {
     });
 
     queries.project.getUnlabeledImages.mockResolvedValue({
-      rows: [{ IName: 'img9.jpg' }, { IName: 'img10.jpg' }],
+      rows: UNLABELED_NAMES.map((IName) => ({ IName })),
     });
   });
 
@@ -100,7 +101,7 @@ describe('YOLO Run API', () => {
     expect(response.body).toEqual({ Success: 'YOLO Training Started' });
   });
 
-  test('excludes unlabeled images from training when the Unlabeled pseudo-class is not selected', async () => {
+  function postYoloRun(overrides) {
     const readNames = [];
     jest.spyOn(fs, 'readFileSync').mockImplementation((p) => {
       readNames.push(path.basename(p));
@@ -113,7 +114,7 @@ describe('YOLO Run API', () => {
     jest.spyOn(fs, 'existsSync').mockReturnValue(true);
     jest.spyOn(fs.promises, 'symlink').mockResolvedValue();
 
-    const response = await request(app)
+    return request(app)
       .post('/yolo-run')
       .set('Cookie', ['Username=testuser'])
       .send({
@@ -124,44 +125,49 @@ describe('YOLO Run API', () => {
         TrainingPercent: 70,
         weights: 'best.pt',
         yolovx_path: '/usr/local/bin/yolo',
-      });
+        ...overrides,
+      })
+      .then((response) => ({ response, readNames }));
+  }
+
+  test('unlabeled_count of 0 excludes every unlabeled image from training', async () => {
+    const { response, readNames } = await postYoloRun({ unlabeled_count: 0 });
 
     expect(response.status).toBe(200);
     expect(queries.project.getUnlabeledImages).toHaveBeenCalledWith(
       expect.stringContaining('testuser-testproj'),
     );
-    expect(readNames).toEqual(expect.arrayContaining(['img1.jpg', 'img8.jpg']));
-    expect(readNames).not.toEqual(expect.arrayContaining(['img9.jpg', 'img10.jpg']));
+    expect(readNames).toEqual(expect.arrayContaining(['img1.jpg']));
+    expect(readNames).not.toEqual(expect.arrayContaining(UNLABELED_NAMES));
   });
 
-  test('includes unlabeled images as background examples when the Unlabeled pseudo-class is selected', async () => {
-    const readNames = [];
-    jest.spyOn(fs, 'readFileSync').mockImplementation((p) => {
-      readNames.push(path.basename(p));
-      return Buffer.from('fake image content');
-    });
-    jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    jest.spyOn(fs, 'appendFile').mockImplementation((p, data, cb) => { if (cb) cb(null); });
-    jest.spyOn(fs, 'writeFile').mockImplementation((p, data, cb) => { if (cb) cb(null); });
-    jest.spyOn(fs, 'copyFile').mockImplementation((src, dest, cb) => { if (cb) cb(null); });
-    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-    jest.spyOn(fs.promises, 'symlink').mockResolvedValue();
-
-    const response = await request(app)
-      .post('/yolo-run')
-      .set('Cookie', ['Username=testuser'])
-      .send({
-        PName: 'testproj',
-        Admin: 'testuser',
-        yolo_task: 'detect',
-        selected_classes: JSON.stringify(['car', 'person', 'dog', UNLABELED_CLASS]),
-        TrainingPercent: 70,
-        weights: 'best.pt',
-        yolovx_path: '/usr/local/bin/yolo',
-      });
+  test('a partial unlabeled_count samples exactly that many unlabeled images', async () => {
+    const { response, readNames } = await postYoloRun({ unlabeled_count: 2 });
 
     expect(response.status).toBe(200);
-    expect(queries.project.getUnlabeledImages).not.toHaveBeenCalled();
-    expect(readNames).toEqual(expect.arrayContaining(['img9.jpg', 'img10.jpg']));
+    const sampledUnlabeled = readNames.filter((name) => UNLABELED_NAMES.includes(name));
+    expect(sampledUnlabeled).toHaveLength(2);
+    expect(readNames).toEqual(expect.arrayContaining(['img1.jpg']));
+  });
+
+  test('unlabeled_count equal to the total includes every unlabeled image', async () => {
+    const { response, readNames } = await postYoloRun({ unlabeled_count: UNLABELED_NAMES.length });
+
+    expect(response.status).toBe(200);
+    expect(readNames).toEqual(expect.arrayContaining(UNLABELED_NAMES));
+  });
+
+  test('unlabeled_count above the total clamps to the full unlabeled set', async () => {
+    const { response, readNames } = await postYoloRun({ unlabeled_count: UNLABELED_NAMES.length + 50 });
+
+    expect(response.status).toBe(200);
+    expect(readNames).toEqual(expect.arrayContaining(UNLABELED_NAMES));
+  });
+
+  test('omitting unlabeled_count entirely (legacy callers) includes every unlabeled image by default', async () => {
+    const { response, readNames } = await postYoloRun({});
+
+    expect(response.status).toBe(200);
+    expect(readNames).toEqual(expect.arrayContaining(UNLABELED_NAMES));
   });
 });

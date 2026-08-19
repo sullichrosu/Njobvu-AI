@@ -156,9 +156,14 @@
 											</div>
 										</div>
 										<!-- Class Subset Selection -->
+										<%
+											var realClasses = (typeof classes !== 'undefined') ? classes.filter(function (c) { return c.CName !== unlabeledClass; }) : [];
+											var unlabeledEntry = (typeof classes !== 'undefined') ? classes.find(function (c) { return c.CName === unlabeledClass; }) : null;
+											var unlabeledImageCount = unlabeledEntry ? (unlabeledEntry.imageCount || 0) : 0;
+										%>
 										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
 											<h5><label>Class Subset Selection</label></h5>
-											<p class="text-muted small">Select which classes to include in training. "Unlabeled" trains on images with no labels as background/negative examples:</p>
+											<p class="text-muted small">Select which classes to include in training:</p>
 											<div class="mb-2">
 												<button type="button" class="btn btn-sm btn-outline-primary" id="selectAllClasses">Select All</button>
 												<button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllClasses">Deselect All</button>
@@ -168,17 +173,25 @@
 												</span>
 											</div>
 											<div class="class-selection-container" style="max-height: 150px; overflow-y: auto;">
-												<% if (typeof classes !== 'undefined' && classes.length > 0) { %>
-													<% for (var i = 0; i < classes.length; i++) { %>
+												<% if (realClasses.length > 0) { %>
+													<% for (var i = 0; i < realClasses.length; i++) { %>
 														<div class="form-check form-check-inline mr-3 my-1">
-															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].imageCount || 0 %>" checked>
-															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName === unlabeledClass ? 'Unlabeled' : classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
+															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= realClasses[i].CName %>" data-image-count="<%= realClasses[i].imageCount || 0 %>" checked>
+															<label class="form-check-label" for="class_<%= i %>"><%= realClasses[i].CName %> <span class="text-muted small">(<%= realClasses[i].imageCount || 0 %> images)</span></label>
 														</div>
 													<% } %>
 												<% } else { %>
 													<span class="text-muted">No classes defined in project.</span>
 												<% } %>
 											</div>
+										</div>
+
+										<!-- Unlabeled Image Sampling -->
+										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
+											<h5><label for="unlabeledCount">Unlabeled Images</label></h5>
+											<p class="text-muted small">Unlabeled images (no labels) are used as background/negative examples during training. Choose how many of the project's <%= unlabeledImageCount %> unlabeled images to include:</p>
+											<input type="range" id="unlabeledCount" name="unlabeled_count" min="0" max="<%= unlabeledImageCount %>" value="<%= unlabeledImageCount %>" step="1" style="width: 100%;" <%= unlabeledImageCount === 0 ? 'disabled' : '' %>>
+											<span id="unlabeledCountLabel"><%= unlabeledImageCount %></span> / <%= unlabeledImageCount %> images
 										</div>
 
 										<div class="form-row">
@@ -362,6 +375,15 @@
 						minClassImagesInput.addEventListener("input", applyMinClassImagesClamp);
 					}
 
+					// Unlabeled image count slider readout
+					var unlabeledCountInput = document.getElementById("unlabeledCount");
+					var unlabeledCountLabel = document.getElementById("unlabeledCountLabel");
+					if (unlabeledCountInput && unlabeledCountLabel) {
+						unlabeledCountInput.addEventListener("input", function() {
+							unlabeledCountLabel.innerText = unlabeledCountInput.value;
+						});
+					}
+
 					// Split ratio summary update
 					function updateRatioSummary() {
 						var train = parseInt(document.getElementById("TrainingRange").value) || 0;
@@ -405,6 +427,7 @@
 						formData.append("TestPercent", document.getElementById("TestRange").value);
 						formData.append("max_images", document.getElementById("max_images").value);
 						formData.append("selected_classes", JSON.stringify(selectedClasses));
+						formData.append("unlabeled_count", unlabeledCountInput ? unlabeledCountInput.value : "0");
 						formData.append("batch", document.getElementById("batch").value);
 						formData.append("subdiv", document.getElementById("subdiv").value);
 						formData.append("yolovx_path", document.getElementById("Yolo").value);
