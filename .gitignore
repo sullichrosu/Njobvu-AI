@@ -18,3 +18,5 @@ config.json
 .venv/
 **/**/__pycache__/
 *.log
+.zed/
+.DS_Store

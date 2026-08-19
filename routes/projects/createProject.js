@@ -1,11 +1,45 @@
 const fs = require("fs");
-const { exec } = require("child_process");
-const ffmpeg = require("ffmpeg");
+const { exec, execFile } = require("child_process");
 const StreamZip = require("node-stream-zip");
 const queries = require("../../queries/queries");
 const rimraf = require("../../public/libraries/rimraf");
 const { Client } = require("../../queries/client");
-const { nextVideoFramePrefix } = require("../../utils/videoFramePrefix");
+const { nextVideoFramePrefix, zeroPadExtractedFrames } = require("../../utils/videoFramePrefix");
+
+// Deliberately not promisify(execFile) at module load time: several test
+// suites mock `child_process` with only `{ exec }`, and promisifying an
+// undefined `execFile` there would throw as soon as this module (pulled in
+// by routes/api.js) is required, well before any test that actually
+// exercises video upload runs.
+function execFileAsync(file, args) {
+    return new Promise((resolve, reject) => {
+        execFile(file, args, (err, stdout, stderr) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve({ stdout, stderr });
+            }
+        });
+    });
+}
+
+const VIDEO_EXTENSIONS = [".mp4", ".avi", ".mov"];
+function isVideoFileName(name) {
+    const lower = name.toLowerCase();
+    return VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+// readdirSync does not guarantee any particular order, and in practice
+// returns names in filesystem/lexicographic order, not the numeric order of
+// the frame numbers ffmpeg stamped on them (`prefix_1.jpg`, `prefix_2.jpg`,
+// ..., `prefix_10.jpg`). Sorting numerically here keeps frames inserted into
+// the DB -- and therefore their display order -- matching video playback
+// order instead of "_1, _10, _11, ..., _2, _20, ...".
+function sortFileNamesNaturally(names) {
+    return names.sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+    );
+}
 
 async function createProject(req, res) {
     const files = req.files || {};
@@ -118,7 +152,59 @@ async function createProject(req, res) {
                 }
             });
 
-            const files = fs.readdirSync(imagesPath);
+            // A zip can mix images and videos (e.g. camera exports dropped
+            // straight into one archive). Pull any videos out and run them
+            // through ffmpeg first so their extracted frames land in
+            // imagesPath alongside the archive's images before the loop
+            // below adds everything to the project -- otherwise the raw
+            // video files would get added to the DB as if they were images.
+            const extractedEntries = fs.readdirSync(imagesPath);
+            const videoFiles = [];
+
+            for (const entry of extractedEntries) {
+                if (entry === "__MACOSX" || entry === "blob") {
+                    continue;
+                }
+
+                if (entry.endsWith(".zip")) {
+                    fs.unlink(imagesPath + "/" + entry, () => { });
+                    continue;
+                }
+
+                if (isVideoFileName(entry)) {
+                    videoFiles.push(entry);
+                }
+            }
+
+            if (videoFiles.length > 0) {
+                let frameStep = Number(frameRate);
+                if (!Number.isFinite(frameStep) || frameStep <= 0) {
+                    frameStep = 30;
+                }
+                frameStep = Math.round(frameStep);
+
+                const usedFramePrefixes = new Set();
+
+                for (const videoFile of videoFiles) {
+                    const videoPath = imagesPath + "/" + videoFile;
+                    const framePrefix = nextVideoFramePrefix(videoFile, usedFramePrefixes);
+                    const outputPattern = imagesPath + "/" + framePrefix + "_%d.jpg";
+
+                    await execFileAsync("ffmpeg", [
+                        "-y",
+                        "-i", videoPath,
+                        "-fps_mode", "passthrough",
+                        "-vf", `select=not(mod(n\\,${frameStep}))`,
+                        outputPattern,
+                    ]);
+
+                    zeroPadExtractedFrames(imagesPath, framePrefix);
+
+                    fs.unlinkSync(videoPath);
+                }
+            }
+
+            const files = sortFileNamesNaturally(fs.readdirSync(imagesPath));
 
             for (var i = 0; i < files.length; i++) {
                 if (files[i] == "__MACOSX") {
@@ -168,7 +254,17 @@ async function createProject(req, res) {
         // that case) -- each gets its own frame prefix below so frame numbers
         // restarting at 1 per video never collide across videos.
         const uploadVideos = Array.isArray(uploadVideo) ? uploadVideo : [uploadVideo];
-        frameRate *= 30;
+
+        // README.md documents frame_rate as "the number of frames you wish
+        // your video to be divided by" -- i.e. a literal divisor (every_n_frames),
+        // not seconds multiplied by an assumed 30fps source. The old `* 30`
+        // here turned the prompt's own example value (30) into a divisor of
+        // 900, so any video under 900 frames produced only its first frame.
+        let frameStep = Number(frameRate);
+        if (!Number.isFinite(frameStep) || frameStep <= 0) {
+            frameStep = 30;
+        }
+        frameStep = Math.round(frameStep);
 
         const usedFramePrefixes = new Set();
 
@@ -179,33 +275,42 @@ async function createProject(req, res) {
                 await video.mv(videoPath);
 
                 const framePrefix = nextVideoFramePrefix(video.name, usedFramePrefixes);
+                const outputPattern = imagesPath + "/" + framePrefix + "_%d.jpg";
 
-                const videoHandle = await new ffmpeg(videoPath);
+                // Shell out to ffmpeg directly (execFile, so file names never pass
+                // through a shell) instead of the abandoned `ffmpeg` npm package:
+                // that package hardcodes a `-vsync 0` flag that modern ffmpeg
+                // builds no longer accept, which made every frame extraction fail
+                // silently and left projects with zero images. `-fps_mode
+                // passthrough` is `-vsync 0`'s replacement -- it keeps exactly the
+                // frames the `select` filter picks instead of padding the output
+                // back up to a constant frame rate.
+                await execFileAsync("ffmpeg", [
+                    "-y",
+                    "-i", videoPath,
+                    "-fps_mode", "passthrough",
+                    "-vf", `select=not(mod(n\\,${frameStep}))`,
+                    outputPattern,
+                ]);
 
-                await videoHandle.fnExtractFrameToJPG(imagesPath, {
-                    every_n_frames: frameRate,
-                    file_name: framePrefix,
-                });
+                zeroPadExtractedFrames(imagesPath, framePrefix);
             }
 
             await cleanFiles();
         } catch (e) {
-            global.logger.debug("ERROR " + e);
+            global.logger.error("Error extracting video frames: " + e);
+            return res.status(500).send("Error extracting video frames");
         }
 
         async function cleanFiles() {
-            let files = fs.readdirSync(imagesPath);
+            let files = sortFileNamesNaturally(fs.readdirSync(imagesPath));
 
             for (let i = 0; i < files.length; i++) {
                 if (files[i] == "__MACOSX") {
                     continue;
                 }
 
-                if (
-                    files[i].endsWith(".mp4") ||
-                    files[i].endsWith(".avi") ||
-                    files[i].endsWith(".mov")
-                ) {
+                if (isVideoFileName(files[i])) {
                     fs.unlink(imagesPath + "/" + files[i], () => { });
                     continue;
                 }

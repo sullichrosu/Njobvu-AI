@@ -77,7 +77,7 @@ Run Labeling-Tool.exe in the root directory of the Labeling Tool
 4) Upload a zip file of images or a single video file. Do NOT upload a folder.
 5) Add your classes. These are comma separated names. "cat,dog,large mouse" will be entered as [cat][dog][large mouse].
 6) Hit submit to create your project and upload your zipfile. When the upload is done, you will be redirected to the home page.
-7) If you selected a video file, fill the incoming prompt with the number of frames you wish your video to be divided by.
+7) If you selected a video file, fill the incoming prompt with the number of frames you wish your video to be divided by (i.e. how many frames to skip between each extracted frame). Enter 1 to extract every frame of the video.
 
 ![alt text](public/images/CreatePage.png)
 

@@ -19,6 +19,7 @@ jest.mock('child_process', () => {
   };
   return {
     exec: jest.fn(),
+    execFile: jest.fn((file, args, callback) => callback(null, '', '')),
     spawn: jest.fn().mockReturnValue(mProcess),
   };
 });
@@ -311,13 +312,11 @@ describe('Project Routes - Basic Tests', () => {
     };
 
     const extractFrameCalls = [];
-    const ffmpeg = require('ffmpeg');
-    ffmpeg.mockImplementation(() => Promise.resolve({
-      fnExtractFrameToJPG: jest.fn((destination, options) => {
-        extractFrameCalls.push(options);
-        return Promise.resolve();
-      }),
-    }));
+    const childProcess = require('child_process');
+    childProcess.execFile.mockImplementation((file, args, callback) => {
+      extractFrameCalls.push(args);
+      callback(null, '', '');
+    });
 
     const res = await request(app)
       .post('/createP')
@@ -331,15 +330,80 @@ describe('Project Routes - Basic Tests', () => {
     expect(res.statusCode).toBe(200);
     expect(extractFrameCalls).toHaveLength(2);
 
-    const prefixes = extractFrameCalls.map((options) => options.file_name);
-    expect(new Set(prefixes).size).toBe(2);
-    expect(prefixes[0]).toBe('video');
-    expect(prefixes[1]).toBe('video_1');
+    // Each video's ffmpeg invocation gets its own output pattern
+    // (imagesPath/<prefix>_%d.jpg) so frame numbers restarting at 1 per
+    // video never collide on disk across videos.
+    const outputPatterns = extractFrameCalls.map((args) => args[args.length - 1]);
+    expect(new Set(outputPatterns).size).toBe(2);
+    expect(outputPatterns[0]).toContain('/video_%d.jpg');
+    expect(outputPatterns[1]).toContain('/video_001_%d.jpg');
+  });
 
-    // jest.clearAllMocks() (afterEach) keeps a mock's implementation, only
-    // its call history is wiped -- reset it fully so this test's fake ffmpeg
-    // doesn't leak into later tests in this file.
-    ffmpeg.mockReset();
+  /*
+  * A zip can contain a mix of images and videos (e.g. camera exports dropped
+  * straight into one archive). Videos found among the extracted contents
+  * should be run through ffmpeg for frame extraction instead of being added
+  * to the project as if they were images, while ordinary images in the same
+  * zip are still added directly.
+  */
+  it('extracts frames from videos found inside an uploaded images zip, alongside its images', async () => {
+    global.mockFiles = {
+      upload_images: {
+        name: 'archive.zip',
+        mv: jest.fn().mockResolvedValue(true),
+      },
+      upload_video: null,
+      upload_bootstrap: null,
+    };
+
+    const fs = require('fs');
+    const originalReaddirSync = fs.readdirSync;
+
+    let readdirCall = 0;
+    fs.readdirSync = jest.fn().mockImplementation(() => {
+      readdirCall += 1;
+      // 1st call: the zip's raw extracted contents (before video handling).
+      if (readdirCall === 1) {
+        return ['image1.jpg', 'clip.mp4'];
+      }
+      // 2nd call: after ffmpeg extraction + source video removal, the
+      // directory holds the original image plus the video's frames.
+      return ['image1.jpg', 'clip_Frame_1.jpg', 'clip_Frame_2.jpg'];
+    });
+
+    const extractFrameCalls = [];
+    const childProcess = require('child_process');
+    childProcess.execFile.mockImplementation((file, args, callback) => {
+      extractFrameCalls.push(args);
+      callback(null, '', '');
+    });
+
+    const queries = require('../../queries/queries');
+    queries.project.addImages.mockClear();
+
+    const res = await request(app)
+      .post('/createP')
+      .send({
+        project_name: 'test-project-zip-mixed',
+        input_classes: 'class1,class2',
+        frame_rate: '1',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+
+    // The video was routed through ffmpeg, not added directly as an image.
+    expect(extractFrameCalls).toHaveLength(1);
+    expect(extractFrameCalls[0]).toContain('-i');
+    expect(extractFrameCalls[0]).toContainEqual(expect.stringContaining('clip.mp4'));
+
+    // Both the untouched image and the video's extracted frames get added;
+    // the original video file itself is never added as an image.
+    const addedNames = queries.project.addImages.mock.calls.map((call) => call[1]);
+    expect(addedNames).toEqual(['clip_Frame_1.jpg', 'clip_Frame_2.jpg', 'image1.jpg']);
+    expect(addedNames).not.toContain('clip.mp4');
+
+    fs.readdirSync = originalReaddirSync;
   });
 
   /*
