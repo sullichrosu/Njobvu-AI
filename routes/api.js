@@ -123,9 +123,14 @@ api.post("/api/runs/persist-summary", asyncHandler(handlePersistCustomSummary));
 
 // INFERENCE ROUTES
 api.post("/yolo-inf", asyncHandler(yoloInference));
+api.post("/api/inference/yolo", asyncHandler(yoloInference));
 api.post("/inception-inf", asyncHandler(inceptionInference));
+api.post("/api/inference/inception", asyncHandler(inceptionInference));
 api.post("/megadetector-inf", asyncHandler(megadetectorInference));
+api.post("/api/inference/megadetector", asyncHandler(megadetectorInference));
 api.post("/upload_inference_file", asyncHandler(uploadInferenceFile));
+api.post("/uploadInferenceFile", asyncHandler(uploadInferenceFile));
+api.post("/api/inference/upload-file", asyncHandler(uploadInferenceFile));
 api.get("/runs/:runId/images", asyncHandler(getRunImages));
 api.post("/inference/add-inference-run-to-dataset", asyncHandler(addYoloInferenceToDataset));
 
@@ -136,6 +141,8 @@ api.post("/signup", asyncHandler(signup));
 api.post("/addUser", asyncHandler(addUser));
 api.post("/deleteUser", asyncHandler(deleteUser));
 api.post("/changeUname", asyncHandler(changeUserName));
+api.post("/changeUserName", asyncHandler(changeUserName));
+api.post("/api/user/change-username", asyncHandler(changeUserName));
 api.post("/changePassword", asyncHandler(changePassword));
 
 api.post("/changeFname", asyncHandler(changeFname));
@@ -144,24 +151,32 @@ api.post("/changeEmail", asyncHandler(changeEmail));
 
 // TRAINING ROUTES
 api.post("/api/createC", asyncHandler(createClassification));
+api.post("/api/training/create-classification", asyncHandler(createClassification));
 api.post("/addClasses", asyncHandler(addClasses));
 api.post("/upload_weights", asyncHandler(uploadWeights));
+api.post("/uploadWeights", asyncHandler(uploadWeights));
 api.post("/yolovx", asyncHandler(yolovx));
 api.post("/upload_pre_weights", asyncHandler(uploadPreWeights));
+api.post("/uploadPreWeights", asyncHandler(uploadPreWeights));
 api.post("/yolo-run", asyncHandler(yoloRun));
 api.post("/deleteRun", asyncHandler(deleteRun));
 api.post("/python", asyncHandler(python));
 api.post("/darknet", asyncHandler(darknet));
 api.post("/remove_path", asyncHandler(removePath));
+api.post("/removePath", asyncHandler(removePath));
 api.post("/remove_darknet_path", asyncHandler(removeDarknetPath));
+api.post("/removeDarknetPath", asyncHandler(removeDarknetPath));
 api.post("/remove_weights", asyncHandler(removeWeights));
+api.post("/removeWeights", asyncHandler(removeWeights));
 api.post("/remove_script", asyncHandler(removeScript));
+api.post("/removeScript", asyncHandler(removeScript));
 api.post("/run", asyncHandler(run));
 api.post("/updateClass", asyncHandler(updateClass));
 api.post("/deleteClass", asyncHandler(deleteClass));
 
 // PROJECT ROUTES
 api.post("/createP", asyncHandler(createProject));
+api.post("/api/projects/create", asyncHandler(createProject));
 api.post("/updateProject", asyncHandler(updateProject));
 api.post("/deleteProject", asyncHandler(deleteProject));
 api.post("/addImages", asyncHandler(addImages));

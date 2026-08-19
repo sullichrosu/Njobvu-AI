@@ -66,43 +66,81 @@ app.use("/", api);
 app.get("/api/v2/help", asyncHandler(getHelpApi));
 app.get("/api/help", asyncHandler(getHelpApi));
 
+// Auth & Core Page Routes
 app.get("/", asyncHandler(getLoginPage));
+app.get("/login", asyncHandler(getLoginPage));
 app.get("/signup", asyncHandler(getSignupPage));
 app.get("/home", asyncHandler(getHomePage));
+app.get("/user", asyncHandler(getUserPage));
 app.get("/help", asyncHandler(getHelpPage));
+app.get("/error", asyncHandler(getErrorPage));
+
+// Project Page Routes
 app.get("/create", asyncHandler(getCreatePage));
+app.get("/projects/create", asyncHandler(getCreatePage));
+app.get("/project", asyncHandler(getProjectPage));
 app.get("/annotate", asyncHandler(getAnnotatePage));
 app.get("/review", asyncHandler(getReviewPage));
-app.get("/project", asyncHandler(getProjectPage));
-app.get("/config", asyncHandler(getConfigPage));
-app.get("/config/projSettings", asyncHandler(getProjectSettingsPage));
-app.get("/config/classSettings", asyncHandler(getClassSettingsPage));
-app.get("/config/accessSettings", asyncHandler(getAccessSettingsPage));
-app.get("/config/imageSettings", asyncHandler(getImageSettingsPage));
-app.get("/config/mergeSettings", asyncHandler(getMergeSettingsPage));
-app.get("/download", asyncHandler(getDownloadPage));
 app.get("/labeling", asyncHandler(getLabelingPage));
 app.get("/stats", asyncHandler(getStatsPage));
-app.get("/customTraining", asyncHandler(getCustomTrainingPage));
+app.get("/download", asyncHandler(getDownloadPage));
+
+// Config Page Routes
+app.get("/config", asyncHandler(getConfigPage));
+app.get("/config/projSettings", asyncHandler(getProjectSettingsPage));
+app.get("/config/project-settings", asyncHandler(getProjectSettingsPage));
+app.get("/config/classSettings", asyncHandler(getClassSettingsPage));
+app.get("/config/class-settings", asyncHandler(getClassSettingsPage));
+app.get("/config/accessSettings", asyncHandler(getAccessSettingsPage));
+app.get("/config/access-settings", asyncHandler(getAccessSettingsPage));
+app.get("/config/imageSettings", asyncHandler(getImageSettingsPage));
+app.get("/config/image-settings", asyncHandler(getImageSettingsPage));
+app.get("/config/mergeSettings", asyncHandler(getMergeSettingsPage));
+app.get("/config/merge-settings", asyncHandler(getMergeSettingsPage));
+
+// Training & Inference Page Routes
 app.get("/training", asyncHandler(getTrainingPage));
+app.get("/customTraining", asyncHandler(getCustomTrainingPage));
+app.get("/training/custom", asyncHandler(getCustomTrainingPage));
+app.get("/createClassification", asyncHandler(getClassificationPage));
+app.get("/training/create-classification", asyncHandler(getClassificationPage));
+app.get("/processing", asyncHandler(getProcessingPage));
+
 app.get("/inference", asyncHandler(getInferencePage));
 app.get("/yolo", asyncHandler(getYoloPage));
 app.get("/yolo/yolov3Settings", asyncHandler(getYolo3SettingsPage));
+app.get("/yolo/v3-settings", asyncHandler(getYolo3SettingsPage));
 app.get("/yolo/yolovXSettings", asyncHandler(getYoloXSettingsPage));
+app.get("/yolo/vx-settings", asyncHandler(getYoloXSettingsPage));
 app.get("/yolo/yolovXInferenceSettings", asyncHandler(getYoloXInferenceSettingsPage));
+app.get("/yolo/vx-inference-settings", asyncHandler(getYoloXInferenceSettingsPage));
 app.get("/yolo/yolovXTrainingSettings", asyncHandler(getYoloXTrainingSettingsPage));
+app.get("/yolo/vx-training-settings", asyncHandler(getYoloXTrainingSettingsPage));
+
 app.get("/inference/inceptionSettings", asyncHandler(getInceptionSettingsPage));
+app.get("/inference/inception-settings", asyncHandler(getInceptionSettingsPage));
 app.get("/megadetector/settings", asyncHandler(getMegadetectorSettingsPage));
-app.get("/user", asyncHandler(getUserPage));
+app.get("/inference/megadetector-settings", asyncHandler(getMegadetectorSettingsPage));
+
+// Server Info & Stats Routes
 app.get("/servstats", asyncHandler(getServerStatsPage));
+app.get("/server-stats", asyncHandler(getServerStatsPage));
+app.get("/serverinfo", asyncHandler(getServerInfoPage));
+app.get("/server/info", asyncHandler(getServerInfoPage));
+
+// Validation Page Routes
 app.get("/homeV", asyncHandler(getValidationHomePage));
+app.get("/validation/home", asyncHandler(getValidationHomePage));
 app.get("/projectV", asyncHandler(getValidationProjectPage));
+app.get("/validation/project", asyncHandler(getValidationProjectPage));
 app.get("/labelingV", asyncHandler(getValidationLabelingPage));
+app.get("/validation/labeling", asyncHandler(getValidationLabelingPage));
 app.get("/configV", asyncHandler(getValidationConfigPage));
+app.get("/validation/config", asyncHandler(getValidationConfigPage));
 app.get("/statsV", asyncHandler(getValidationStatsPage));
-app.get("/createClassification", asyncHandler(getClassificationPage));
+app.get("/validation/stats", asyncHandler(getValidationStatsPage));
+
 app.get("/api/gpuinfo");
-app.get("/error", asyncHandler(getErrorPage));
 
 app.get("*", asyncHandler(get404Page));
 
