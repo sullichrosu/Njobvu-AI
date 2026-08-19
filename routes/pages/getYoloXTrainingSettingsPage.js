@@ -1,4 +1,5 @@
 const queries = require("../../queries/queries");
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 async function getYoloXInferencePage(req, res) {
     global.logger.debug("get yolo (ultralytics) X training Setting Page");
@@ -156,9 +157,23 @@ async function getYoloXInferencePage(req, res) {
         global.logger.error(err);
     }
 
+    var classImageCounts = {};
+
+    try {
+        var imageCountsResult = await queries.project.getClassImageCounts(project_path);
+        if (imageCountsResult && imageCountsResult.rows) {
+            imageCountsResult.rows.forEach(function (row) {
+                classImageCounts[row.CName] = row.imageCount;
+            });
+        }
+    } catch (err) {
+        global.logger.error(err);
+    }
+
     results2 = results2.map(function (cls) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
+            imageCount: classImageCounts[cls.CName] || 0,
         });
     });
 
@@ -398,6 +413,7 @@ async function getYoloXInferencePage(req, res) {
         PDescription: results1.PDescription,
         AutoSave: results1.AutoSave,
         classes: results2,
+        unlabeledClass: UNLABELED_CLASS,
         logs: log_files,
         err_file: err_file,
         err_contents: err,

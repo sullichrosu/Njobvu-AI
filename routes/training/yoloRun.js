@@ -6,6 +6,7 @@ const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -479,13 +480,16 @@ async function yoloRun(req, res) {
         );
     }
 
+
+    const includeUnlabeled =
+        !selectedClassesList ||
+        selectedClassesList.length === 0 ||
+        selectedClassesList.includes(UNLABELED_CLASS);
+
     // Parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
 
-    // How many unlabeled images (of those available) to include as background
-    // examples, set via the "Include" slider next to the Unlabeled checkbox.
-    // Not provided means no cap was requested (include all of them).
     let unlabeledCount = parseInt(req.body.unlabeled_count, 10);
 
     if (["detect", "segment", "obb"].includes(yoloTask)) {

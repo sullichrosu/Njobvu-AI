@@ -150,9 +150,6 @@ async function getYoloXSettingsPage(req, res) {
         });
     });
 
-    // Unlabeled images aren't a row in Classes, but training can use them as
-    // background/negative examples, so surface them as a selectable pseudo-class
-    // alongside the real ones instead of always silently including them.
     var unlabeledImageCount = 0;
     try {
         var unlabeledResult = await queries.project.getUnlabeledImages(project_path);

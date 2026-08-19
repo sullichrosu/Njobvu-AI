@@ -342,9 +342,6 @@
 					var unlabeledSlider = document.getElementById("unlabeledCountSlider");
 					var unlabeledCountValue = document.getElementById("unlabeledCountValue");
 
-					// Keeps the unlabeled-count slider in sync with the "Unlabeled" checkbox:
-					// disabled (and pinned to 0) whenever the checkbox is unchecked, since
-					// there's nothing to limit if no unlabeled images are being included.
 					function updateUnlabeledSliderState() {
 						if (!unlabeledSlider) {
 							return;
