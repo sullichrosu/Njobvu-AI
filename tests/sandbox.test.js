@@ -233,12 +233,17 @@ describe("Model Card Generator", () => {
         }
     });
 
-    test("generates MODEL_CARD.md with Hugging Face compatible YAML frontmatter", async () => {
+    test("generates MODEL_CARD.md and MODEL_CARD.png with image model card and YAML frontmatter", async () => {
         const result = await generateModelCard(cardRunDir, { runName: "example_run" });
 
         const modelCardPath = path.join(cardRunDir, "MODEL_CARD.md");
         expect(result.modelCardPath).toBe(modelCardPath);
         expect(fs.existsSync(modelCardPath)).toBe(true);
+
+        const modelCardImagePath = path.join(cardRunDir, "MODEL_CARD.png");
+        expect(result.modelCardImagePath).toBe(modelCardImagePath);
+        expect(fs.existsSync(modelCardImagePath)).toBe(true);
+        expect(fs.statSync(modelCardImagePath).size).toBeGreaterThan(0);
 
         const content = fs.readFileSync(modelCardPath, "utf8");
         expect(content.startsWith("---\n")).toBe(true);
@@ -280,6 +285,11 @@ describe("Model Card Generator", () => {
             expect(content).toContain('pipeline_tag: "image-classification"');
             expect(content).toContain("not found in run artifacts");
             expect(content).toContain("Top-1 Accuracy");
+
+            const imagePath = path.join(bareDir, "MODEL_CARD.png");
+            expect(result.modelCardImagePath).toBe(imagePath);
+            expect(fs.existsSync(imagePath)).toBe(true);
+            expect(fs.statSync(imagePath).size).toBeGreaterThan(0);
         } finally {
             fs.rmSync(bareDir, { recursive: true, force: true });
         }

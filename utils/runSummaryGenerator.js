@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const sharp = require("sharp");
 
 /**
  * Training & Inference Run Output Analysis / Summary Generator
@@ -1301,8 +1302,186 @@ function buildModelCardBody({ runName, runDir, summary, classNames, classSource,
 }
 
 /**
+ * Renders an SVG template with model details, metrics, dataset counts, and framework info
+ * and converts it to a PNG image buffer using sharp.
+ */
+async function generateModelCardImageBuffer({
+    runName,
+    summary,
+    classNames,
+    classSource,
+    datasetCounts,
+    task,
+    pipelineTag,
+    modelIndexMetrics
+}) {
+    const config = (summary && summary.config) || {};
+    const metrics = (summary && summary.metrics) || {};
+
+    const formatMetric = (val) => {
+        if (typeof val === "number" && Number.isFinite(val)) {
+            return `${(val > 1 ? val : val * 100).toFixed(2)}%`;
+        }
+        if (val !== undefined && val !== null && val !== "") {
+            return String(val);
+        }
+        return "N/A";
+    };
+
+    const getMetricVal = (keyPattern) => {
+        for (const [k, v] of Object.entries(metrics)) {
+            if (k.toLowerCase().includes(keyPattern.toLowerCase()) && typeof v === "number") {
+                return v;
+            }
+        }
+        const item = modelIndexMetrics.find((m) => m.type.toLowerCase().includes(keyPattern.toLowerCase()));
+        return item ? item.value : undefined;
+    };
+
+    const map50 = metrics.bestMap50 ?? getMetricVal("map50");
+    const map50_95 = metrics.bestMap50_95 ?? getMetricVal("map50-95");
+    const precision = metrics.precision ?? getMetricVal("precision");
+    const recall = metrics.recall ?? getMetricVal("recall");
+    const accuracy = metrics.accuracy ?? metrics.accuracy_top1 ?? getMetricVal("accuracy");
+
+    const map50Str = formatMetric(map50);
+    const map50_95Str = formatMetric(map50_95);
+    const precisionStr = formatMetric(precision);
+    const recallStr = formatMetric(recall);
+    const accuracyStr = formatMetric(accuracy);
+
+    const modelName = config.model || config.weights || "YOLOv8";
+    const epochs = config.epochs !== undefined ? String(config.epochs) : "N/A";
+    const batch = config.batch !== undefined ? String(config.batch) : "N/A";
+
+    const classCountStr = String(classNames ? classNames.length : 0);
+    const classListStr = classNames && classNames.length > 0
+        ? classNames.slice(0, 8).join(", ") + (classNames.length > 8 ? "..." : "")
+        : "N/A";
+
+    let trainCount = "N/A", valCount = "N/A", testCount = "N/A", totalCount = "0";
+    if (datasetCounts) {
+        trainCount = String(datasetCounts.train);
+        valCount = String(datasetCounts.val);
+        testCount = String(datasetCounts.test);
+        totalCount = String(datasetCounts.total);
+    } else if (summary && summary.imageCount !== undefined) {
+        totalCount = String(summary.imageCount);
+    }
+
+    const esc = (s) => (s ? String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : "");
+
+    const svg = `<svg width="1000" height="720" viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#334155" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="720" rx="16" fill="url(#bgGrad)"/>
+  <rect width="1000" height="8" rx="4" fill="url(#barGrad)"/>
+
+  <text x="40" y="52" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="28" font-weight="700">MODEL CARD</text>
+  <text x="40" y="82" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="16" font-weight="500">${esc(runName)}</text>
+
+  <rect x="730" y="38" width="110" height="28" rx="6" fill="#312e81"/>
+  <text x="785" y="57" fill="#818cf8" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">Ultralytics</text>
+
+  <rect x="850" y="38" width="110" height="28" rx="6" fill="#064e3b"/>
+  <text x="905" y="57" fill="#34d399" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">${esc((task || "detect").toUpperCase())}</text>
+
+  <!-- Metric Stat Cards -->
+  <rect x="40" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
+  <text x="60" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">mAP@50</text>
+  <text x="60" y="190" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="32" font-weight="700">${esc(map50Str)}</text>
+
+  <rect x="275" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
+  <text x="295" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">mAP@50-95</text>
+  <text x="295" y="190" fill="#818cf8" font-family="system-ui, sans-serif" font-size="32" font-weight="700">${esc(map50_95Str)}</text>
+
+  <rect x="510" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
+  <text x="530" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Precision / Recall</text>
+  <text x="530" y="180" fill="#34d399" font-family="system-ui, sans-serif" font-size="20" font-weight="700">P: ${esc(precisionStr)}</text>
+  <text x="530" y="206" fill="#a7f3d0" font-family="system-ui, sans-serif" font-size="16" font-weight="600">R: ${esc(recallStr)}</text>
+
+  <rect x="745" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
+  <text x="765" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Accuracy</text>
+  <text x="765" y="190" fill="#f472b6" font-family="system-ui, sans-serif" font-size="32" font-weight="700">${esc(accuracyStr)}</text>
+
+  <!-- Left Panel: Model & Framework -->
+  <rect x="40" y="250" width="450" height="410" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
+  <text x="65" y="285" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="18" font-weight="600">Model &amp; Framework Details</text>
+  <line x1="65" y1="300" x2="465" y2="300" stroke="#334155" stroke-width="1"/>
+
+  <text x="65" y="335" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Framework:</text>
+  <text x="220" y="335" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">Ultralytics YOLO</text>
+
+  <text x="65" y="375" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Base Weights / Model:</text>
+  <text x="220" y="375" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${esc(modelName)}</text>
+
+  <text x="65" y="415" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Task Type:</text>
+  <text x="220" y="415" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(task)} (${esc(pipelineTag)})</text>
+
+  <text x="65" y="455" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Epochs / Batch Size:</text>
+  <text x="220" y="455" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(epochs)} / ${esc(batch)}</text>
+
+  <text x="65" y="495" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Run Name:</text>
+  <text x="220" y="495" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(runName)}</text>
+
+  <text x="65" y="535" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Project:</text>
+  <text x="220" y="535" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(config.project || "N/A")}</text>
+
+  <!-- Right Panel: Dataset & Class Statistics -->
+  <rect x="510" y="250" width="450" height="410" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
+  <text x="535" y="285" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="18" font-weight="600">Dataset &amp; Class Statistics</text>
+  <line x1="535" y1="300" x2="935" y2="300" stroke="#334155" stroke-width="1"/>
+
+  <text x="535" y="335" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Class Count:</text>
+  <text x="680" y="335" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${esc(classCountStr)} classes</text>
+
+  <text x="535" y="375" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Classes List:</text>
+  <text x="680" y="375" fill="#a7f3d0" font-family="system-ui, sans-serif" font-size="14">${esc(classListStr)}</text>
+
+  <text x="535" y="415" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Class Source:</text>
+  <text x="680" y="415" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="13">${esc(classSource || "N/A")}</text>
+
+  <text x="535" y="460" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="15" font-weight="600">Dataset Image Split Counts</text>
+
+  <rect x="535" y="480" width="90" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="580" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Train</text>
+  <text x="580" y="527" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(trainCount)}</text>
+
+  <rect x="635" y="480" width="90" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="680" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Val</text>
+  <text x="680" y="527" fill="#818cf8" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(valCount)}</text>
+
+  <rect x="735" y="480" width="90" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="780" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Test</text>
+  <text x="780" y="527" fill="#f472b6" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(testCount)}</text>
+
+  <rect x="835" y="480" width="100" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="885" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Total</text>
+  <text x="885" y="527" fill="#34d399" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(totalCount)}</text>
+
+  <text x="500" y="695" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Generated by Njobvu AI Model Card Post-Processing Pipeline</text>
+</svg>`;
+
+    return await sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+/**
  * Generates a Hugging Face-compatible model card (YAML frontmatter + markdown body)
- * for a single training run and writes it to MODEL_CARD.md inside the run directory.
+ * as well as a rendered image model card (MODEL_CARD.png) for a single training run.
  *
  * @param {string} runDir - Run directory to source artifacts from
  * @param {Object} [options]
@@ -1310,7 +1489,7 @@ function buildModelCardBody({ runName, runDir, summary, classNames, classSource,
  * @param {string} [options.runName] - Custom run name/label
  * @param {string} [options.task] - Override task type (detect/segment/obb/classify/pose)
  * @param {string} [options.projectName] - Project name used as the dataset label
- * @returns {Promise<Object>} { modelCardPath, frontmatter, markdown, summary }
+ * @returns {Promise<Object>} { modelCardPath, modelCardImagePath, frontmatter, markdown, summary }
  */
 async function generateModelCard(runDir, options = {}) {
     if (!runDir || !fs.existsSync(runDir)) {
@@ -1354,8 +1533,22 @@ async function generateModelCard(runDir, options = {}) {
     const modelCardPath = path.join(runDir, "MODEL_CARD.md");
     fs.writeFileSync(modelCardPath, markdown, "utf8");
 
+    const imageBuffer = await generateModelCardImageBuffer({
+        runName,
+        summary,
+        classNames,
+        classSource,
+        datasetCounts,
+        task,
+        pipelineTag,
+        modelIndexMetrics
+    });
+    const modelCardImagePath = path.join(runDir, "MODEL_CARD.png");
+    fs.writeFileSync(modelCardImagePath, imageBuffer);
+
     return {
         modelCardPath,
+        modelCardImagePath,
         frontmatter: { library_name: "ultralytics", pipeline_tag: pipelineTag, tags },
         markdown,
         summary
