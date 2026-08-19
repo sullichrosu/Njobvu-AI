@@ -434,7 +434,7 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
     }
 
     it("does not crash and returns the correct filtered neighbors for a middle needs_review image", async () => {
-      mockLabelingVDb();
+      const mockDb = mockLabelingVDb();
 
       const res = await request(app)
         .get("/labelingV?IDX=0&IName=c4.png&sort=needs_review")
@@ -443,6 +443,11 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
       expect(res.statusCode).toBe(200);
       expect(res.text).toContain('name="prev_IName" value="c2.png"');
       expect(res.text).toContain('name="next_IName" value="c6.png"');
+      expect(res.text).toContain('id="prev"');
+      expect(res.text).toContain('id="next"');
+      expect(res.text).toContain('sort=needs_review');
+      // Assert GET request does NOT issue DB update to clear reviewImage
+      expect(mockDb.all).not.toHaveBeenCalledWith(expect.stringContaining("UPDATE Images SET reviewImage"));
     });
 
     it("still resolves correct neighbors with no filter active", async () => {
@@ -455,6 +460,80 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
       expect(res.statusCode).toBe(200);
       expect(res.text).toContain('name="prev_IName" value="c2.png"');
       expect(res.text).toContain('name="next_IName" value="c4.png"');
+    });
+
+    it("redirects to projectV when requested image is not in filtered results2 set and results2 is empty", async () => {
+      const sqlite3 = require("sqlite3");
+      global.sqlite3 = sqlite3;
+      global.fs = require("fs");
+      const dbMock = {
+        all: jest.fn((sql, params, cb) => {
+          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
+          const s = String(sql);
+          if (!callback) return;
+
+          if (s.includes("FROM `Classes`")) return callback(null, [{ CName: "cat" }]);
+          if (s.includes("WHERE reviewImage=1")) return callback(null, []); // No review images left!
+          if (s.includes("UPDATE Images SET reviewImage")) return callback(null, []);
+          if (s.includes("FROM `Labels` WHERE IName")) return callback(null, []);
+          if (s.includes("FROM `Images` WHERE IName")) {
+            return callback(null, [{ IName: "c1.png", reviewImage: 0, validateImage: 0 }]);
+          }
+          if (s.includes("FROM `Validation` WHERE IName")) return callback(null, []);
+          if (s.includes("FROM `Images`")) return callback(null, []);
+          return callback(null, []);
+        }),
+        get: jest.fn((sql, cb) => cb && cb(null, {})),
+        close: jest.fn((cb) => cb && cb(null)),
+      };
+      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
+        if (cb) cb(null);
+        return dbMock;
+      });
+
+      const res = await request(app)
+        .get("/labelingV?IDX=0&IName=c1.png&sort=needs_review")
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(302);
+      expect(res.headers.location).toContain("/projectV?IDX=0&page=1&perPage=10&sort=needs_review");
+    });
+
+    it("redirects to next available filtered image when requested image does not match active filter but other images exist", async () => {
+      const sqlite3 = require("sqlite3");
+      global.sqlite3 = sqlite3;
+      global.fs = require("fs");
+      const dbMock = {
+        all: jest.fn((sql, params, cb) => {
+          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
+          const s = String(sql);
+          if (!callback) return;
+
+          if (s.includes("FROM `Classes`")) return callback(null, [{ CName: "cat" }]);
+          if (s.includes("WHERE reviewImage=1")) return callback(null, [{ IName: "c2.png", reviewImage: 1 }]);
+          if (s.includes("UPDATE Images SET reviewImage")) return callback(null, []);
+          if (s.includes("FROM `Labels` WHERE IName")) return callback(null, []);
+          if (s.includes("FROM `Images` WHERE IName")) {
+            return callback(null, [{ IName: "c1.png", reviewImage: 0, validateImage: 0 }]);
+          }
+          if (s.includes("FROM `Validation` WHERE IName")) return callback(null, []);
+          if (s.includes("FROM `Images`")) return callback(null, []);
+          return callback(null, []);
+        }),
+        get: jest.fn((sql, cb) => cb && cb(null, {})),
+        close: jest.fn((cb) => cb && cb(null)),
+      };
+      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
+        if (cb) cb(null);
+        return dbMock;
+      });
+
+      const res = await request(app)
+        .get("/labelingV?IDX=0&IName=c1.png&sort=needs_review")
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(302);
+      expect(res.headers.location).toContain("/labelingV?IDX=0&IName=c2.png&curr_class=cat&sort=needs_review");
     });
   });
 });
