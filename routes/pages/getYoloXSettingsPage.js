@@ -1,4 +1,5 @@
 const queries = require("../../queries/queries");
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 async function getYoloXSettingsPage(req, res) {
     const readdir = util.promisify(fs.readdir);
@@ -129,10 +130,40 @@ async function getYoloXSettingsPage(req, res) {
         global.logger.error(err);
     }
 
+    var classImageCounts = {};
+
+    try {
+        var imageCountsResult = await queries.project.getClassImageCounts(project_path);
+        if (imageCountsResult && imageCountsResult.rows) {
+            imageCountsResult.rows.forEach(function (row) {
+                classImageCounts[row.CName] = row.imageCount;
+            });
+        }
+    } catch (err) {
+        global.logger.error(err);
+    }
+
     results2 = results2.map(function (cls) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
+            imageCount: classImageCounts[cls.CName] || 0,
         });
+    });
+
+    // Unlabeled images aren't a row in Classes, but training can use them as
+    // background/negative examples, so surface them as a selectable pseudo-class
+    // alongside the real ones instead of always silently including them.
+    var unlabeledImageCount = 0;
+    try {
+        var unlabeledResult = await queries.project.getUnlabeledImages(project_path);
+        unlabeledImageCount = (unlabeledResult && unlabeledResult.rows) ? unlabeledResult.rows.length : 0;
+    } catch (err) {
+        global.logger.error(err);
+    }
+    results2.push({
+        CName: UNLABELED_CLASS,
+        labelCount: 0,
+        imageCount: unlabeledImageCount,
     });
 
     var acc = await db.allAsync(
@@ -273,6 +304,7 @@ async function getYoloXSettingsPage(req, res) {
         PDescription: results1.PDescription,
         AutoSave: results1.AutoSave,
         classes: results2,
+        unlabeledClass: UNLABELED_CLASS,
         logs: log_files,
         err_file: err_file,
         err_contents: err,

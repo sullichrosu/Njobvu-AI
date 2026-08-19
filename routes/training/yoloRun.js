@@ -482,6 +482,41 @@ async function yoloRun(req, res) {
     // Parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
+
+    // How many unlabeled images (of those available) to include as background
+    // examples, set via the "Include" slider next to the Unlabeled checkbox.
+    // Not provided means no cap was requested (include all of them).
+    let unlabeledCount = parseInt(req.body.unlabeled_count, 10);
+
+    if (["detect", "segment", "obb"].includes(yoloTask)) {
+        if (!includeUnlabeled) {
+            try {
+                const unlabeledResult = await queries.project.getUnlabeledImages(projectPath);
+                const unlabeledImageNames = new Set(
+                    (unlabeledResult.rows || []).map((row) => row.IName),
+                );
+                targetImages = targetImages.filter(
+                    (img) => !unlabeledImageNames.has(img.IName),
+                );
+            } catch (err) {
+                global.logger.error(err);
+            }
+        } else if (Number.isFinite(unlabeledCount)) {
+            try {
+                const unlabeledResult = await queries.project.getUnlabeledImages(projectPath);
+                const unlabeledImageNames = (unlabeledResult.rows || []).map((row) => row.IName);
+                if (unlabeledCount < unlabeledImageNames.length) {
+                    const excludeNames = new Set(unlabeledImageNames.slice(Math.max(0, unlabeledCount)));
+                    targetImages = targetImages.filter(
+                        (img) => !excludeNames.has(img.IName),
+                    );
+                }
+            } catch (err) {
+                global.logger.error(err);
+            }
+        }
+    }
+
     if (Number.isFinite(maxImages) && maxImages > 0 && maxImages < targetImages.length) {
         targetImages = targetImages.slice(0, maxImages);
     }
@@ -888,6 +923,8 @@ async function yoloRun(req, res) {
         val_percent: valPct,
         test_percent: testPct,
         selected_classes: selectedClassesList ? selectedClassesList.join(", ") : null,
+        include_unlabeled: includeUnlabeled,
+        unlabeled_count: Number.isFinite(unlabeledCount) ? unlabeledCount : null,
         max_images: Number.isFinite(maxImages) ? maxImages : null,
         batch,
         subdiv,

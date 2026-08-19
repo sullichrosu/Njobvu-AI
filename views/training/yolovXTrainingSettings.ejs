@@ -170,9 +170,17 @@
 											<div class="class-selection-container" style="max-height: 150px; overflow-y: auto;">
 												<% if (typeof classes !== 'undefined' && classes.length > 0) { %>
 													<% for (var i = 0; i < classes.length; i++) { %>
-														<div class="form-check form-check-inline mr-3 my-1">
-															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].labelCount || 0 %>" checked>
-															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].labelCount || 0 %> labels)</span></label>
+														<% var isUnlabeledRow = classes[i].CName === unlabeledClass; %>
+														<div class="form-check form-check-inline mr-3 my-1<%= isUnlabeledRow ? ' d-flex align-items-center flex-wrap w-100' : '' %>">
+															<input class="form-check-input class-checkbox<%= isUnlabeledRow ? ' unlabeled-checkbox' : '' %>" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].imageCount || 0 %>" checked>
+															<label class="form-check-label" for="class_<%= i %>"><%= isUnlabeledRow ? 'Unlabeled' : classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
+															<% if (isUnlabeledRow) { %>
+																<span class="d-inline-flex align-items-center ml-3">
+																	<label for="unlabeledCountSlider" class="mr-2 mb-0 small text-muted">Include:</label>
+																	<input type="range" class="custom-range" id="unlabeledCountSlider" name="unlabeled_count" min="0" max="<%= classes[i].imageCount || 0 %>" value="<%= classes[i].imageCount || 0 %>" style="width: 150px;">
+																	<span id="unlabeledCountValue" class="ml-2 small text-muted"><%= classes[i].imageCount || 0 %> / <%= classes[i].imageCount || 0 %></span>
+																</span>
+															<% } %>
 														</div>
 													<% } %>
 												<% } else { %>
@@ -329,7 +337,32 @@
 					// Class selection helper buttons
 					var selectAllBtn = document.getElementById("selectAllClasses");
 					var deselectAllBtn = document.getElementById("deselectAllClasses");
-					var minClassLabelsInput = document.getElementById("minClassLabels");
+					var minClassImagesInput = document.getElementById("minClassImages");
+					var unlabeledCheckbox = document.querySelector(".unlabeled-checkbox");
+					var unlabeledSlider = document.getElementById("unlabeledCountSlider");
+					var unlabeledCountValue = document.getElementById("unlabeledCountValue");
+
+					// Keeps the unlabeled-count slider in sync with the "Unlabeled" checkbox:
+					// disabled (and pinned to 0) whenever the checkbox is unchecked, since
+					// there's nothing to limit if no unlabeled images are being included.
+					function updateUnlabeledSliderState() {
+						if (!unlabeledSlider) {
+							return;
+						}
+						unlabeledSlider.disabled = !(unlabeledCheckbox && unlabeledCheckbox.checked);
+					}
+
+					if (unlabeledSlider) {
+						unlabeledSlider.addEventListener("input", function() {
+							if (unlabeledCountValue) {
+								unlabeledCountValue.innerText = unlabeledSlider.value + " / " + unlabeledSlider.max;
+							}
+						});
+					}
+					if (unlabeledCheckbox) {
+						unlabeledCheckbox.addEventListener("change", updateUnlabeledSliderState);
+						updateUnlabeledSliderState();
+					}
 
 					// Unchecks any class checkbox whose image count is below the configured minimum,
 					// so Select All (or manually re-checking a box) can't bypass the clamp.
@@ -345,17 +378,20 @@
 								cb.checked = false;
 							}
 						});
+						updateUnlabeledSliderState();
 					}
 
 					if (selectAllBtn) {
 						selectAllBtn.addEventListener("click", function() {
 							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = true; });
-							applyMinClassLabelsClamp();
+							applyMinClassImagesClamp();
+							updateUnlabeledSliderState();
 						});
 					}
 					if (deselectAllBtn) {
 						deselectAllBtn.addEventListener("click", function() {
 							document.querySelectorAll(".class-checkbox").forEach(function(cb) { cb.checked = false; });
+							updateUnlabeledSliderState();
 						});
 					}
 					if (minClassLabelsInput) {
@@ -405,6 +441,7 @@
 						formData.append("TestPercent", document.getElementById("TestRange").value);
 						formData.append("max_images", document.getElementById("max_images").value);
 						formData.append("selected_classes", JSON.stringify(selectedClasses));
+						formData.append("unlabeled_count", unlabeledSlider && unlabeledCheckbox && unlabeledCheckbox.checked ? unlabeledSlider.value : "0");
 						formData.append("batch", document.getElementById("batch").value);
 						formData.append("subdiv", document.getElementById("subdiv").value);
 						formData.append("yolovx_path", document.getElementById("Yolo").value);
