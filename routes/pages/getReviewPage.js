@@ -4,110 +4,164 @@ const queries = require("../../queries/queries");
 
 async function getReviewPage(req, res) {
     const username = req.cookies ? req.cookies.Username : undefined;
-    const CName = req.query.class;
-    const idx = parseInt(req.query.IDX, 10);
-    const isUnlabeledMode = CName === UNLABELED_CLASS;
+    let CName = req.query.class;
+    let idx = parseInt(req.query.IDX, 10);
+
+    if (isNaN(idx) || idx === undefined) {
+        idx = 0;
+    }
 
     const page = parseInt(req.query.page, 10) || 1;
     const pageSize = 100;
     const offset = (page - 1) * pageSize;
 
-    if (isNaN(idx) || idx === undefined || username === undefined) {
+    if (username === undefined) {
+        return res.redirect("/");
+    }
+
+    let projects = [];
+    try {
+        const { rows } = await queries.managed.getUserProjects(username);
+        projects = rows || [];
+    } catch (err) {}
+
+    const project = projects[idx];
+    if (!project) {
+        global.logger.error("No project found for IDX:", idx);
         return res.redirect("/home");
     }
 
-    let project, PName, admin, projectDir;
-    try {
-        const { rows: projects } = await queries.managed.getUserProjects(username);
+    const PName = project.PName;
+    const admin = project.Admin;
 
-        project = projects[idx];
-        if (!project) {
-            global.logger.error("No project found for IDX:", idx);
-            return res.redirect("/home");
-        }
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
 
-        ({ PName, Admin: admin } = project);
-
-        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
-        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
-    } catch (err) {
-        global.logger.error("Error loading review page:", err);
-        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
-    }
-
-    let totalCount = 0;
-    let images = [];
-
-    if (isUnlabeledMode) {
+    // If CName is missing but IName was provided, look up the label class for IName
+    if (!CName && req.query.IName) {
         try {
-            const countRes = await queries.project.sql(
+            const labelRes = await queries.project.sql(
                 projectDir,
-                "SELECT COUNT(*) as count FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels)",
+                "SELECT CName FROM Labels WHERE IName = ? LIMIT 1",
+                [req.query.IName]
+            );
+            if (labelRes && labelRes.rows && labelRes.rows.length > 0) {
+                CName = labelRes.rows[0].CName;
+            } else {
+                CName = UNLABELED_CLASS;
+            }
+        } catch (err) {
+            CName = UNLABELED_CLASS;
+        }
+    } else if (!CName) {
+        try {
+            const classRes = await queries.project.sql(
+                projectDir,
+                "SELECT CName FROM Classes LIMIT 1",
                 []
             );
-            totalCount = (countRes.rows && countRes.rows[0]) ? Number(countRes.rows[0].count) : 0;
+            if (classRes && classRes.rows && classRes.rows.length > 0) {
+                CName = classRes.rows[0].CName;
+            } else {
+                CName = UNLABELED_CLASS;
+            }
         } catch (err) {
-            global.logger.error("Error counting unlabeled images:", err);
+            CName = UNLABELED_CLASS;
         }
+    }
 
-        try {
-            const imgRes = await queries.project.sql(
-                projectDir,
-                "SELECT Images.IName FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ? OFFSET ?",
-                [pageSize, offset]
-            );
-            images = imgRes.rows || [];
-        } catch (err) {
-            global.logger.error("Error fetching unlabeled images:", err);
+    const isUnlabeledMode = CName === UNLABELED_CLASS;
+    let totalImagesRes = { rows: [] };
+    let imagesRes = { rows: [] };
+
+    if (isUnlabeledMode) {
+        if (req.query.IName) {
+            try {
+                totalImagesRes = await queries.project.sql(
+                    projectDir,
+                    "SELECT COUNT(*) as count FROM Images WHERE Images.IName = ? AND Images.IName NOT IN (SELECT IName FROM Labels)",
+                    [req.query.IName]
+                );
+                imagesRes = await queries.project.sql(
+                    projectDir,
+                    "SELECT Images.IName FROM Images WHERE Images.IName = ? AND Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ? OFFSET ?",
+                    [req.query.IName, pageSize, offset]
+                );
+            } catch (err) {}
+
+            if (!imagesRes.rows || imagesRes.rows.length === 0) {
+                try {
+                    totalImagesRes = await queries.project.sql(
+                        projectDir,
+                        "SELECT COUNT(*) as count FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels)",
+                        []
+                    );
+                    imagesRes = await queries.project.sql(
+                        projectDir,
+                        "SELECT Images.IName FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ? OFFSET ?",
+                        [pageSize, offset]
+                    );
+                } catch (err) {}
+            }
+        } else {
+            try {
+                totalImagesRes = await queries.project.sql(
+                    projectDir,
+                    "SELECT COUNT(*) as count FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels)",
+                    []
+                );
+                imagesRes = await queries.project.sql(
+                    projectDir,
+                    "SELECT Images.IName FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ? OFFSET ?",
+                    [pageSize, offset]
+                );
+            } catch (err) {}
         }
     } else {
         try {
-            const countRes = await queries.project.sql(
+            totalImagesRes = await queries.project.sql(
                 projectDir,
                 "SELECT COUNT(*) as count FROM Images INNER JOIN Labels ON Images.IName = Labels.IName WHERE Labels.CName = ?",
                 [CName]
             );
-            totalCount = (countRes.rows && countRes.rows[0]) ? Number(countRes.rows[0].count) : 0;
-        } catch (err) {
-            global.logger.error("Error counting labeled images:", err);
-        }
-
-        try {
-            const imgRes = await queries.project.sql(
+            imagesRes = await queries.project.sql(
                 projectDir,
                 "SELECT Images.IName FROM Images INNER JOIN Labels ON Images.IName = Labels.IName WHERE Labels.CName = ? LIMIT ? OFFSET ?",
                 [CName, pageSize, offset]
             );
-            images = imgRes.rows || [];
-        } catch (err) {
-            global.logger.error("Error fetching labeled images:", err);
-        }
+        } catch (err) {}
     }
 
-    const uniqueImages = images.filter(
+    const rawImages = imagesRes.rows || [];
+    const uniqueImages = rawImages.filter(
         (image, index, self) =>
             index === self.findIndex((img) => img.IName === image.IName)
     );
 
     const imageLabels = {};
-    for (const image of uniqueImages) {
+    for (let i = 0; i < uniqueImages.length; i++) {
+        const imageName = uniqueImages[i].IName;
         try {
-            const labelsRes = await queries.project.getLabelsForImageName(projectDir, image.IName);
-            imageLabels[image.IName] = labelsRes.rows || [];
+            const labelRes = await queries.project.sql(
+                projectDir,
+                "SELECT * FROM Labels WHERE IName = ?",
+                [imageName]
+            );
+            imageLabels[imageName] = labelRes.rows || [];
         } catch (err) {
-            global.logger.error(`Error fetching labels for ${image.IName}:`, err);
-            imageLabels[image.IName] = [];
+            imageLabels[imageName] = [];
         }
     }
 
     let classes = [];
     try {
-        const classRes = await queries.project.getAllClasses(projectDir);
+        const classRes = await queries.project.sql(projectDir, "SELECT * FROM Classes", []);
         classes = classRes.rows || [];
-    } catch (err) {
-        global.logger.error("Error querying project classes:", err);
-    }
+    } catch (err) {}
 
+    const totalCount = (totalImagesRes.rows && totalImagesRes.rows[0] && totalImagesRes.rows[0].count !== undefined)
+        ? Number(totalImagesRes.rows[0].count)
+        : 0;
     const totalPageCount = Math.ceil(totalCount / pageSize) || 1;
 
     res.render("review", {
@@ -119,10 +173,10 @@ async function getReviewPage(req, res) {
         images: uniqueImages,
         imageLabels,
         PName,
-        classes,
+        classes: classes || [],
         currentPage: page,
         totalPageCount,
-        selectedClass: req.query.class,
+        selectedClass: CName,
         IDX: idx,
         admin,
         activePage: "Label",

@@ -1,7 +1,9 @@
 const fs = require("fs");
+const path = require("path");
 const rimraf = require("../../public/libraries/rimraf");
 const StreamZip = require("node-stream-zip");
 const queries = require("../../queries/queries");
+const flattenDirectory = require("../../utils/flattenDirectory");
 
 async function addImages(req, res) {
     var uploadImages = req.files["upload_images"],
@@ -65,43 +67,29 @@ async function addImages(req, res) {
             });
 
             files = await readdirAsync(imagesPath);
-            newFiles = await readdirAsync(mergeImages);
+            const newFiles = await flattenDirectory(mergeImages);
 
             for (var i = 0; i < newFiles.length; i++) {
-                var temp = mergeImages + "/" + newFiles[i];
-                newFiles[i] = newFiles[i].trim();
-                newFiles[i] = newFiles[i].split(" ").join("_");
-                newFiles[i] = newFiles[i].split("+").join("_");
-
-                fs.rename(temp, mergeImages + "/" + newFiles[i], () => {});
-
-                if (newFiles[i] == "__MACOSX") {
-                    continue;
-                } else if (!files.includes(newFiles[i])) {
-                    fs.rename(
-                        mergeImages + "/" + newFiles[i],
-                        imagesPath + "/" + newFiles[i],
-                        function (err) {
-                            if (err) {
-                                global.logger.error(err);
-                                return res.send("ERROR! " + err);
-                            }
-                        },
-                    );
-
+                const imageName = newFiles[i];
+                if (!files.includes(imageName)) {
                     try {
+                        fs.renameSync(
+                            path.join(mergeImages, imageName),
+                            path.join(imagesPath, imageName),
+                        );
+
                         await queries.project.addImages(
                             projectPath,
-                            newFiles[i],
+                            imageName,
                             0,
                             0,
                         );
+
+                        newImages.push(imageName);
                     } catch (err) {
                         global.logger.error(err);
                         return res.send("Error adding images");
                     }
-
-                    newImages.push(newFiles[i]);
                 }
             }
 

@@ -253,45 +253,112 @@ a:hover {
     }
 
 .modalV {
-    width: 350px; /* Adjust the width as needed */
-    overflow-y: auto;
-
+    display: none;
     position: fixed;
-    margin-left: auto;
-    margin-right: 0; 
     top: 0;
     right: 0;
     bottom: 0;
-    left: 0;
-    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
-    z-index: 9999; /* Higher z-index value to ensure the modal is on top */
-    display: block;
-    }
-
-.modalV .modal-contentV {
-    /* position: absolute; */
-    /* top: 50%; */
-    margin-left: auto;
-    /* transform: translate(-50%, -50%); */
-    padding: 20px;
-    }
-
-.modal-contentV .modal-headerV {
-    margin-top: auto;
-    margin-bottom: 0;
-    margin-left: auto;
-    margin-right: 0;
-    }
-
-.modal-contentV .modal-textV {
-    color:rgb(255, 255, 255);
-    font-weight: bold;
+    width: 360px;
+    max-width: 90vw;
+    background-color: #262C2F;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    overflow-y: auto;
+    border-left: 1px solid #3A4146;
+    border-radius: 0;
+    color: #FFFFFF;
 }
 
-
-.imageLabels {
+.modalV .modal-headerV {
     display: flex;
+    justify-content: space-between;
     align-items: center;
+    padding: 14px 18px;
+    background-color: #1E2225;
+    border-bottom: 1px solid #3A4146;
+    border-radius: 0;
+}
+
+.modalV .modal-titleV {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0;
+    color: #FFFFFF;
+}
+
+.modalV .modal-contentV {
+    padding: 16px;
+    border-radius: 0;
+}
+
+.modalV .stats-section {
+    background: #32383C;
+    border-radius: 0;
+    padding: 12px;
+    margin-bottom: 16px;
+    border: 1px solid #41484D;
+}
+
+.modalV .stats-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #ADB5BD;
+    margin-bottom: 10px;
+}
+
+.modalV .stat-badge {
+    display: inline-block;
+    background: #1E2225;
+    border: 1px solid #495057;
+    border-radius: 0;
+    padding: 4px 10px;
+    margin: 3px;
+    font-size: 0.85rem;
+    color: #E9ECEF;
+}
+
+.modalV .label-card {
+    background: #32383C;
+    border-radius: 0;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    border: 1px solid #41484D;
+}
+
+.modalV .label-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.modalV .conf-badge {
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    border-radius: 0;
+}
+
+.modalV .custom-select,
+.modalV .btn {
+    border-radius: 0 !important;
+}
+
+.modalV .conf-high {
+    background-color: #28a745;
+    color: white;
+}
+
+.modalV .conf-med {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.modalV .conf-low {
+    background-color: #dc3545;
+    color: white;
 }
 
 .modal-backdrop {

@@ -1,11 +1,13 @@
 const path = require("path");
 const fs = require("fs");
+const probe = require("probe-image-size");
 const queries = require("../../queries/queries");
 
 async function getAnnotatePage(req, res) {
     let idx = parseInt(req.query.IDX, 10);
     const IName = String(req.query.IName || "");
     let currClass = req.query.curr_class;
+    const reviewFilter = req.query.reviewFilter || req.query.review || "all";
     const user = req.cookies ? req.cookies.Username : undefined;
 
     if (isNaN(idx) || idx === undefined) {
@@ -46,7 +48,14 @@ async function getAnnotatePage(req, res) {
     try {
         const imgRes = await queries.project.getAllImages(projectDir);
 
-        allImages = (imgRes && imgRes.rows) ? imgRes.rows : [];
+        const rawImages = (imgRes && imgRes.rows) ? imgRes.rows : [];
+        if (reviewFilter === "true" || reviewFilter === "1" || reviewFilter === 1 || reviewFilter === "needs_review" || reviewFilter === "needsReview") {
+            allImages = rawImages.filter((img) => img.reviewImage != 0);
+        } else if (reviewFilter === "false" || reviewFilter === "0" || reviewFilter === 0) {
+            allImages = rawImages.filter((img) => img.reviewImage == 0);
+        } else {
+            allImages = rawImages;
+        }
     } catch (err) {
         global.logger.error("Error fetching images for annotate page:", err);
     }
@@ -143,16 +152,15 @@ async function getAnnotatePage(req, res) {
     let nextIName = -1;
     let currIndex = 1;
 
-    if (rowidRecord && rowidRecord.display_id) {
-        currIndex = Number(rowidRecord.display_id);
-    }
-
-    if (allImages && currIndex > 1 && allImages[currIndex - 2]) {
-        prevIName = allImages[currIndex - 2].IName;
-    }
-
-    if (allImages && currIndex < allImages.length && allImages[currIndex]) {
-        nextIName = allImages[currIndex].IName;
+    const imgIdx = (allImages || []).findIndex((item) => item.IName === IName);
+    if (imgIdx !== -1) {
+        currIndex = imgIdx + 1;
+        prevIName = imgIdx > 0 ? allImages[imgIdx - 1].IName : -1;
+        nextIName = imgIdx < allImages.length - 1 ? allImages[imgIdx + 1].IName : -1;
+    } else {
+        currIndex = 1;
+        prevIName = -1;
+        nextIName = (allImages && allImages.length > 0) ? allImages[0].IName : -1;
     }
 
     const colors = [];
@@ -194,6 +202,7 @@ async function getAnnotatePage(req, res) {
         list_counter: [],
         AutoSave: projRecord ? projRecord.AutoSave : 0,
         logged: req.query.logged,
+        reviewFilter,
         activePage: "project",
     });
 }
