@@ -1,6 +1,6 @@
 describe('Help, Documentation & Server Stats E2E Tests', () => {
   beforeEach(() => {
-    cy.setCookie('Username', 'testadmin');
+    cy.setupProjectContext();
   });
 
   it('should render help page (/help)', () => {
@@ -26,7 +26,7 @@ describe('Help, Documentation & Server Stats E2E Tests', () => {
   });
 
   it('should render download page (/download)', () => {
-    cy.visit('/download');
+    cy.visit('/download?IDX=0');
     cy.get('body').should('exist');
   });
 });

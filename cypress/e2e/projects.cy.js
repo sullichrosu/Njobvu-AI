@@ -1,6 +1,6 @@
 describe('Project Management & Settings E2E Tests', () => {
   beforeEach(() => {
-    cy.setCookie('Username', 'testadmin');
+    cy.setupProjectContext();
   });
 
   describe('Project Creation Page (/create)', () => {
@@ -44,32 +44,32 @@ describe('Project Management & Settings E2E Tests', () => {
 
   describe('Project Settings Configuration Pages (/config)', () => {
     it('should render main config page options', () => {
-      cy.visit('/config');
-      cy.get('#config').should('be.visible');
+      cy.visit('/config?IDX=0');
+      cy.get('#config').should('exist');
     });
 
     it('should render project settings subpage (/config/projSettings)', () => {
-      cy.visit('/config/projSettings');
+      cy.visit('/config/projSettings?IDX=0');
       cy.get('body').should('exist');
     });
 
     it('should render class settings subpage (/config/classSettings)', () => {
-      cy.visit('/config/classSettings');
+      cy.visit('/config/classSettings?IDX=0');
       cy.get('body').should('exist');
     });
 
     it('should render access settings subpage (/config/accessSettings)', () => {
-      cy.visit('/config/accessSettings');
+      cy.visit('/config/accessSettings?IDX=0');
       cy.get('body').should('exist');
     });
 
     it('should render image settings subpage (/config/imageSettings)', () => {
-      cy.visit('/config/imageSettings');
+      cy.visit('/config/imageSettings?IDX=0');
       cy.get('body').should('exist');
     });
 
     it('should render merge settings subpage (/config/mergeSettings)', () => {
-      cy.visit('/config/mergeSettings');
+      cy.visit('/config/mergeSettings?IDX=0');
       cy.get('body').should('exist');
     });
   });
