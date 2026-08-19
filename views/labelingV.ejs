@@ -33,7 +33,7 @@
                   <% if (AutoSave == 1) { %>
                       <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-prevV" aria-label="Previous image" value="auto-prevV" style="border-radius: 0"><i class="fas fa-arrow-alt-left" aria-disable="true"></i></button>
                   <% } else { %>
-					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= prev_IName %>&curr_class=<%= curr_class %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-dark col text-center pass-class" id="prev" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-dark col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-left"></i></a>
@@ -43,57 +43,62 @@
                   <% if (AutoSave == 1) { %>
                       <button type="submit" name="form_action" class="mr-0 ml-0 btn btn-primary col text-center" id="auto-nextV" aria-label="Next image" value="auto-nextV" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></button>
                   <% } else { %>
-					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right" aria-disable="true"></i></a>
+					  <a href="/labelingV?IDX=<%= IDX %>&IName=<%= next_IName %>&curr_class=<%= curr_class %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=<%= classFilter %>" role="button" class="mr-0 ml-0 btn btn-primary col text-center pass-class" id="next" style="border-radius: 0"><i class="fas fa-arrow-alt-right" aria-disable="true"></i></a>
                   <% } %>
           <% } else { %>
               <a href="#" role="button" class="mr-0 ml-0 btn btn-primary col text-center disabled" style="border-radius: 0"><i class="fas fa-arrow-alt-right"></i></a>
           <% } %>
         </div>
-        <div>
-          <button type="button" id ="openOptions" class="semi-transparent-button" onclick="toggleOptions()">Options</button>
-          <div class="modalV" id = "optionModal">
-            <div class="modal-headerV">
-              <div>
-                <button type="button" class="semi-transparent-button" onclick="toggleOptions()">Close</button>
-              </div>
+        <div class="modalV" id="optionModal">
+          <div class="modal-headerV">
+            <h5 class="modal-titleV"><i class="fas fa-sliders-h mr-2"></i>Validation Options & Stats</h5>
+            <button type="button" class="btn btn-sm btn-outline-light" onclick="toggleOptions()">&times;</button>
+          </div>
+          <div class="modal-contentV">
+            <div class="stats-section">
+              <div class="stats-title"><i class="fas fa-chart-pie mr-1"></i> Class Distribution</div>
+              <% if (stats && stats.length > 0) { %>
+                <% for(var i=0; i < stats.length; i++) { %>
+                  <span class="stat-badge"><%= stats[i][0] %>: <strong><%= stats[i][1] %></strong></span>
+                <% } %>
+              <% } else { %>
+                <span class="text-muted font-italic small">No labels for this image</span>
+              <% } %>
             </div>
-            <div class="modal-contentV">
-              <div class="modal-textV">
-                <a >Image Stats:</a>
-                <% for(var i=0; i < stats.length; i++) {%>
-                  <a class ="mr-0 ml-0 btn col text-center"><%= stats[i][0]%>: <%= stats[i][1] %></a>
-                  <% } %>
-              </div>
-              <div class="modal-textV">
-                <a >Image Labels:</a>
-                <% for(var i=0; i < labelConf.length; i++) {%>
-                  <div class="imageLabels">
-                    <div style="display: flex;align-items: center;padding-bottom: 5px;">
-                      <button type="button" onclick="deleteLabel('<%= String(labelConf[i].LID) %>')" class="btn btn-danger">X</button>
-                      <a class ="mr-0 ml-0 btn col text-center">
-                        ID: <%= labelConf[i].LID %>, Conf: <%= Math.round(Number(labelConf[i].Confidence)) %>%
-                      </a>
+            
+            <div class="stats-section">
+              <div class="stats-title"><i class="fas fa-tags mr-1"></i> Image Labels & Confidence</div>
+              <% if (labelConf && labelConf.length > 0) { %>
+                <% for(var i=0; i < labelConf.length; i++) { %>
+                  <% var confVal = Math.round(Number(labelConf[i].Confidence)); %>
+                  <% var confClass = confVal >= 80 ? 'conf-high' : (confVal >= 50 ? 'conf-med' : 'conf-low'); %>
+                  <div class="label-card">
+                    <div class="label-header">
+                      <span class="small font-weight-bold">ID: <%= labelConf[i].LID %></span>
+                      <span class="conf-badge <%= confClass %>"><%= confVal %>% Conf</span>
+                      <button type="button" onclick="deleteLabel('<%= String(labelConf[i].LID) %>')" class="btn btn-sm btn-danger py-0 px-2">&times;</button>
                     </div>
                     <div>
-                        <select name="classChange" id="classChange" data-lid="<%= labelConf[i].LID %>">
-                          <option><%= labelConf[i].CName %></option>
-                          <% for(var f=0; f<classes.length; f++) {%>
-                            <% if(classes[f] != labelConf[i].CName) { %>
-                                <option><%=classes[f]%></option>
-                            <% } %>
+                      <select name="classChange" class="custom-select custom-select-sm bg-dark text-white border-secondary" data-lid="<%= labelConf[i].LID %>">
+                        <option><%= labelConf[i].CName %></option>
+                        <% for(var f=0; f<classes.length; f++) { %>
+                          <% if(classes[f] != labelConf[i].CName) { %>
+                            <option><%= classes[f] %></option>
                           <% } %>
-                        </select>
-                        <input type="hidden" name="LID" value="<%= labelConf[i].LID %>">
+                        <% } %>
+                      </select>
+                      <input type="hidden" name="LID" value="<%= labelConf[i].LID %>">
                     </div>
                   </div>
-                  <% } %>
-              </div>
+                <% } %>
+              <% } else { %>
+                <span class="text-muted font-italic small">No confidence data available</span>
+              <% } %>
             </div>
           </div>
         </div>
-        
 
-          <div id="editor-area" class="col-md-12 pt-2 pb-2 mx-auto" style="background: #4C4C4C">
+        <div id="editor-area" class="col-md-12 pt-2 pb-2 mx-auto" style="background: #4C4C4C">
             <canvas id="canvas"
                     width="<%= image_width %>"
                     height="<%= image_height %>"
@@ -138,6 +143,7 @@
         <div class="col-md-12 enoughPadding row mx-auto text-center">
             <button type="button" class="mr-0 ml-0 btn btn-info col text-center" id="menu" data-toggle="modal" data-target="#menu_modal" style="border-radius: 0"><i class="fas fa-bars"></i> <u>M</u>enu</button>
             <button type="button" class="mr-0 ml-0 btn btn-dark col text-center" id="info" data-toggle="modal" data-target="#info_modal" style="border-radius: 0"><i class="fas fa-info"></i> <u>I</u>nfo</button>
+            <button type="button" class="mr-0 ml-0 btn btn-secondary col text-center" id="openOptions" onclick="toggleOptions()" style="border-radius: 0"><i class="fas fa-sliders-h"></i> <u>O</u>ptions</button>
             <button type="button" class="mr-0 ml-0 btn btn-danger col text-center" id="reset-labeling" style="border-radius: 0"><i class="fas fa-recycle"></i> <u>R</u>eset</button>
             <button type="button" class="mr-0 ml-0 btn btn-warning col text-center" id="undo-labeling" style="border-radius: 0"><i class="fas fa-undo"></i> <u>U</u>ndo</button>
             <button type="button" class="mr-0 ml-0 btn btn-dark col text-center" id="reset-zoom" style="border-radius: 0"><i class="fas fa-search"></i> Reset <u>Z</u>oom</button>
@@ -153,7 +159,7 @@
 </div>
 
 <!-- Modals -->
-<div class="modal fade" style="width: 300px;" id="menu_modal" tabindex="-1" role="dialog" aria-labelledby="menuModal">
+<div class="modal fade" id="menu_modal" tabindex="-1" role="dialog" aria-labelledby="menuModal">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -183,7 +189,7 @@
                                 <%} else {%>
                                 <td></td>
                                 <%}%>
-                                <td class="text-right"><a class="btn btn-primary pass-class" href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&curr_class=<%= curr_class %>&sort=null&class=null&classFilter=<%= classFilter %>" role="button">Label</a></td>
+                                <td class="text-right"><a class="btn btn-primary pass-class" href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&curr_class=<%= curr_class %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=<%= classFilter %>" role="button">Label</a></td>
                             </tr>
                             <% } %>
                         </tbody>
@@ -322,6 +328,16 @@
                   <th scope="row">
                     <div class="keyboard">
                         <div class="keyboard__row">
+                            <div class="key--letter">O</div>
+                        </div>
+                    </div>
+                  </th>
+                  <td>Toggle Options Sidebar (Image Stats & Confidence)</td>
+                </tr>
+                <tr>
+                  <th scope="row">
+                    <div class="keyboard">
+                        <div class="keyboard__row">
                             <div class="key--letter">I</div>
                         </div>
                     </div>
@@ -337,22 +353,14 @@
 <%- include('includes/footer') %>
 
 <script>
-  var modal = document.getElementById("optionModal")
-
-  function openOptions() {
-    modal.style.display = 'block';
-  }
-
-  // Close the modal
   function toggleOptions() {
-
-    if(modal.style.display == 'block'){
-      modal.style.display = 'none';
+    var modal = document.getElementById("optionModal");
+    if (!modal) return;
+    if (modal.style.display === "block") {
+      modal.style.display = "none";
+    } else {
+      modal.style.display = "block";
     }
-    else{
-      modal.style.display = 'block';
-    }
-    
   }
 </script>
 

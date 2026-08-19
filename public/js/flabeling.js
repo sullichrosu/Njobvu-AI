@@ -1118,6 +1118,10 @@ $(document).keydown(function(event) {
         // reset zoom
         resetZoom();
     }
+    else if (key == 30) { // o
+        // toggle options
+        if (typeof toggleOptions === 'function') toggleOptions();
+    }
 
 });
 
