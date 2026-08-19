@@ -79,10 +79,13 @@
                                 <%= image.IName %>
                             </td>
                             <td>
-                                <img class="UnlabeledImage"
+                                <img class="Image"
                                     src="/projects/<%= admin %>-<%= PName %>/images/<%= image.IName %>"
                                     aria-label="<%=PName %> <%= image.IName%>"
-                                    style="max-width: 200px; max-height: 200px;">
+                                    style="display: none;">
+                                <canvas class="cropCanvas"
+                                    style="max-width: 200px; max-height: 200px; display: block; cursor: pointer;"
+                                    data-toggle="modal" data-target="#myModal"></canvas>
                             </td>
                             <td>
                                 <form class="SwitchForm" action="/api/switchLabels" method="PUT">
@@ -361,7 +364,46 @@
         console.log('hello:', className);
     </script>
 
+    <script src="/libraries/tiffjs/tiff.min.js"></script>
     <script>
+        let tiffInitialized = false;
+
+        // Browsers can't natively decode TIFF/SCN images, so those formats are
+        // fetched as raw bytes and converted to a canvas-drawable Image via Tiff.js.
+        function loadImageSmart(url) {
+            return new Promise(function (resolve, reject) {
+                if (/\.(tiff|tif|scn)$/i.test(url) && typeof Tiff !== 'undefined') {
+                    if (!tiffInitialized) {
+                        Tiff.initialize({ TOTAL_MEMORY: 16777216 * 10 });
+                        tiffInitialized = true;
+                    }
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.responseType = 'arraybuffer';
+                    xhr.open('GET', url);
+                    xhr.onload = function () {
+                        try {
+                            const tiff = new Tiff({ buffer: xhr.response });
+                            const image = new Image();
+                            image.onload = function () { resolve(image); };
+                            image.onerror = reject;
+                            image.src = tiff.toDataURL();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    };
+                    xhr.onerror = reject;
+                    xhr.send();
+                    return;
+                }
+
+                const image = new Image();
+                image.onload = function () { resolve(image); };
+                image.onerror = reject;
+                image.src = url;
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             let images = document.querySelectorAll('.Image');
             let canvases = document.querySelectorAll('.cropCanvas');
@@ -391,9 +433,7 @@
                 };
 
                 const ctx = canvas.getContext('2d');
-                const image = new Image();
-                image.src = imageData.imageUrl;
-                image.onload = function () {
+                loadImageSmart(imageData.imageUrl).then(function (image) {
                     let drawX = imageData.crop.x;
                     let drawY = imageData.crop.y;
                     let drawW = imageData.crop.width;
@@ -419,11 +459,10 @@
                         drawW,
                         drawH
                     );
-                };
-                image.onerror = function () {
+                }).catch(function () {
                     imageElement.style.display = 'block';
                     canvas.style.display = 'none';
-                };
+                });
                 canvas.addEventListener("click", function () {
                     $('#myModel').modal('show');
                     const modalImage = document.getElementById("expandedImg");

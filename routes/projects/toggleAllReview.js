@@ -1,5 +1,6 @@
 const path = require("path");
 const queries = require("../../queries/queries");
+const getDbClient = require("../../queries/getDbClient");
 
 async function toggleAllReview(req, res) {
     const PName = req.body.PName;
@@ -19,15 +20,13 @@ async function toggleAllReview(req, res) {
         if (targetState !== undefined && targetState !== null && targetState !== "") {
             newState = Number(targetState);
         } else {
-            const countRes = await queries.project.sql(
-                projectPath,
+            const db = getDbClient(projectPath);
+            const countRes = await db.all(
                 "SELECT COUNT(*) as count FROM Images WHERE reviewImage = 0"
             );
             let unreviewedCount = 0;
             if (countRes && countRes.rows && countRes.rows.length > 0) {
                 unreviewedCount = countRes.rows[0].count !== undefined ? countRes.rows[0].count : (countRes.rows[0]["COUNT(*)"] || 0);
-            } else if (Array.isArray(countRes) && countRes.length > 0) {
-                unreviewedCount = countRes[0].count !== undefined ? countRes[0].count : (countRes[0]["COUNT(*)"] || 0);
             }
             newState = unreviewedCount > 0 ? 1 : 0;
         }

@@ -1,3 +1,4 @@
+const path = require("path");
 const request = require("supertest");
 const app = require("../../app");
 const queries = require("../../queries/queries");
@@ -113,13 +114,26 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
   });
 
   describe("POST /toggleAllReview", () => {
+    beforeEach(() => {
+      // An earlier test in this file leaves queries.project.sql permanently
+      // mocked (jest.clearAllMocks() clears call history but not spy
+      // implementations), which would otherwise silently swallow the real
+      // UPDATE call below. Restore it so these tests exercise the real code path.
+      if (queries.project.sql.mockRestore) {
+        queries.project.sql.mockRestore();
+      }
+    });
+
     it("should update reviewImage for all images in project and return Success: Yes", async () => {
-      const sqlSpy = jest.spyOn(queries.project, "sql").mockImplementation((path, sql, params) => {
-        if (sql.includes("SELECT COUNT")) {
-          return Promise.resolve({ rows: [{ count: 2 }] });
-        }
-        return Promise.resolve({ row: { success: true } });
-      });
+      // getDbClient reads live rows via db.all (unlike queries.project.sql, which
+      // always calls db.run and never returns rows) — mock at that layer so the
+      // real "any images still unreviewed?" count logic in the route is exercised.
+      const projectPath = path.join(process.cwd(), "public", "projects", "testuser-test-project");
+      const mockDb = {
+        all: jest.fn().mockResolvedValue({ rows: [{ count: 2 }] }),
+        run: jest.fn().mockResolvedValue({ success: true, changes: 2 }),
+      };
+      global.projectDbClients = { [projectPath]: mockDb };
 
       const res = await request(app)
         .post("/toggleAllReview")
@@ -130,12 +144,34 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
         .set("Cookie", ["Username=testuser"]);
 
       expect(res.statusCode).toBe(200);
-      expect(res.body.Success).toBe("Yes");
-      expect(sqlSpy).toHaveBeenCalledWith(
-        expect.stringContaining("test-project"),
-        "UPDATE Images SET reviewImage = ?",
-        [1]
-      );
+      expect(res.body).toEqual({ Success: "Yes", newState: 1 });
+      expect(mockDb.all).toHaveBeenCalledWith("SELECT COUNT(*) as count FROM Images WHERE reviewImage = 0");
+      expect(mockDb.run).toHaveBeenCalledWith("UPDATE Images SET reviewImage = ?", [1]);
+
+      delete global.projectDbClients;
+    });
+
+    it("should turn review off when no images are unreviewed (regression: count query must read real rows)", async () => {
+      const projectPath = path.join(process.cwd(), "public", "projects", "testuser-test-project");
+      const mockDb = {
+        all: jest.fn().mockResolvedValue({ rows: [{ count: 0 }] }),
+        run: jest.fn().mockResolvedValue({ success: true, changes: 2 }),
+      };
+      global.projectDbClients = { [projectPath]: mockDb };
+
+      const res = await request(app)
+        .post("/toggleAllReview")
+        .send({
+          PName: "test-project",
+          Admin: "testuser",
+        })
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ Success: "Yes", newState: 0 });
+      expect(mockDb.run).toHaveBeenCalledWith("UPDATE Images SET reviewImage = ?", [0]);
+
+      delete global.projectDbClients;
     });
 
     it("should accept explicit state parameter", async () => {
@@ -238,6 +274,78 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
       expect(res.statusCode).toBe(200);
       expect(res.text).toContain("IName=image3.jpg");
       expect(res.text).toContain("reviewFilter=true");
+    });
+  });
+
+  describe("GET /review image rendering", () => {
+    function mockReviewDb(overrides) {
+      const sqlite3 = require("sqlite3");
+      const dbMock = {
+        all: jest.fn((sql, params, cb) => {
+          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
+          const s = String(sql);
+          if (!callback) return;
+
+          if (s.includes("NOT IN (SELECT IName FROM Labels)")) {
+            return callback(null, overrides.unlabeled || []);
+          }
+          if (s.includes("INNER JOIN Labels")) {
+            return callback(null, overrides.labeledImages || []);
+          }
+          if (s.includes("SELECT CName FROM Labels WHERE IName")) {
+            return callback(null, overrides.classForIName || []);
+          }
+          if (s.includes("SELECT CName FROM Classes")) {
+            return callback(null, overrides.defaultClass || []);
+          }
+          if (s.includes("SELECT * FROM Labels WHERE IName")) {
+            return callback(null, overrides.imageLabels || []);
+          }
+          if (s.includes("Classes")) {
+            return callback(null, overrides.classes || []);
+          }
+          return callback(null, []);
+        }),
+        close: jest.fn((cb) => cb && cb(null)),
+      };
+      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
+        if (cb) cb(null);
+        return dbMock;
+      });
+      return dbMock;
+    }
+
+    it("routes labeled images through the TIFF/SCN-aware crop-canvas loader instead of a plain <img>", async () => {
+      mockReviewDb({
+        labeledImages: [{ IName: "img1.tif" }],
+        imageLabels: [{ LID: 1, CName: "cat", X: "0", Y: "0", W: 50, H: 50, IName: "img1.tif" }],
+        classes: [{ CName: "cat" }],
+      });
+
+      const res = await request(app)
+        .get("/review?class=cat&IDX=0")
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.text).toContain("libraries/tiffjs/tiff.min.js");
+      expect(res.text).toContain("loadImageSmart");
+      expect(res.text).toContain('class="cropCanvas"');
+    });
+
+    it("routes unlabeled images through the same crop-canvas pipeline (not the old plain <img> path) so TIFF/SCN can decode", async () => {
+      mockReviewDb({
+        classForIName: [],
+        unlabeled: [{ IName: "img2.tif" }],
+        classes: [{ CName: "cat" }],
+      });
+
+      const res = await request(app)
+        .get("/review?IDX=0&IName=img2.tif")
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.text).not.toContain('class="UnlabeledImage"');
+      expect(res.text).toContain('class="cropCanvas"');
     });
   });
 });
