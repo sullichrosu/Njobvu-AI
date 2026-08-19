@@ -77,6 +77,97 @@ async function generateRunSummary(runDir, options = {}) {
     return await generateSingleRunSummary(targetPath, options);
 }
 
+function inferProjectName(runDir, runName = "") {
+    if (!runDir) return null;
+    const match = runDir.match(/public\/projects\/([^\/]+)/i) || runDir.match(/projects\/([^\/]+)/i);
+    if (match && match[1] && !["training", "logs", "inference", "uploads", "bootstrap"].includes(match[1].toLowerCase())) {
+        return match[1];
+    }
+    const parts = runDir.split(path.sep).filter(Boolean);
+    const trainIdx = parts.indexOf("training");
+    if (trainIdx > 0 && !["public", "projects"].includes(parts[trainIdx - 1].toLowerCase())) {
+        return parts[trainIdx - 1];
+    }
+    const projIdx = parts.indexOf("projects");
+    if (projIdx >= 0 && projIdx < parts.length - 1) {
+        return parts[projIdx + 1];
+    }
+    if (runName) {
+        const stripped = runName.replace(/[-_]?\d{10,}$/, "");
+        if (stripped && stripped !== runName && !/^\d+$/.test(stripped)) {
+            return stripped;
+        }
+    }
+    return null;
+}
+
+function parseLogHeaderConfig(runDir, fileEntries) {
+    const config = {};
+    const logFiles = (fileEntries || getFilesRecursive(runDir)).filter(f => 
+        (f.name.endsWith(".log") || f.name.endsWith(".txt")) && f.name !== "cfgTemplate.txt"
+    );
+
+    for (const logFile of logFiles) {
+        if (logFile.sizeBytes > 10 * 1024 * 1024) continue;
+        let content;
+        try {
+            content = fs.readFileSync(logFile.fullPath, "utf8");
+        } catch (e) {
+            continue;
+        }
+
+        const lines = content.split("\n");
+        let inOptionsHeader = false;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.includes("Run Options")) {
+                inOptionsHeader = true;
+                continue;
+            }
+            if (inOptionsHeader && trimmed.startsWith("# ===")) {
+                inOptionsHeader = false;
+                continue;
+            }
+
+            if (trimmed.startsWith("#")) {
+                const kvMatch = trimmed.match(/^#\s*([^:]+)\s*:\s*(.*)$/);
+                if (kvMatch) {
+                    const key = kvMatch[1].trim().toLowerCase();
+                    const val = kvMatch[2].trim();
+
+                    if (val && val.toLowerCase() !== "(none)") {
+                        if (key === "project") {
+                            config.project = val;
+                        } else if (key === "epochs") {
+                            const parsedEpochs = parseInt(val, 10);
+                            if (!isNaN(parsedEpochs)) config.epochs = parsedEpochs;
+                        } else if (key === "batch") {
+                            const parsedBatch = parseInt(val, 10);
+                            if (!isNaN(parsedBatch)) config.batch = parsedBatch;
+                        } else if (key === "weights" || key === "model") {
+                            config.weights = val;
+                            if (!config.model) config.model = val;
+                        } else if (key === "task") {
+                            config.task = val;
+                        } else if (key === "classes") {
+                            const classList = val.split(",").map(c => c.trim()).filter(Boolean);
+                            if (classList.length > 0) {
+                                config.classes = classList;
+                            }
+                        } else if (key === "image size" || key === "imgsz") {
+                            const parsedImgSize = parseInt(val, 10);
+                            if (!isNaN(parsedImgSize)) config.imgsz = parsedImgSize;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return config;
+}
+
 /**
  * Generates summary for a single run directory.
  */
@@ -126,6 +217,14 @@ async function generateSingleRunSummary(runDir, options = {}) {
         } catch (e) {}
     }
 
+    const logHeaderConfig = parseLogHeaderConfig(runDir, allFileEntries);
+    configData = { ...logHeaderConfig, ...configData };
+
+    if (!configData.project) {
+        const inferred = inferProjectName(runDir, runName);
+        if (inferred) configData.project = inferred;
+    }
+
     if (fs.existsSync(hypPath)) {
         configData.hyperparameters = parseYamlSimple(fs.readFileSync(hypPath, "utf8"));
     }
@@ -142,7 +241,7 @@ async function generateSingleRunSummary(runDir, options = {}) {
         metrics = parsedCsv.metrics;
         performanceAnalysis = parsedCsv.analysis;
     } else {
-        metrics = await parseFallbackMetrics(runDir, allFileEntries);
+        metrics = await parseFallbackMetrics(runDir, allFileEntries, configData);
     }
 
     const logDiagnostics = await parseLogFilesStream(runDir, allFileEntries);
@@ -486,7 +585,7 @@ async function parseResultsCsvStream(csvPath) {
  * Fallback metric parser when results.csv is absent - inspects metrics.json, summary.json,
  * and execution log files (*.log, *.txt) for training/evaluation metric values.
  */
-async function parseFallbackMetrics(runDir, fileEntries) {
+async function parseFallbackMetrics(runDir, fileEntries, configData = {}) {
     let metrics = {};
 
     const metricsJsonPath = path.join(runDir, "metrics.json");
@@ -511,11 +610,11 @@ async function parseFallbackMetrics(runDir, fileEntries) {
         (f.name.endsWith(".log") || f.name.endsWith(".txt")) && f.name !== "cfgTemplate.txt"
     );
 
-    let maxMap50 = metrics.bestMap50 || metrics.mAP50 || 0;
-    let maxMap50_95 = metrics.bestMap50_95 || metrics["mAP50-95"] || 0;
-    let lastPrecision = metrics.precision || metrics.bestPrecision || 0;
-    let lastRecall = metrics.recall || metrics.bestRecall || 0;
-    let lastAccuracy = metrics.accuracy || metrics.bestAccuracy || 0;
+    let maxMap50 = metrics.bestMap50 !== undefined ? metrics.bestMap50 : (metrics.mAP50 !== undefined ? metrics.mAP50 : null);
+    let maxMap50_95 = metrics.bestMap50_95 !== undefined ? metrics.bestMap50_95 : (metrics["mAP50-95"] !== undefined ? metrics["mAP50-95"] : null);
+    let lastPrecision = metrics.precision !== undefined ? metrics.precision : (metrics.bestPrecision !== undefined ? metrics.bestPrecision : null);
+    let lastRecall = metrics.recall !== undefined ? metrics.recall : (metrics.bestRecall !== undefined ? metrics.bestRecall : null);
+    let lastAccuracy = metrics.accuracy !== undefined ? metrics.accuracy : (metrics.bestAccuracy !== undefined ? metrics.bestAccuracy : null);
 
     for (const logFile of logFiles) {
         if (logFile.sizeBytes > 10 * 1024 * 1024) continue;
@@ -539,65 +638,77 @@ async function parseFallbackMetrics(runDir, fileEntries) {
                 const map50 = parseFloat(allMatch[3]);
                 const map5095 = parseFloat(allMatch[4]);
 
-                if (!isNaN(p) && p > 0) lastPrecision = p;
-                if (!isNaN(r) && r > 0) lastRecall = r;
-                if (!isNaN(map50) && map50 > maxMap50) maxMap50 = map50;
-                if (!isNaN(map5095) && map5095 > maxMap50_95) maxMap50_95 = map5095;
+                if (!isNaN(p)) lastPrecision = p;
+                if (!isNaN(r)) lastRecall = r;
+                if (!isNaN(map50)) {
+                    if (maxMap50 === null || map50 >= maxMap50) maxMap50 = map50;
+                }
+                if (!isNaN(map5095)) {
+                    if (maxMap50_95 === null || map5095 >= maxMap50_95) maxMap50_95 = map5095;
+                }
                 continue;
             }
 
             // Pattern 2: Key-value metric log entries
-            const map50Match = trimmed.match(/mAP(?:@|_)?50(?!\s*-\s*95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+)/i);
+            const map50Match = trimmed.match(/mAP(?:@|_)?50(?!\s*-\s*95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+|\d+)/i);
             if (map50Match) {
                 const val = parseFloat(map50Match[1]);
-                if (!isNaN(val) && val > maxMap50) maxMap50 = val;
+                if (!isNaN(val)) {
+                    if (maxMap50 === null || val >= maxMap50) maxMap50 = val;
+                }
             }
 
-            const map95Match = trimmed.match(/mAP(?:@|_)?(?:50-95|0\.5:0\.95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+)/i);
+            const map95Match = trimmed.match(/mAP(?:@|_)?(?:50-95|0\.5:0\.95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+|\d+)/i);
             if (map95Match) {
                 const val = parseFloat(map95Match[1]);
-                if (!isNaN(val) && val > maxMap50_95) maxMap50_95 = val;
+                if (!isNaN(val)) {
+                    if (maxMap50_95 === null || val >= maxMap50_95) maxMap50_95 = val;
+                }
             }
 
-            const precMatch = trimmed.match(/\bprecision\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+)/i);
+            const precMatch = trimmed.match(/\bprecision\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+|\d+)/i);
             if (precMatch) {
                 const val = parseFloat(precMatch[1]);
-                if (!isNaN(val) && val > 0) lastPrecision = val;
+                if (!isNaN(val)) lastPrecision = val;
             }
 
-            const recMatch = trimmed.match(/\brecall\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+)/i);
+            const recMatch = trimmed.match(/\brecall\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+|\d+)/i);
             if (recMatch) {
                 const val = parseFloat(recMatch[1]);
-                if (!isNaN(val) && val > 0) lastRecall = val;
+                if (!isNaN(val)) lastRecall = val;
             }
 
-            const accMatch = trimmed.match(/\b(?:accuracy|accuracy_top1|top1)\b\s*[:=]?\s*(0\.\d+|\d+\.\d+)/i);
+            const accMatch = trimmed.match(/\b(?:accuracy|accuracy_top1|top1)\b\s*[:=]?\s*(0\.\d+|\d+\.\d+|\d+)/i);
             if (accMatch) {
                 const val = parseFloat(accMatch[1]);
-                if (!isNaN(val) && val > 0) lastAccuracy = val;
+                if (!isNaN(val)) lastAccuracy = val;
             }
         }
     }
 
-    if (maxMap50 > 0) {
+    if (maxMap50 !== null && !isNaN(maxMap50)) {
         metrics.bestMap50 = maxMap50;
         metrics.mAP50 = maxMap50;
     }
-    if (maxMap50_95 > 0) {
+    if (maxMap50_95 !== null && !isNaN(maxMap50_95)) {
         metrics.bestMap50_95 = maxMap50_95;
         metrics["mAP50-95"] = maxMap50_95;
     }
-    if (lastPrecision > 0) {
+    if (lastPrecision !== null && !isNaN(lastPrecision)) {
         metrics.bestPrecision = lastPrecision;
         metrics.precision = lastPrecision;
     }
-    if (lastRecall > 0) {
+    if (lastRecall !== null && !isNaN(lastRecall)) {
         metrics.bestRecall = lastRecall;
         metrics.recall = lastRecall;
     }
-    if (lastAccuracy > 0) {
+    if (lastAccuracy !== null && !isNaN(lastAccuracy)) {
         metrics.bestAccuracy = lastAccuracy;
         metrics.accuracy = lastAccuracy;
+    }
+
+    if (configData && configData.epochs !== undefined && !metrics.totalEpochs) {
+        metrics.totalEpochs = configData.epochs;
     }
 
     return metrics;
@@ -1491,9 +1602,6 @@ function buildModelCardBody({ runName, runDir, summary, classNames, classSource,
  * Renders an SVG template with model details, metrics, dataset counts, and framework info
  * and converts it to a PNG image buffer using sharp.
  */
-/**
- * Truncates class list string before it reaches the right boundary of the image card container.
- */
 function formatClassList(classNames, maxChars = 32) {
     if (!classNames || classNames.length === 0) return "N/A";
 
@@ -1527,7 +1635,8 @@ async function generateModelCardImageBuffer({
     datasetCounts,
     task,
     pipelineTag,
-    modelIndexMetrics
+    modelIndexMetrics,
+    runDir
 }) {
     const config = (summary && summary.config) || {};
     const metrics = (summary && summary.metrics) || {};
@@ -1585,6 +1694,7 @@ async function generateModelCardImageBuffer({
     const modelName = config.model || config.weights || "YOLOv8";
     const epochs = config.epochs !== undefined ? String(config.epochs) : "N/A";
     const batch = config.batch !== undefined ? String(config.batch) : "N/A";
+    const projectName = config.project || inferProjectName(runDir, runName) || "N/A";
 
     const classCountStr = String(classNames ? classNames.length : 0);
     const classListStr = formatClassList(classNames, 32);
@@ -1662,7 +1772,7 @@ async function generateModelCardImageBuffer({
   <text x="210" y="502" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(runName)}</text>
 
   <text x="60" y="542" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Project:</text>
-  <text x="210" y="542" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(config.project || "N/A")}</text>
+  <text x="210" y="542" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(projectName)}</text>
 
   <!-- Right Panel: Dataset & Class Statistics -->
   <rect x="510" y="250" width="450" height="400" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
@@ -1724,7 +1834,7 @@ async function generateModelCard(runDir, options = {}) {
     const summary = options.summary || await generateSingleRunSummary(runDir, options);
     const runName = options.runName || summary.runName || path.basename(runDir);
 
-    const { names: classNames, source: classSource } = discoverClassNames(runDir);
+    const { names: classNames, source: classSource } = discoverClassNames(runDir, summary);
     const datasetCounts = discoverDatasetImageCounts(runDir);
     const task = (options.task || inferTask(summary.config, datasetCounts)).toLowerCase();
     const pipelineTag = PIPELINE_TAG_BY_TASK[task] || "object-detection";
@@ -1738,7 +1848,7 @@ async function generateModelCard(runDir, options = {}) {
         modelIndex: {
             name: runName,
             taskType: pipelineTag,
-            datasetName: options.projectName || (summary.config && summary.config.project) || runName,
+            datasetName: options.projectName || (summary.config && summary.config.project) || inferProjectName(runDir, runName) || runName,
             metrics: modelIndexMetrics
         }
     });
@@ -1766,7 +1876,8 @@ async function generateModelCard(runDir, options = {}) {
         datasetCounts,
         task,
         pipelineTag,
-        modelIndexMetrics
+        modelIndexMetrics,
+        runDir
     });
     const modelCardImagePath = path.join(runDir, "MODEL_CARD.png");
     fs.writeFileSync(modelCardImagePath, imageBuffer);

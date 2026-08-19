@@ -347,6 +347,59 @@ describe("Model Card Generator", () => {
         }
     });
 
+    test("handles Njobvu training run with .log header options (no args.yaml or results.csv present)", async () => {
+        const njobvuRunDir = path.join(__dirname, "public/projects/coco-test-annotate/training/logs/1787162767678");
+        fs.mkdirSync(njobvuRunDir, { recursive: true });
+
+        const logContent = `# ================================================================================
+# Run Options (for reproducing this run)
+# ================================================================================
+# Project              : coco-test-annotate
+# Task                 : detect
+# Mode                 : train
+# YOLO Version         : 5
+# Classes              : person, bycicle, car, motorbike, plane, bus, train, truck
+# Batch                : 16
+# Epochs               : 10
+# Image Size           : 640
+# Device               : cpu
+# Weights              : yolo11n.pt
+# ================================================================================
+
+      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 1/1 3.3s/it 3.3s
+                   all          1          0          0          0          0          0
+`;
+        fs.writeFileSync(path.join(njobvuRunDir, "1787162767678.log"), logContent, "utf8");
+
+        try {
+            const result = await generateModelCard(njobvuRunDir, { runName: "1787162767678" });
+            const imagePath = path.join(njobvuRunDir, "MODEL_CARD.png");
+
+            expect(result.modelCardImagePath).toBe(imagePath);
+            expect(fs.existsSync(imagePath)).toBe(true);
+
+            // Assert project, epochs, batch, weights parsed from log header
+            expect(result.summary.config.project).toBe("coco-test-annotate");
+            expect(result.summary.config.epochs).toBe(10);
+            expect(result.summary.config.batch).toBe(16);
+            expect(result.summary.config.weights).toBe("yolo11n.pt");
+
+            // Assert metrics include numeric 0 instead of N/A or undefined
+            expect(result.summary.metrics.bestMap50).toBe(0);
+            expect(result.summary.metrics.bestMap50_95).toBe(0);
+            expect(result.summary.metrics.precision).toBe(0);
+            expect(result.summary.metrics.recall).toBe(0);
+            expect(result.summary.metrics.totalEpochs).toBe(10);
+
+            // Assert class list extracted from log header
+            expect(result.markdown).toContain("person");
+            expect(result.markdown).toContain("coco-test-annotate");
+        } finally {
+            fs.rmSync(path.join(__dirname, "public"), { recursive: true, force: true });
+        }
+    });
+
     test("falls back gracefully when no dataset yaml or split directories are present", async () => {
         const bareDir = path.join(__dirname, "tmp_model_card_bare");
         fs.mkdirSync(bareDir, { recursive: true });
