@@ -17,9 +17,9 @@ global.csv = require("csvtojson");
 global.rimraf = require("./public/libraries/rimraf");
 global.util = require("util");
 global.archiver = require("archiver");
-(global.sqlite3 = require("sqlite3").verbose()),
-    (global.readline = require("readline")),
-    (global.path = require("path"));
+global.sqlite3 = require("sqlite3").verbose();
+global.readline = require("readline");
+global.path = require("path");
 global.readdirAsync = util.promisify(fs.readdir);
 global.removeDir = util.promisify(fs.rmdir);
 
@@ -37,9 +37,14 @@ try {
     } else {
         global.logger.debug(`Directory '${allProjectsPath}' already exists.`);
     }
+
+    if (!fs.existsSync("./tmp")) {
+        fs.mkdirSync("./tmp");
+    }
 } catch (err) {
     global.logger.error(`Error creating directory: ${err.message}`);
 }
+
 
 for (const project of fs.readdirSync(allProjectsPath)) {
     const projectPath = path.join(allProjectsPath, project);
