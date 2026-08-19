@@ -252,14 +252,11 @@ async function createProject(req, res) {
         // A single <input> submits one file, but the API also accepts several
         // videos in one request (express-fileupload gives back an array in
         // that case) -- each gets its own frame prefix below so frame numbers
-        // restarting at 1 per video never collide across videos.
+        // restarting at 1 per video never collide across videos. frame_rate
+        // is submitted once per video, in the same order as upload_video, so
+        // each video is split at the fps the user picked for it specifically.
         const uploadVideos = Array.isArray(uploadVideo) ? uploadVideo : [uploadVideo];
 
-        // README.md documents frame_rate as "the number of frames you wish
-        // your video to be divided by" -- i.e. a literal divisor (every_n_frames),
-        // not seconds multiplied by an assumed 30fps source. The old `* 30`
-        // here turned the prompt's own example value (30) into a divisor of
-        // 900, so any video under 900 frames produced only its first frame.
         let frameStep = Number(frameRate);
         if (!Number.isFinite(frameStep) || frameStep <= 0) {
             frameStep = 30;
@@ -269,7 +266,11 @@ async function createProject(req, res) {
         const usedFramePrefixes = new Set();
 
         try {
-            for (const video of uploadVideos) {
+            for (let i = 0; i < uploadVideos.length; i++) {
+                const video = uploadVideos[i];
+                // fall back to the last rate provided if fewer rates than videos were sent
+                const videoFrameRate = frameRates[i] ?? frameRates[frameRates.length - 1];
+
                 var videoPath = imagesPath + "/" + video.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
 
                 await video.mv(videoPath);
@@ -277,14 +278,7 @@ async function createProject(req, res) {
                 const framePrefix = nextVideoFramePrefix(video.name, usedFramePrefixes);
                 const outputPattern = imagesPath + "/" + framePrefix + "_%d.jpg";
 
-                // Shell out to ffmpeg directly (execFile, so file names never pass
-                // through a shell) instead of the abandoned `ffmpeg` npm package:
-                // that package hardcodes a `-vsync 0` flag that modern ffmpeg
-                // builds no longer accept, which made every frame extraction fail
-                // silently and left projects with zero images. `-fps_mode
-                // passthrough` is `-vsync 0`'s replacement -- it keeps exactly the
-                // frames the `select` filter picks instead of padding the output
-                // back up to a constant frame rate.
+
                 await execFileAsync("ffmpeg", [
                     "-y",
                     "-i", videoPath,
@@ -293,7 +287,10 @@ async function createProject(req, res) {
                     outputPattern,
                 ]);
 
-                zeroPadExtractedFrames(imagesPath, framePrefix);
+                await videoHandle.fnExtractFrameToJPG(imagesPath, {
+                    every_n_frames: videoFrameRate * 30,
+                    file_name: framePrefix,
+                });
             }
 
             await cleanFiles();

@@ -407,6 +407,46 @@ describe('Project Routes - Basic Tests', () => {
   });
 
   /*
+  * CEO-46 follow-up: the user should be prompted for -- and get -- a
+  * separate fps for each video uploaded in one project, not one shared
+  * rate applied to every video.
+  */
+  it('splits each uploaded video at its own requested framerate', async () => {
+    global.mockFiles = {
+      upload_images: null,
+      upload_video: [
+        { name: 'slow-cam.mp4', mv: jest.fn().mockResolvedValue(true) },
+        { name: 'fast-cam.mp4', mv: jest.fn().mockResolvedValue(true) },
+      ],
+      upload_bootstrap: null,
+    };
+
+    const extractFrameCalls = [];
+    const ffmpeg = require('ffmpeg');
+    ffmpeg.mockImplementation(() => Promise.resolve({
+      fnExtractFrameToJPG: jest.fn((destination, options) => {
+        extractFrameCalls.push(options);
+        return Promise.resolve();
+      }),
+    }));
+
+    const res = await request(app)
+      .post('/createP')
+      .send({
+        project_name: 'test-project-per-video-fps',
+        input_classes: 'class1,class2',
+        frame_rate: ['2', '5'],
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(extractFrameCalls).toHaveLength(2);
+    expect(extractFrameCalls.map((options) => options.every_n_frames)).toEqual([60, 150]);
+
+    ffmpeg.mockReset();
+  });
+
+  /*
   * this tests if the createProject route handles PyTorch (.pt) bootstrap zip uploads correctly.
   */
   it('should accept and save PyTorch (.pt) bootstrap models during project creation', async () => {
