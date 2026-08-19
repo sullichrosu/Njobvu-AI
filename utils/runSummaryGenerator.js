@@ -67,8 +67,8 @@ async function generateRunSummary(runDir, options = {}) {
 
     const topFiles = fs.readdirSync(targetPath);
     const hasDirectRunFiles = topFiles.some(f => 
-        f === "results.csv" || f === "args.yaml" || f === "labels.jpg" ||
-        (f === "config.json" && !topFiles.includes("projects"))
+        f === "results.csv" || f === "args.yaml" || f === "cfgTemplate.txt" || f === "labels.jpg" ||
+        f.endsWith(".log") || (f === "config.json" && !topFiles.includes("projects"))
     );
 
     if (options.allRuns || !hasDirectRunFiles) {
@@ -87,7 +87,8 @@ async function generateSingleRunSummary(runDir, options = {}) {
     let runType = options.runType || "auto";
     if (runType === "auto") {
         const hasTrainingFiles = allFileEntries.some(f => 
-            f.name === "results.csv" || f.name === "args.yaml" || f.name.includes("train") || f.relPath.includes("weights")
+            f.name === "results.csv" || f.name === "args.yaml" || f.name === "cfgTemplate.txt" ||
+            f.name.endsWith(".log") || f.name.includes("train") || f.relPath.includes("weights")
         );
         runType = hasTrainingFiles ? "training" : "inference";
     }
@@ -110,12 +111,15 @@ async function generateSingleRunSummary(runDir, options = {}) {
 
     let configData = {};
     const argsPath = path.join(runDir, "args.yaml");
+    const cfgTemplatePath = path.join(runDir, "cfgTemplate.txt");
     const hypPath = path.join(runDir, "hyp.yaml");
     const optPath = path.join(runDir, "opt.yaml");
     const configJsonPath = path.join(runDir, "config.json");
 
     if (fs.existsSync(argsPath)) {
         configData = parseYamlSimple(fs.readFileSync(argsPath, "utf8"));
+    } else if (fs.existsSync(cfgTemplatePath)) {
+        configData = parseYamlSimple(fs.readFileSync(cfgTemplatePath, "utf8"));
     } else if (fs.existsSync(configJsonPath)) {
         try {
             configData = JSON.parse(fs.readFileSync(configJsonPath, "utf8"));
@@ -132,16 +136,13 @@ async function generateSingleRunSummary(runDir, options = {}) {
     let metrics = {};
     let performanceAnalysis = {};
     const resultsCsvPath = path.join(runDir, "results.csv");
-    const metricsJsonPath = path.join(runDir, "metrics.json");
 
     if (fs.existsSync(resultsCsvPath)) {
         const parsedCsv = await parseResultsCsvStream(resultsCsvPath);
         metrics = parsedCsv.metrics;
         performanceAnalysis = parsedCsv.analysis;
-    } else if (fs.existsSync(metricsJsonPath)) {
-        try {
-            metrics = JSON.parse(fs.readFileSync(metricsJsonPath, "utf8"));
-        } catch (e) {}
+    } else {
+        metrics = await parseFallbackMetrics(runDir, allFileEntries);
     }
 
     const logDiagnostics = await parseLogFilesStream(runDir, allFileEntries);
@@ -479,6 +480,127 @@ async function parseResultsCsvStream(csvPath) {
             resolve({ metrics, analysis });
         });
     });
+}
+
+/**
+ * Fallback metric parser when results.csv is absent - inspects metrics.json, summary.json,
+ * and execution log files (*.log, *.txt) for training/evaluation metric values.
+ */
+async function parseFallbackMetrics(runDir, fileEntries) {
+    let metrics = {};
+
+    const metricsJsonPath = path.join(runDir, "metrics.json");
+    const summaryJsonPath = path.join(runDir, "summary.json");
+
+    if (fs.existsSync(metricsJsonPath)) {
+        try {
+            const m = JSON.parse(fs.readFileSync(metricsJsonPath, "utf8"));
+            if (m && typeof m === "object") metrics = { ...metrics, ...m };
+        } catch (e) {}
+    }
+    if (fs.existsSync(summaryJsonPath)) {
+        try {
+            const s = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
+            if (s && s.metrics && typeof s.metrics === "object") {
+                metrics = { ...metrics, ...s.metrics };
+            }
+        } catch (e) {}
+    }
+
+    const logFiles = fileEntries.filter(f => 
+        (f.name.endsWith(".log") || f.name.endsWith(".txt")) && f.name !== "cfgTemplate.txt"
+    );
+
+    let maxMap50 = metrics.bestMap50 || metrics.mAP50 || 0;
+    let maxMap50_95 = metrics.bestMap50_95 || metrics["mAP50-95"] || 0;
+    let lastPrecision = metrics.precision || metrics.bestPrecision || 0;
+    let lastRecall = metrics.recall || metrics.bestRecall || 0;
+    let lastAccuracy = metrics.accuracy || metrics.bestAccuracy || 0;
+
+    for (const logFile of logFiles) {
+        if (logFile.sizeBytes > 10 * 1024 * 1024) continue;
+        let content;
+        try {
+            content = fs.readFileSync(logFile.fullPath, "utf8");
+        } catch (e) {
+            continue;
+        }
+
+        const lines = content.split("\n");
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            // Pattern 1: Standard YOLO evaluation row: 'all <images> <instances> <precision> <recall> <mAP50> <mAP50-95>'
+            const allMatch = trimmed.match(/^\s*all\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+            if (allMatch) {
+                const p = parseFloat(allMatch[1]);
+                const r = parseFloat(allMatch[2]);
+                const map50 = parseFloat(allMatch[3]);
+                const map5095 = parseFloat(allMatch[4]);
+
+                if (!isNaN(p) && p > 0) lastPrecision = p;
+                if (!isNaN(r) && r > 0) lastRecall = r;
+                if (!isNaN(map50) && map50 > maxMap50) maxMap50 = map50;
+                if (!isNaN(map5095) && map5095 > maxMap50_95) maxMap50_95 = map5095;
+                continue;
+            }
+
+            // Pattern 2: Key-value metric log entries
+            const map50Match = trimmed.match(/mAP(?:@|_)?50(?!\s*-\s*95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+)/i);
+            if (map50Match) {
+                const val = parseFloat(map50Match[1]);
+                if (!isNaN(val) && val > maxMap50) maxMap50 = val;
+            }
+
+            const map95Match = trimmed.match(/mAP(?:@|_)?(?:50-95|0\.5:0\.95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+)/i);
+            if (map95Match) {
+                const val = parseFloat(map95Match[1]);
+                if (!isNaN(val) && val > maxMap50_95) maxMap50_95 = val;
+            }
+
+            const precMatch = trimmed.match(/\bprecision\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+)/i);
+            if (precMatch) {
+                const val = parseFloat(precMatch[1]);
+                if (!isNaN(val) && val > 0) lastPrecision = val;
+            }
+
+            const recMatch = trimmed.match(/\brecall\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+)/i);
+            if (recMatch) {
+                const val = parseFloat(recMatch[1]);
+                if (!isNaN(val) && val > 0) lastRecall = val;
+            }
+
+            const accMatch = trimmed.match(/\b(?:accuracy|accuracy_top1|top1)\b\s*[:=]?\s*(0\.\d+|\d+\.\d+)/i);
+            if (accMatch) {
+                const val = parseFloat(accMatch[1]);
+                if (!isNaN(val) && val > 0) lastAccuracy = val;
+            }
+        }
+    }
+
+    if (maxMap50 > 0) {
+        metrics.bestMap50 = maxMap50;
+        metrics.mAP50 = maxMap50;
+    }
+    if (maxMap50_95 > 0) {
+        metrics.bestMap50_95 = maxMap50_95;
+        metrics["mAP50-95"] = maxMap50_95;
+    }
+    if (lastPrecision > 0) {
+        metrics.bestPrecision = lastPrecision;
+        metrics.precision = lastPrecision;
+    }
+    if (lastRecall > 0) {
+        metrics.bestRecall = lastRecall;
+        metrics.recall = lastRecall;
+    }
+    if (lastAccuracy > 0) {
+        metrics.bestAccuracy = lastAccuracy;
+        metrics.accuracy = lastAccuracy;
+    }
+
+    return metrics;
 }
 
 async function parseLogFilesStream(runDir, fileEntries) {
@@ -1480,120 +1602,100 @@ async function generateModelCardImageBuffer({
     const esc = (s) => (s ? String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : "");
 
     const svg = `<svg width="1000" height="720" viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e293b"/>
-    </linearGradient>
-    <linearGradient id="njobvuGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#10b981"/>
-      <stop offset="50%" stop-color="#059669"/>
-      <stop offset="100%" stop-color="#047857"/>
-    </linearGradient>
-    <linearGradient id="panelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.85"/>
-    </linearGradient>
-    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#064e3b" stop-opacity="0.3"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Canvas Background -->
-  <rect width="1000" height="720" rx="16" fill="url(#bgGrad)"/>
+  <!-- Flat Dark Background -->
+  <rect width="1000" height="720" rx="0" fill="#171717"/>
   
-  <!-- Njobvu Accent Top Bar -->
-  <rect width="1000" height="6" rx="3" fill="url(#njobvuGrad)"/>
+  <!-- Njobvu Brand Blue Top Bar -->
+  <rect width="1000" height="6" rx="0" fill="#1569AE"/>
 
   <!-- Header Section -->
-  <rect x="40" y="36" width="38" height="38" rx="8" fill="url(#njobvuGrad)"/>
+  <rect x="40" y="36" width="38" height="38" rx="0" fill="#1569AE"/>
   <text x="59" y="61" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="800" text-anchor="middle">N</text>
 
-  <text x="90" y="52" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" letter-spacing="1.5">NJOBVU AI PLATFORM</text>
-  <text x="90" y="74" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700">${esc(runName)}</text>
+  <text x="90" y="52" fill="#1569AE" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" letter-spacing="1.5">NJOBVU AI PLATFORM</text>
+  <text x="90" y="74" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700">${esc(runName)}</text>
 
   <!-- Header Badges -->
-  <rect x="730" y="38" width="110" height="30" rx="15" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
-  <text x="785" y="58" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" text-anchor="middle">Ultralytics</text>
+  <rect x="730" y="38" width="110" height="30" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <text x="785" y="58" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" text-anchor="middle">Ultralytics</text>
 
-  <rect x="850" y="38" width="110" height="30" rx="15" fill="#065f46" stroke="#34d399" stroke-width="1"/>
-  <text x="905" y="58" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" text-anchor="middle">${esc((task || "detect").toUpperCase())}</text>
+  <rect x="850" y="38" width="110" height="30" rx="0" fill="#1569AE"/>
+  <text x="905" y="58" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" text-anchor="middle">${esc((task || "detect").toUpperCase())}</text>
 
   <!-- Metric Stat Cards -->
-  <rect x="40" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <rect x="40" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
   <text x="60" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">mAP@50</text>
-  <text x="60" y="188" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50Str)}</text>
+  <text x="60" y="188" fill="#1569AE" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50Str)}</text>
 
-  <rect x="275" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <rect x="275" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
   <text x="295" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">mAP@50-95</text>
-  <text x="295" y="188" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50_95Str)}</text>
+  <text x="295" y="188" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50_95Str)}</text>
 
-  <rect x="510" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <rect x="510" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
   <text x="530" y="138" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Precision / Recall</text>
-  <text x="530" y="172" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700">P: ${esc(precisionStr)}</text>
-  <text x="530" y="200" fill="#a7f3d0" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">R: ${esc(recallStr)}</text>
+  <text x="530" y="172" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700">P: ${esc(precisionStr)}</text>
+  <text x="530" y="200" fill="#a0c4df" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">R: ${esc(recallStr)}</text>
 
-  <rect x="745" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <rect x="745" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
   <text x="765" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Accuracy</text>
-  <text x="765" y="188" fill="#2dd4bf" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(accuracyStr)}</text>
+  <text x="765" y="188" fill="#0284c7" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(accuracyStr)}</text>
 
   <!-- Left Panel: Model & Framework Details -->
-  <rect x="40" y="250" width="450" height="400" rx="12" fill="url(#panelGrad)" stroke="#334155" stroke-width="1"/>
-  <rect x="60" y="275" width="4" height="20" rx="2" fill="#10b981"/>
-  <text x="74" y="291" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Model &amp; Framework Details</text>
+  <rect x="40" y="250" width="450" height="400" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <rect x="60" y="275" width="4" height="20" rx="0" fill="#1569AE"/>
+  <text x="74" y="291" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Model &amp; Framework Details</text>
   <line x1="60" y1="308" x2="470" y2="308" stroke="#334155" stroke-width="1"/>
 
   <text x="60" y="342" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Framework:</text>
-  <text x="210" y="342" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Ultralytics YOLO</text>
+  <text x="210" y="342" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Ultralytics YOLO</text>
 
   <text x="60" y="382" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Base Weights / Model:</text>
-  <text x="210" y="382" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(modelName)}</text>
+  <text x="210" y="382" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(modelName)}</text>
 
   <text x="60" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Task Type:</text>
-  <text x="210" y="422" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(task)} (${esc(pipelineTag)})</text>
+  <text x="210" y="422" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(task)} (${esc(pipelineTag)})</text>
 
   <text x="60" y="462" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Epochs / Batch Size:</text>
-  <text x="210" y="462" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(epochs)} / ${esc(batch)}</text>
+  <text x="210" y="462" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(epochs)} / ${esc(batch)}</text>
 
   <text x="60" y="502" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Run Name:</text>
-  <text x="210" y="502" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(runName)}</text>
+  <text x="210" y="502" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(runName)}</text>
 
   <text x="60" y="542" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Project:</text>
-  <text x="210" y="542" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(config.project || "N/A")}</text>
+  <text x="210" y="542" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(config.project || "N/A")}</text>
 
   <!-- Right Panel: Dataset & Class Statistics -->
-  <rect x="510" y="250" width="450" height="400" rx="12" fill="url(#panelGrad)" stroke="#334155" stroke-width="1"/>
-  <rect x="530" y="275" width="4" height="20" rx="2" fill="#10b981"/>
-  <text x="544" y="291" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Dataset &amp; Class Statistics</text>
+  <rect x="510" y="250" width="450" height="400" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <rect x="530" y="275" width="4" height="20" rx="0" fill="#1569AE"/>
+  <text x="544" y="291" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Dataset &amp; Class Statistics</text>
   <line x1="530" y1="308" x2="940" y2="308" stroke="#334155" stroke-width="1"/>
 
   <text x="530" y="342" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Class Count:</text>
-  <text x="670" y="342" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(classCountStr)} classes</text>
+  <text x="670" y="342" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(classCountStr)} classes</text>
 
   <text x="530" y="382" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Classes List:</text>
-  <text x="670" y="382" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500">${esc(classListStr)}</text>
+  <text x="670" y="382" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500">${esc(classListStr)}</text>
 
   <text x="530" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Class Source:</text>
   <text x="670" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13">${esc(classSource || "N/A")}</text>
 
-  <text x="530" y="470" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">Dataset Image Split Counts</text>
+  <text x="530" y="470" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">Dataset Image Split Counts</text>
 
-  <rect x="530" y="490" width="92" height="64" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <rect x="530" y="490" width="92" height="64" rx="0" fill="#171717" stroke="#334155"/>
   <text x="576" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Train</text>
-  <text x="576" y="539" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(trainCount)}</text>
+  <text x="576" y="539" fill="#1569AE" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(trainCount)}</text>
 
-  <rect x="632" y="490" width="92" height="64" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <rect x="632" y="490" width="92" height="64" rx="0" fill="#171717" stroke="#334155"/>
   <text x="678" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Val</text>
-  <text x="678" y="539" fill="#2dd4bf" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(valCount)}</text>
+  <text x="678" y="539" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(valCount)}</text>
 
-  <rect x="734" y="490" width="92" height="64" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <rect x="734" y="490" width="92" height="64" rx="0" fill="#171717" stroke="#334155"/>
   <text x="780" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Test</text>
-  <text x="780" y="539" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(testCount)}</text>
+  <text x="780" y="539" fill="#0284c7" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(testCount)}</text>
 
-  <rect x="836" y="490" width="104" height="64" rx="8" fill="#0f172a" stroke="#10b981" stroke-opacity="0.5"/>
+  <rect x="836" y="490" width="104" height="64" rx="0" fill="#171717" stroke="#1569AE"/>
   <text x="888" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Total</text>
-  <text x="888" y="539" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" text-anchor="middle">${esc(totalCount)}</text>
+  <text x="888" y="539" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" text-anchor="middle">${esc(totalCount)}</text>
 
   <!-- Footer Branding -->
   <text x="500" y="692" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Njobvu AI Platform  •  Computer Vision Training &amp; Inference Pipeline</text>

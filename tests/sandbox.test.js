@@ -308,6 +308,45 @@ describe("Model Card Generator", () => {
         }
     });
 
+    test("handles training runs with log files and cfgTemplate.txt (no results.csv present)", async () => {
+        const noCsvRunDir = path.join(__dirname, "tmp_model_card_no_csv");
+        fs.mkdirSync(noCsvRunDir, { recursive: true });
+
+        fs.writeFileSync(
+            path.join(noCsvRunDir, "cfgTemplate.txt"),
+            "task: detect\nmodel: yolov8s.pt\nepochs: 100\nbatch: 32\n",
+            "utf8"
+        );
+
+        fs.writeFileSync(
+            path.join(noCsvRunDir, "1787162286668.log"),
+            "100/100 2.5G 0.45 0.32 0.89 10 640: 100%\nall 150 400 0.86 0.81 0.92 0.65\nTraining complete.\n",
+            "utf8"
+        );
+
+        try {
+            const result = await generateModelCard(noCsvRunDir, { runName: "no_csv_log_run" });
+            const imagePath = path.join(noCsvRunDir, "MODEL_CARD.png");
+
+            expect(result.modelCardImagePath).toBe(imagePath);
+            expect(fs.existsSync(imagePath)).toBe(true);
+            expect(fs.statSync(imagePath).size).toBeGreaterThan(0);
+
+            // Verify metric extraction from log file fallback
+            expect(result.summary.metrics.bestMap50).toBe(0.92);
+            expect(result.summary.metrics.bestMap50_95).toBe(0.65);
+            expect(result.summary.metrics.precision).toBe(0.86);
+            expect(result.summary.metrics.recall).toBe(0.81);
+
+            // Verify config parsed from cfgTemplate.txt
+            expect(result.summary.config.model).toBe("yolov8s.pt");
+            expect(result.summary.config.epochs).toBe(100);
+            expect(result.summary.config.batch).toBe(32);
+        } finally {
+            fs.rmSync(noCsvRunDir, { recursive: true, force: true });
+        }
+    });
+
     test("falls back gracefully when no dataset yaml or split directories are present", async () => {
         const bareDir = path.join(__dirname, "tmp_model_card_bare");
         fs.mkdirSync(bareDir, { recursive: true });
