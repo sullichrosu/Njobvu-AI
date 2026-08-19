@@ -264,12 +264,48 @@ describe("Model Card Generator", () => {
         expect(result.frontmatter.library_name).toBe("ultralytics");
         expect(result.frontmatter.tags).toEqual(expect.arrayContaining(["ultralytics", "yolo", "detect", "yolov8n"]));
 
+        expect(result.summary.metrics.bestMap50).toBe(0.91);
+        expect(result.summary.metrics.bestMap50_95).toBe(0.6);
+        expect(result.summary.metrics.precision).toBe(0.88);
+        expect(result.summary.metrics.recall).toBe(0.8);
+
         expect(body).toContain("# example_run");
         expect(body).toContain("**Classes (3)**: `person`, `car`, `dog`");
         expect(body).toContain("train: 3, val: 1, test: 0");
         expect(body).toContain("mAP50 | 91.00%");
         expect(body).toContain("weights/best.pt");
         expect(body).toContain("from ultralytics import YOLO");
+    });
+
+    test("truncates long class lists to prevent card image overflow", async () => {
+        const longClassRunDir = path.join(__dirname, "tmp_model_card_long_classes");
+        fs.mkdirSync(longClassRunDir, { recursive: true });
+
+        const manyNames = Array.from({ length: 25 }, (_, i) => `long_object_class_name_${i + 1}`).map((n, i) => `  ${i}: ${n}`).join("\n");
+        fs.writeFileSync(
+            path.join(longClassRunDir, "coco_classes.yaml"),
+            `names:\n${manyNames}\n`,
+            "utf8"
+        );
+        fs.writeFileSync(
+            path.join(longClassRunDir, "results.csv"),
+            "epoch, metrics/mAP50(B), metrics/precision(B), metrics/recall(B)\n1, 0.85, 0.82, 0.79",
+            "utf8"
+        );
+
+        try {
+            const result = await generateModelCard(longClassRunDir, { runName: "long_classes_run" });
+            const imagePath = path.join(longClassRunDir, "MODEL_CARD.png");
+            expect(result.modelCardImagePath).toBe(imagePath);
+            expect(fs.existsSync(imagePath)).toBe(true);
+            expect(fs.statSync(imagePath).size).toBeGreaterThan(0);
+
+            // Metrics are resolved cleanly
+            expect(result.summary.metrics.precision).toBe(0.82);
+            expect(result.summary.metrics.recall).toBe(0.79);
+        } finally {
+            fs.rmSync(longClassRunDir, { recursive: true, force: true });
+        }
     });
 
     test("falls back gracefully when no dataset yaml or split directories are present", async () => {
@@ -290,6 +326,8 @@ describe("Model Card Generator", () => {
             expect(result.modelCardImagePath).toBe(imagePath);
             expect(fs.existsSync(imagePath)).toBe(true);
             expect(fs.statSync(imagePath).size).toBeGreaterThan(0);
+
+            expect(result.summary.metrics.accuracy).toBe(0.92);
         } finally {
             fs.rmSync(bareDir, { recursive: true, force: true });
         }

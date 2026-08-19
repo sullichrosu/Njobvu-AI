@@ -334,6 +334,9 @@ async function parseResultsCsvStream(csvPath) {
         let bestMap50 = 0;
         let bestMap50Epoch = 0;
         let bestMap50_95 = 0;
+        let bestPrecision = 0;
+        let bestRecall = 0;
+        let bestAccuracy = 0;
         let epochLosses = [];
 
         rl.on("line", (line) => {
@@ -345,9 +348,21 @@ async function parseResultsCsvStream(csvPath) {
                 lastRow = row;
 
                 const epochIdx = headers.findIndex(h => h.toLowerCase().includes("epoch"));
-                const map50Idx = headers.findIndex(h => h.includes("mAP50") || h.includes("mAP_0.5"));
-                const map95Idx = headers.findIndex(h => h.includes("mAP50-95") || h.includes("mAP_0.5:0.95"));
-                const lossIdx = headers.findIndex(h => h.includes("val/box_loss") || h.includes("val/loss") || h.includes("train/box_loss") || h.includes("train/loss"));
+                const map50Idx = headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return (l.includes("map50") || l.includes("map_0.5")) && !l.includes("map50-95") && !l.includes("map_0.5:0.95");
+                });
+                const map95Idx = headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return l.includes("map50-95") || l.includes("map_0.5:0.95") || l.includes("map95");
+                });
+                const precisionIdx = headers.findIndex(h => h.toLowerCase().includes("precision"));
+                const recallIdx = headers.findIndex(h => h.toLowerCase().includes("recall"));
+                const accuracyIdx = headers.findIndex(h => h.toLowerCase().includes("accuracy"));
+                const lossIdx = headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return l.includes("val/box_loss") || l.includes("val/loss") || l.includes("train/box_loss") || l.includes("train/loss");
+                });
 
                 const currentEpoch = epochIdx !== -1 && !isNaN(parseInt(row[epochIdx])) ? parseInt(row[epochIdx]) : rowsCount;
 
@@ -364,6 +379,24 @@ async function parseResultsCsvStream(csvPath) {
                         bestMap50_95 = val;
                     }
                 }
+                if (precisionIdx !== -1 && row[precisionIdx]) {
+                    const val = parseFloat(row[precisionIdx]);
+                    if (!isNaN(val) && val > bestPrecision) {
+                        bestPrecision = val;
+                    }
+                }
+                if (recallIdx !== -1 && row[recallIdx]) {
+                    const val = parseFloat(row[recallIdx]);
+                    if (!isNaN(val) && val > bestRecall) {
+                        bestRecall = val;
+                    }
+                }
+                if (accuracyIdx !== -1 && row[accuracyIdx]) {
+                    const val = parseFloat(row[accuracyIdx]);
+                    if (!isNaN(val) && val > bestAccuracy) {
+                        bestAccuracy = val;
+                    }
+                }
                 if (lossIdx !== -1 && row[lossIdx]) {
                     const lVal = parseFloat(row[lossIdx]);
                     if (!isNaN(lVal)) epochLosses.push(lVal);
@@ -378,17 +411,48 @@ async function parseResultsCsvStream(csvPath) {
                 totalEpochs,
                 bestMap50,
                 bestMap50Epoch,
-                bestMap50_95
+                bestMap50_95,
+                bestPrecision,
+                bestRecall,
+                bestAccuracy
             };
 
             if (headers.length && lastRow) {
                 headers.forEach((h, idx) => {
                     if (lastRow[idx] !== undefined) {
                         const val = parseFloat(lastRow[idx]);
-                        metrics[h] = isNaN(val) ? lastRow[idx] : val;
+                        const numVal = isNaN(val) ? lastRow[idx] : val;
+                        const cleanHeader = h.trim();
+                        metrics[cleanHeader] = numVal;
+
+                        // Normalize common YOLO header names onto metrics object
+                        const lower = cleanHeader.toLowerCase();
+                        if ((lower.includes("map50") || lower.includes("map_0.5")) && !lower.includes("map50-95") && !lower.includes("map_0.5:0.95")) {
+                            if (!metrics.mAP50) metrics.mAP50 = numVal;
+                        } else if (lower.includes("map50-95") || lower.includes("map_0.5:0.95")) {
+                            if (!metrics["mAP50-95"]) metrics["mAP50-95"] = numVal;
+                        } else if (lower.includes("precision")) {
+                            if (!metrics.precision) metrics.precision = numVal;
+                        } else if (lower.includes("recall")) {
+                            if (!metrics.recall) metrics.recall = numVal;
+                        } else if (lower.includes("accuracy")) {
+                            if (!metrics.accuracy) metrics.accuracy = numVal;
+                        }
                     }
                 });
             }
+
+            if (bestMap50 > 0) {
+                metrics.bestMap50 = bestMap50;
+                if (!metrics.mAP50) metrics.mAP50 = bestMap50;
+            }
+            if (bestMap50_95 > 0) {
+                metrics.bestMap50_95 = bestMap50_95;
+                if (!metrics["mAP50-95"]) metrics["mAP50-95"] = bestMap50_95;
+            }
+            if (bestPrecision > 0 && !metrics.precision) metrics.precision = bestPrecision;
+            if (bestRecall > 0 && !metrics.recall) metrics.recall = bestRecall;
+            if (bestAccuracy > 0 && !metrics.accuracy) metrics.accuracy = bestAccuracy;
 
             let initialLoss = epochLosses.length > 0 ? epochLosses[0] : null;
             let finalLoss = epochLosses.length > 0 ? epochLosses[epochLosses.length - 1] : null;
@@ -1305,6 +1369,34 @@ function buildModelCardBody({ runName, runDir, summary, classNames, classSource,
  * Renders an SVG template with model details, metrics, dataset counts, and framework info
  * and converts it to a PNG image buffer using sharp.
  */
+/**
+ * Truncates class list string before it reaches the right boundary of the image card container.
+ */
+function formatClassList(classNames, maxChars = 32) {
+    if (!classNames || classNames.length === 0) return "N/A";
+
+    let resultItems = [];
+    for (let i = 0; i < classNames.length; i++) {
+        const name = classNames[i];
+        const remainingCount = classNames.length - i;
+        const countSuffix = i > 0 ? ` (+${remainingCount} more)` : `... (+${remainingCount})`;
+
+        const testStr = resultItems.length > 0 ? resultItems.join(", ") + `, ${name}` : name;
+        if (testStr.length + (remainingCount > 1 ? countSuffix.length : 0) > maxChars) {
+            if (resultItems.length === 0) {
+                return name.slice(0, Math.max(5, maxChars - 5)) + "...";
+            }
+            return resultItems.join(", ") + ` (+${remainingCount} more)`;
+        }
+        resultItems.push(name);
+    }
+    return resultItems.join(", ");
+}
+
+/**
+ * Renders an SVG template with model details, metrics, dataset counts, and framework info
+ * in Njobvu platform brand aesthetics and converts it to a PNG image buffer using sharp.
+ */
 async function generateModelCardImageBuffer({
     runName,
     summary,
@@ -1328,21 +1420,39 @@ async function generateModelCardImageBuffer({
         return "N/A";
     };
 
-    const getMetricVal = (keyPattern) => {
-        for (const [k, v] of Object.entries(metrics)) {
-            if (k.toLowerCase().includes(keyPattern.toLowerCase()) && typeof v === "number") {
-                return v;
+    const getMetricVal = (...patterns) => {
+        for (const pat of patterns) {
+            if (metrics[pat] !== undefined && typeof metrics[pat] === "number" && !isNaN(metrics[pat])) {
+                return metrics[pat];
+            }
+            for (const [k, v] of Object.entries(metrics)) {
+                if (typeof v !== "number" || isNaN(v)) continue;
+                const lowerK = k.toLowerCase().trim();
+                const lowerPat = pat.toLowerCase().trim();
+                if (lowerPat === "map50" && (lowerK.includes("map50-95") || lowerK.includes("map_0.5:0.95"))) {
+                    continue;
+                }
+                if (lowerK.includes(lowerPat)) {
+                    return v;
+                }
+            }
+            const item = modelIndexMetrics.find((m) => {
+                const t = m.type.toLowerCase();
+                if (pat.toLowerCase() === "map50" && t.includes("map50-95")) return false;
+                return t.includes(pat.toLowerCase());
+            });
+            if (item && typeof item.value === "number" && !isNaN(item.value)) {
+                return item.value;
             }
         }
-        const item = modelIndexMetrics.find((m) => m.type.toLowerCase().includes(keyPattern.toLowerCase()));
-        return item ? item.value : undefined;
+        return undefined;
     };
 
-    const map50 = metrics.bestMap50 ?? getMetricVal("map50");
-    const map50_95 = metrics.bestMap50_95 ?? getMetricVal("map50-95");
-    const precision = metrics.precision ?? getMetricVal("precision");
-    const recall = metrics.recall ?? getMetricVal("recall");
-    const accuracy = metrics.accuracy ?? metrics.accuracy_top1 ?? getMetricVal("accuracy");
+    const map50 = getMetricVal("bestMap50", "mAP50", "mAP_0.5", "metrics/mAP50(B)", "metrics/mAP50");
+    const map50_95 = getMetricVal("bestMap50_95", "mAP50-95", "mAP_0.5:0.95", "metrics/mAP50-95(B)", "metrics/mAP50-95");
+    const precision = getMetricVal("bestPrecision", "precision", "metrics/precision(B)", "metrics/precision");
+    const recall = getMetricVal("bestRecall", "recall", "metrics/recall(B)", "metrics/recall");
+    const accuracy = getMetricVal("bestAccuracy", "accuracy", "accuracy_top1", "metrics/accuracy_top1", "metrics/accuracy");
 
     const map50Str = formatMetric(map50);
     const map50_95Str = formatMetric(map50_95);
@@ -1355,9 +1465,7 @@ async function generateModelCardImageBuffer({
     const batch = config.batch !== undefined ? String(config.batch) : "N/A";
 
     const classCountStr = String(classNames ? classNames.length : 0);
-    const classListStr = classNames && classNames.length > 0
-        ? classNames.slice(0, 8).join(", ") + (classNames.length > 8 ? "..." : "")
-        : "N/A";
+    const classListStr = formatClassList(classNames, 32);
 
     let trainCount = "N/A", valCount = "N/A", testCount = "N/A", totalCount = "0";
     if (datasetCounts) {
@@ -1377,103 +1485,118 @@ async function generateModelCardImageBuffer({
       <stop offset="0%" stop-color="#0f172a"/>
       <stop offset="100%" stop-color="#1e293b"/>
     </linearGradient>
-    <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="50%" stop-color="#8b5cf6"/>
-      <stop offset="100%" stop-color="#ec4899"/>
+    <linearGradient id="njobvuGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
     </linearGradient>
-    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#334155" stop-opacity="0.6"/>
+    <linearGradient id="panelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#064e3b" stop-opacity="0.3"/>
     </linearGradient>
   </defs>
 
+  <!-- Canvas Background -->
   <rect width="1000" height="720" rx="16" fill="url(#bgGrad)"/>
-  <rect width="1000" height="8" rx="4" fill="url(#barGrad)"/>
+  
+  <!-- Njobvu Accent Top Bar -->
+  <rect width="1000" height="6" rx="3" fill="url(#njobvuGrad)"/>
 
-  <text x="40" y="52" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="28" font-weight="700">MODEL CARD</text>
-  <text x="40" y="82" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="16" font-weight="500">${esc(runName)}</text>
+  <!-- Header Section -->
+  <rect x="40" y="36" width="38" height="38" rx="8" fill="url(#njobvuGrad)"/>
+  <text x="59" y="61" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="800" text-anchor="middle">N</text>
 
-  <rect x="730" y="38" width="110" height="28" rx="6" fill="#312e81"/>
-  <text x="785" y="57" fill="#818cf8" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">Ultralytics</text>
+  <text x="90" y="52" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" letter-spacing="1.5">NJOBVU AI PLATFORM</text>
+  <text x="90" y="74" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700">${esc(runName)}</text>
 
-  <rect x="850" y="38" width="110" height="28" rx="6" fill="#064e3b"/>
-  <text x="905" y="57" fill="#34d399" font-family="system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="middle">${esc((task || "detect").toUpperCase())}</text>
+  <!-- Header Badges -->
+  <rect x="730" y="38" width="110" height="30" rx="15" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+  <text x="785" y="58" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" text-anchor="middle">Ultralytics</text>
+
+  <rect x="850" y="38" width="110" height="30" rx="15" fill="#065f46" stroke="#34d399" stroke-width="1"/>
+  <text x="905" y="58" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" text-anchor="middle">${esc((task || "detect").toUpperCase())}</text>
 
   <!-- Metric Stat Cards -->
-  <rect x="40" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
-  <text x="60" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">mAP@50</text>
-  <text x="60" y="190" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="32" font-weight="700">${esc(map50Str)}</text>
+  <rect x="40" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <text x="60" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">mAP@50</text>
+  <text x="60" y="188" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50Str)}</text>
 
-  <rect x="275" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
-  <text x="295" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">mAP@50-95</text>
-  <text x="295" y="190" fill="#818cf8" font-family="system-ui, sans-serif" font-size="32" font-weight="700">${esc(map50_95Str)}</text>
+  <rect x="275" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <text x="295" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">mAP@50-95</text>
+  <text x="295" y="188" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50_95Str)}</text>
 
-  <rect x="510" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
-  <text x="530" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Precision / Recall</text>
-  <text x="530" y="180" fill="#34d399" font-family="system-ui, sans-serif" font-size="20" font-weight="700">P: ${esc(precisionStr)}</text>
-  <text x="530" y="206" fill="#a7f3d0" font-family="system-ui, sans-serif" font-size="16" font-weight="600">R: ${esc(recallStr)}</text>
+  <rect x="510" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <text x="530" y="138" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Precision / Recall</text>
+  <text x="530" y="172" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700">P: ${esc(precisionStr)}</text>
+  <text x="530" y="200" fill="#a7f3d0" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">R: ${esc(recallStr)}</text>
 
-  <rect x="745" y="115" width="215" height="110" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
-  <text x="765" y="145" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Accuracy</text>
-  <text x="765" y="190" fill="#f472b6" font-family="system-ui, sans-serif" font-size="32" font-weight="700">${esc(accuracyStr)}</text>
+  <rect x="745" y="110" width="215" height="115" rx="12" fill="url(#cardGrad)" stroke="#10b981" stroke-opacity="0.3" stroke-width="1.5"/>
+  <text x="765" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Accuracy</text>
+  <text x="765" y="188" fill="#2dd4bf" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(accuracyStr)}</text>
 
-  <!-- Left Panel: Model & Framework -->
-  <rect x="40" y="250" width="450" height="410" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
-  <text x="65" y="285" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="18" font-weight="600">Model &amp; Framework Details</text>
-  <line x1="65" y1="300" x2="465" y2="300" stroke="#334155" stroke-width="1"/>
+  <!-- Left Panel: Model & Framework Details -->
+  <rect x="40" y="250" width="450" height="400" rx="12" fill="url(#panelGrad)" stroke="#334155" stroke-width="1"/>
+  <rect x="60" y="275" width="4" height="20" rx="2" fill="#10b981"/>
+  <text x="74" y="291" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Model &amp; Framework Details</text>
+  <line x1="60" y1="308" x2="470" y2="308" stroke="#334155" stroke-width="1"/>
 
-  <text x="65" y="335" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Framework:</text>
-  <text x="220" y="335" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">Ultralytics YOLO</text>
+  <text x="60" y="342" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Framework:</text>
+  <text x="210" y="342" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Ultralytics YOLO</text>
 
-  <text x="65" y="375" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Base Weights / Model:</text>
-  <text x="220" y="375" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${esc(modelName)}</text>
+  <text x="60" y="382" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Base Weights / Model:</text>
+  <text x="210" y="382" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(modelName)}</text>
 
-  <text x="65" y="415" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Task Type:</text>
-  <text x="220" y="415" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(task)} (${esc(pipelineTag)})</text>
+  <text x="60" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Task Type:</text>
+  <text x="210" y="422" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(task)} (${esc(pipelineTag)})</text>
 
-  <text x="65" y="455" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Epochs / Batch Size:</text>
-  <text x="220" y="455" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(epochs)} / ${esc(batch)}</text>
+  <text x="60" y="462" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Epochs / Batch Size:</text>
+  <text x="210" y="462" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(epochs)} / ${esc(batch)}</text>
 
-  <text x="65" y="495" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Run Name:</text>
-  <text x="220" y="495" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(runName)}</text>
+  <text x="60" y="502" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Run Name:</text>
+  <text x="210" y="502" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(runName)}</text>
 
-  <text x="65" y="535" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Project:</text>
-  <text x="220" y="535" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14">${esc(config.project || "N/A")}</text>
+  <text x="60" y="542" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Project:</text>
+  <text x="210" y="542" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(config.project || "N/A")}</text>
 
   <!-- Right Panel: Dataset & Class Statistics -->
-  <rect x="510" y="250" width="450" height="410" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1"/>
-  <text x="535" y="285" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="18" font-weight="600">Dataset &amp; Class Statistics</text>
-  <line x1="535" y1="300" x2="935" y2="300" stroke="#334155" stroke-width="1"/>
+  <rect x="510" y="250" width="450" height="400" rx="12" fill="url(#panelGrad)" stroke="#334155" stroke-width="1"/>
+  <rect x="530" y="275" width="4" height="20" rx="2" fill="#10b981"/>
+  <text x="544" y="291" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Dataset &amp; Class Statistics</text>
+  <line x1="530" y1="308" x2="940" y2="308" stroke="#334155" stroke-width="1"/>
 
-  <text x="535" y="335" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Class Count:</text>
-  <text x="680" y="335" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="600">${esc(classCountStr)} classes</text>
+  <text x="530" y="342" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Class Count:</text>
+  <text x="670" y="342" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(classCountStr)} classes</text>
 
-  <text x="535" y="375" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Classes List:</text>
-  <text x="680" y="375" fill="#a7f3d0" font-family="system-ui, sans-serif" font-size="14">${esc(classListStr)}</text>
+  <text x="530" y="382" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Classes List:</text>
+  <text x="670" y="382" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500">${esc(classListStr)}</text>
 
-  <text x="535" y="415" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Class Source:</text>
-  <text x="680" y="415" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="13">${esc(classSource || "N/A")}</text>
+  <text x="530" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Class Source:</text>
+  <text x="670" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13">${esc(classSource || "N/A")}</text>
 
-  <text x="535" y="460" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="15" font-weight="600">Dataset Image Split Counts</text>
+  <text x="530" y="470" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">Dataset Image Split Counts</text>
 
-  <rect x="535" y="480" width="90" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
-  <text x="580" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Train</text>
-  <text x="580" y="527" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(trainCount)}</text>
+  <rect x="530" y="490" width="92" height="64" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <text x="576" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Train</text>
+  <text x="576" y="539" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(trainCount)}</text>
 
-  <rect x="635" y="480" width="90" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
-  <text x="680" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Val</text>
-  <text x="680" y="527" fill="#818cf8" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(valCount)}</text>
+  <rect x="632" y="490" width="92" height="64" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <text x="678" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Val</text>
+  <text x="678" y="539" fill="#2dd4bf" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(valCount)}</text>
 
-  <rect x="735" y="480" width="90" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
-  <text x="780" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Test</text>
-  <text x="780" y="527" fill="#f472b6" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(testCount)}</text>
+  <rect x="734" y="490" width="92" height="64" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <text x="780" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Test</text>
+  <text x="780" y="539" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(testCount)}</text>
 
-  <rect x="835" y="480" width="100" height="60" rx="8" fill="#0f172a" stroke="#334155"/>
-  <text x="885" y="502" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Total</text>
-  <text x="885" y="527" fill="#34d399" font-family="system-ui, sans-serif" font-size="16" font-weight="700" text-anchor="middle">${esc(totalCount)}</text>
+  <rect x="836" y="490" width="104" height="64" rx="8" fill="#0f172a" stroke="#10b981" stroke-opacity="0.5"/>
+  <text x="888" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Total</text>
+  <text x="888" y="539" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" text-anchor="middle">${esc(totalCount)}</text>
 
-  <text x="500" y="695" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Generated by Njobvu AI Model Card Post-Processing Pipeline</text>
+  <!-- Footer Branding -->
+  <text x="500" y="692" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Njobvu AI Platform  •  Computer Vision Training &amp; Inference Pipeline</text>
 </svg>`;
 
     return await sharp(Buffer.from(svg)).png().toBuffer();
