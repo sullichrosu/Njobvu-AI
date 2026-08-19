@@ -1,5 +1,11 @@
+const path = require("path");
+const fs = require("fs");
 const queries = require("../../queries/queries");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const {
+    ensureTrainingImagesLocal,
+    cleanupJitTrainingImages,
+} = require("../../utils/jitTrainingImages");
 
 async function run(req, res) {
     const { exec } = require("child_process");
@@ -27,7 +33,7 @@ async function run(req, res) {
         options = "EMPTY";
     }
     global.logger.debug("options: ", options);
-    var publicPath = currentPath,
+    var publicPath = global.currentPath || (typeof currentPath !== "undefined" ? currentPath : (process.cwd() + "/")),
         mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
         projectPath = mainPath + Admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
         imagesPath = projectPath + "/images", // $LABELING_TOOL_PATH/public/projects/project_name/images
@@ -59,11 +65,22 @@ async function run(req, res) {
         if (err) throw err;
     });
 
+    let existingImages;
+    let jitDownloadedFiles = [];
+    try {
+        existingImages = await queries.project.getAllImages(projectPath);
+        jitDownloadedFiles = await ensureTrainingImagesLocal(PName, Admin, projectPath, existingImages.rows);
+    } catch (err) {
+        global.logger.error("Error fetching streamed S3 images JIT for run:", err);
+        return res.status(500).send("Error fetching streamed S3 images for training: " + err.message);
+    }
+
     let existingLabels;
     try {
         existingLabels = await queries.project.getAllLabels(projectPath);
     } catch (err) {
         global.logger.error(err);
+        await cleanupJitTrainingImages(jitDownloadedFiles);
         return res.status(500).send("Error fetching labels");
     }
     const labels = existingLabels.rows;
@@ -168,8 +185,9 @@ async function run(req, res) {
         global.logger.debug("stdout: ", stdout);
         global.logger.debug("stderr: ", stderr);
         global.logger.debug("err: ", err);
-        fs.writeFile(`${runPath}/done.log`, success, (err) => {
+        fs.writeFile(`${runPath}/done.log`, success, async (err) => {
             if (err) throw err;
+            await cleanupJitTrainingImages(jitDownloadedFiles);
         });
     });
 

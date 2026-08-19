@@ -6,6 +6,10 @@ const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const {
+    ensureTrainingImagesLocal,
+    cleanupJitTrainingImages,
+} = require("../../utils/jitTrainingImages");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -486,6 +490,14 @@ async function yoloRun(req, res) {
         targetImages = targetImages.slice(0, maxImages);
     }
 
+    let jitDownloadedFiles = [];
+    try {
+        jitDownloadedFiles = await ensureTrainingImagesLocal(PName, Admin, projectPath, targetImages);
+    } catch (err) {
+        global.logger.error("Error ensuring local images for training JIT:", err);
+        return res.status(500).send("Error fetching streamed S3 images for training: " + err.message);
+    }
+
     // Parse Train : Validate : Test split ratio
     let trainPct = parseFloat(req.body.TrainingPercent || req.body.train_percent || 70);
     let valPct = parseFloat(req.body.ValPercent || req.body.val_percent);
@@ -903,7 +915,7 @@ async function yoloRun(req, res) {
     fs.writeFileSync(`${absDarknetProjectRun}/${log}`, `${runOptionsHeader}${cmd}`);
 
     const bufferSizeMult = (global.configFile && global.configFile.training_max_buffer_size) || (typeof configFile !== "undefined" && configFile.training_max_buffer_size) || 1;
-    exec(cmd, { maxBuffer: 1024 * 1024 * 1024 * bufferSizeMult }, (err, stdout, stderr) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 * 1024 * bufferSizeMult }, async (err, stdout, stderr) => {
         if (stdout) {
             global.logger.debug("STDOUT:", stdout);
             fs.appendFile(`${absDarknetProjectRun}/${log}`, stdout, (err) => {
@@ -940,6 +952,7 @@ async function yoloRun(req, res) {
         }
 
         fs.writeFileSync(`${runPath}/done.log`, success);
+        await cleanupJitTrainingImages(jitDownloadedFiles);
     });
 
 
