@@ -207,7 +207,7 @@ async function getValidationLabelingPage(req, res) {
         });
     }
 
-    const relImagePath = `${relProjectPath}/images/${imageRecord.IName}`;
+    const relImagePath = `/${relProjectPath}/images/${imageRecord.IName}`;
     let imgData;
     try {
         const imgBuffer = fsObj.readFileSync(absImagePath);

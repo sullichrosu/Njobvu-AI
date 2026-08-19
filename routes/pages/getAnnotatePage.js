@@ -120,7 +120,7 @@ async function getAnnotatePage(req, res) {
         });
     }
 
-    const relImagePath = `${relProjectPath}/images/${imageRecord.IName}`;
+    const relImagePath = `/${relProjectPath}/images/${imageRecord.IName}`;
 
     let imgData;
     try {

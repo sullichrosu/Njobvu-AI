@@ -204,6 +204,8 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", asyncHandler(syn
 
 // LABELLING ROUTES
 api.post("/updateLabels", asyncHandler(updateLabels));
+api.post("/project/updateLabels", asyncHandler(updateLabels));
+api.post("/api/labels/update", asyncHandler(updateLabels));
 api.delete("/deleteBadLabels/:Admin/:PName/:Lid", asyncHandler(deleteLabels));
 api.put("/api/switchLabels", asyncHandler(switchLabels));
 
