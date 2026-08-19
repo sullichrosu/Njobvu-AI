@@ -1,14 +1,19 @@
+const queries = require("../../queries/queries");
+
 async function getSignupPage(req, res) {
-    var results1 = await db.allAsync("SELECT * FROM `Users`");
-    var users = [];
-    for (var i = 0; i < results1.length; i++) {
-        users.push(results1[i].Username);
+    let users = [];
+    try {
+        const usersRes = await queries.managed.sql("SELECT * FROM Users", []);
+        const rows = (usersRes && usersRes.rows) ? usersRes.rows : [];
+        users = rows.map((u) => u.Username);
+    } catch (err) {
+        global.logger.error("Error fetching users for signup page:", err);
     }
 
     res.render("signup", {
         title: "signup",
         logged: req.query.logged,
-        users: users,
+        users,
     });
 }
 

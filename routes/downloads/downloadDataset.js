@@ -223,10 +223,16 @@ async function downloadDataset(req, res) {
                 imgW = imgData.width,
                 imgH = imgData.height;
 
-            const imageLabels = await queries.project.getLabelsForImageName(
-                projectPath,
-                existingImages.rows[i].IName,
-            );
+            let imageLabels;
+            try {
+                imageLabels = await queries.project.getLabelsForImageName(
+                    projectPath,
+                    existingImages.rows[i].IName,
+                );
+            } catch (err) {
+                global.logger.error(err);
+                return res.status(500).send("Could not fetch labels");
+            }
 
             for (var j = 0; j < imageLabels.rows.length; j++) {
                 // x, y, w, h

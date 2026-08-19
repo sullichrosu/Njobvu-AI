@@ -59,7 +59,7 @@
 			<tbody>
 				<% for(var i=0; i<images.length; i++) {%>
 				<tr>
-					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/annotate?IDX=<%= IDX %>&IName=<%= images[i].IName %>&reviewFilter=<%= typeof reviewFilter !== 'undefined' ? reviewFilter : 'all' %>"><%= images[i].IName %></a></td>
+					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/project/annotate?IDX=<%= IDX %>&IName=<%= encodeURIComponent(images[i].IName) %>&reviewFilter=<%= typeof reviewFilter !== 'undefined' ? reviewFilter : 'all' %>"><%= images[i].IName %></a></td>
 					<!-- input checkbox for review here -->
 					<td class="text-left"> 
 					    <% if(images[i].reviewImage != 0) {%>
@@ -68,13 +68,13 @@
 					</td>
 					<td class="text-right"><%= list_counter[i] %></td>
 					<td class="text-right">
-						<a class="btn btn-primary" href="/annotate?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>&reviewFilter=<%= typeof reviewFilter !== 'undefined' ? reviewFilter : 'all' %>" role="button" style="border-radius: 0">Annotate</a>
+						<a class="btn btn-primary" href="/project/annotate?IDX=<%= IDX %>&IName=<%= encodeURIComponent(String(images[i].IName)) %>&reviewFilter=<%= typeof reviewFilter !== 'undefined' ? reviewFilter : 'all' %>" role="button" style="border-radius: 0">Annotate</a>
 						<% if(images[i].reviewImage != 0) {%>
-						<a class="btn btn-warning" href="/labelingV?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0; margin-left: 5px;">Review</a>
+						<a class="btn btn-warning" href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>" role="button" style="border-radius: 0; margin-left: 5px;">Review</a>
 						<%}%>
 					</td>
 					<td class="text-right"> <button type="button" class="button btn-danger" style="border-radius: 0" 
-					    onclick="deleteImage('<%= String(images[i].IName) %>')" aria-label="Delete image <%= images[i].IName %>">X</a></td>
+					    onclick="deleteImage('<%= String(images[i].IName) %>')" aria-label="Delete image <%= images[i].IName %>">X</button></td>
 				</tr>
 				
 				<% } %>

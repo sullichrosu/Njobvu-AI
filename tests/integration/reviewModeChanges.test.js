@@ -81,7 +81,8 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
+    global.projectDbClients = {};
   });
 
   describe("POST /changeValidation state preservation", () => {
@@ -282,6 +283,7 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /review image rendering", () => {
     function mockReviewDb(overrides) {
+      global.projectDbClients = {};
       const sqlite3 = require("sqlite3");
       const dbMock = {
         all: jest.fn((sql, params, cb) => {
@@ -382,6 +384,9 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
   });
 
   describe("GET /labelingV filtered prev/next navigation", () => {
+    beforeEach(() => {
+      global.projectDbClients = {};
+    });
     // curr_index used to come from a ROW_NUMBER() query over the *entire*
     // unfiltered Images table, while prev/next indexed into results2 (a
     // filtered/sorted subset, e.g. sort=needs_review). Once a filter shrank

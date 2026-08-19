@@ -32,7 +32,7 @@ class Client {
 
             let success = true;
 
-            const db = new Database(filename, openMode, function (error) {
+            const db = new Database(filename, function (error) {
                 if (error) {
                     console.error(error);
                     success = false;

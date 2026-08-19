@@ -288,7 +288,7 @@ if __name__ == "__main__":
         darknet_path
         + f" {yolo_task}"
         + f" {yolo_mode}"
-        + " predict model="
+        + " model="
         + weight_path
         + " source="
         + image_path
@@ -309,13 +309,13 @@ if __name__ == "__main__":
     call_command(cmd)
 
     destination_dir = data_path
-    source_dir = data_path + "/output"
+    source_dir = os.path.join(data_path, "output")
 
     # create a directory for original images
     raw_images_dir = os.path.join(destination_dir, "raw")
     os.makedirs(raw_images_dir, exist_ok=True)
 
-    files = os.listdir(source_dir)
+    files = os.listdir(source_dir) if os.path.exists(source_dir) else []
     for file_name in files:
         source_path = os.path.join(source_dir, file_name)
         destination_path = os.path.join(destination_dir, file_name)

@@ -13,18 +13,25 @@ async function deleteLabelValidation(req, res) {
 
     labels = labels.split(",");
 
-    for (const label of labels) {
-        await queries.project.sql(
-            projectPath,
-            "DELETE FROM Labels WHERE LID = ?",
-            [label],
-        );
-        await queries.project.sql(
-            projectPath,
-            "DELETE FROM Validation WHERE LID = ?",
-            [label],
-        );
+    try {
+        for (const label of labels) {
+            await queries.project.sql(
+                projectPath,
+                "DELETE FROM Labels WHERE LID = ?",
+                [label],
+            );
+            await queries.project.sql(
+                projectPath,
+                "DELETE FROM Validation WHERE LID = ?",
+                [label],
+            );
+        }
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).send("Error deleting validation labels");
     }
+
+    res.send({ Success: "Yes" });
 }
 
 module.exports = deleteLabelValidation;
