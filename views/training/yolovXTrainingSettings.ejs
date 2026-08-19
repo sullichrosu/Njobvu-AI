@@ -158,7 +158,7 @@
 										<!-- Class Subset Selection -->
 										<div class="form-group col-12 p-3 mb-3 border rounded" style="background-color: #f8f9fa;">
 											<h5><label>Class Subset Selection</label></h5>
-											<p class="text-muted small">Select which classes to include in training:</p>
+											<p class="text-muted small">Select which classes to include in training. "Unlabeled" trains on images with no labels as background/negative examples:</p>
 											<div class="mb-2">
 												<button type="button" class="btn btn-sm btn-outline-primary" id="selectAllClasses">Select All</button>
 												<button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllClasses">Deselect All</button>
@@ -172,7 +172,7 @@
 													<% for (var i = 0; i < classes.length; i++) { %>
 														<div class="form-check form-check-inline mr-3 my-1">
 															<input class="form-check-input class-checkbox" type="checkbox" name="selected_classes" id="class_<%= i %>" value="<%= classes[i].CName %>" data-image-count="<%= classes[i].imageCount || 0 %>" checked>
-															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
+															<label class="form-check-label" for="class_<%= i %>"><%= classes[i].CName === unlabeledClass ? 'Unlabeled' : classes[i].CName %> <span class="text-muted small">(<%= classes[i].imageCount || 0 %> images)</span></label>
 														</div>
 													<% } %>
 												<% } else { %>

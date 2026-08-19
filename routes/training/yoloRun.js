@@ -6,6 +6,7 @@ const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -479,9 +480,33 @@ async function yoloRun(req, res) {
         );
     }
 
+    // Whether unlabeled images (no rows in Labels) should be included as
+    // background/negative examples. Absent selected_classes means no filter was
+    // applied at all (legacy behavior: include everything); otherwise it's included
+    // only if the "Unlabeled" pseudo-class checkbox was checked.
+    const includeUnlabeled =
+        !selectedClassesList ||
+        selectedClassesList.length === 0 ||
+        selectedClassesList.includes(UNLABELED_CLASS);
+
     // Parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
+
+    if (!includeUnlabeled && ["detect", "segment", "obb"].includes(yoloTask)) {
+        try {
+            const unlabeledResult = await queries.project.getUnlabeledImages(projectPath);
+            const unlabeledImageNames = new Set(
+                (unlabeledResult.rows || []).map((row) => row.IName),
+            );
+            targetImages = targetImages.filter(
+                (img) => !unlabeledImageNames.has(img.IName),
+            );
+        } catch (err) {
+            global.logger.error(err);
+        }
+    }
+
     if (Number.isFinite(maxImages) && maxImages > 0 && maxImages < targetImages.length) {
         targetImages = targetImages.slice(0, maxImages);
     }
@@ -888,6 +913,7 @@ async function yoloRun(req, res) {
         val_percent: valPct,
         test_percent: testPct,
         selected_classes: selectedClassesList ? selectedClassesList.join(", ") : null,
+        include_unlabeled: includeUnlabeled,
         max_images: Number.isFinite(maxImages) ? maxImages : null,
         batch,
         subdiv,
