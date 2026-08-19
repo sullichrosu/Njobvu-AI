@@ -210,7 +210,11 @@ async function createProject(req, res) {
 
                 fs.rename(temp, imagesPath + "/" + files[i], () => { });
 
-                await queries.project.addImages(projectPath, files[i], 0, 0);
+                try {
+                    await queries.project.addImages(projectPath, files[i], 0, 0);
+                } catch (err) {
+                    global.logger.error(err);
+                }
             }
         }
 

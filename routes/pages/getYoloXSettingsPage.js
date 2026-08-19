@@ -13,26 +13,15 @@ async function getYoloXSettingsPage(req, res) {
         return res.redirect("/l");
     }
 
-    let projects = [];
-    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
-            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading yoloX settings page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    if (!projects || idx < 0 || idx >= projects.length) {
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
@@ -68,69 +57,47 @@ async function getYoloXSettingsPage(req, res) {
     }
 
     let projRecord = null;
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, Admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-        } catch (err) {}
-    }
-    if (!projRecord && global.db && typeof global.db.getAsync === "function") {
-        try {
-            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + Admin + "'");
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, Admin]
+        );
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let classes = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
-    }
-    if ((!classes || classes.length === 0) && global.sqlite3) {
-        try {
-            const dbPath = path.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classes = await new Promise((resolve) => {
-                    const cb = (err, rows) => resolve(rows || []);
-                    if (tdb.all.length === 2) {
-                        tdb.all("SELECT * FROM Classes", cb);
-                    } else {
-                        tdb.all("SELECT * FROM Classes", [], cb);
-                    }
-                });
-            }
-        } catch (err) {}
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
     }
 
     const classLabelCounts = {};
     try {
         const countsResult = await queries.project.getClassLabelCounts(projectDir);
-        if (countsResult && countsResult.rows) {
-            countsResult.rows.forEach((row) => {
-                classLabelCounts[row.CName] = row.labelCount || 0;
-            });
-        }
-    } catch (err) {}
+        (countsResult.rows || []).forEach((row) => {
+            classLabelCounts[row.CName] = row.labelCount || 0;
+        });
+    } catch (err) {
+        global.logger.error("Error querying class label counts:", err);
+    }
 
-    classes = (classes || []).map((cls) => Object.assign({}, cls, {
+    classes = classes.map((cls) => Object.assign({}, cls, {
         labelCount: classLabelCounts[cls.CName] || 0,
     }));
 
     let accessUsers = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, Admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : [];
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, Admin]
+        );
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     let globalWeights = [];

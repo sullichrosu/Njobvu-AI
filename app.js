@@ -45,9 +45,11 @@ const {
     getYoloXTrainingSettingsPage,
     getInceptionSettingsPage,
     getHelpPage,
+    getErrorPage,
     getMegadetectorSettingsPage,
 } = require("./routes/pages");
 const { getHelpApi } = require("./routes/api/help");
+const asyncHandler = require("./utils/asyncHandler");
 
 // middleware
 
@@ -61,46 +63,61 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(cookieParser());
 app.use("/", api);
 
-app.get("/api/v2/help", getHelpApi);
-app.get("/api/help", getHelpApi);
+app.get("/api/v2/help", asyncHandler(getHelpApi));
+app.get("/api/help", asyncHandler(getHelpApi));
 
-app.get("/", getLoginPage);
-app.get("/signup", getSignupPage);
-app.get("/home", getHomePage);
-app.get("/help", getHelpPage);
-app.get("/create", getCreatePage);
-app.get("/annotate", getAnnotatePage);
-app.get("/review", getReviewPage);
-app.get("/project", getProjectPage);
-app.get("/config", getConfigPage);
-app.get("/config/projSettings", getProjectSettingsPage);
-app.get("/config/classSettings", getClassSettingsPage);
-app.get("/config/accessSettings", getAccessSettingsPage);
-app.get("/config/imageSettings", getImageSettingsPage);
-app.get("/config/mergeSettings", getMergeSettingsPage);
-app.get("/download", getDownloadPage);
-app.get("/labeling", getLabelingPage);
-app.get("/stats", getStatsPage);
-app.get("/customTraining", getCustomTrainingPage);
-app.get("/training", getTrainingPage);
-app.get("/inference", getInferencePage);
-app.get("/yolo", getYoloPage);
-app.get("/yolo/yolov3Settings", getYolo3SettingsPage);
-app.get("/yolo/yolovXSettings", getYoloXSettingsPage);
-app.get("/yolo/yolovXInferenceSettings", getYoloXInferenceSettingsPage);
-app.get("/yolo/yolovXTrainingSettings", getYoloXTrainingSettingsPage);
-app.get("/inference/inceptionSettings", getInceptionSettingsPage);
-app.get("/megadetector/settings", getMegadetectorSettingsPage);
-app.get("/user", getUserPage);
-app.get("/servstats", getServerStatsPage);
-app.get("/homeV", getValidationHomePage);
-app.get("/projectV", getValidationProjectPage);
-app.get("/labelingV", getValidationLabelingPage);
-app.get("/configV", getValidationConfigPage);
-app.get("/statsV", getValidationStatsPage);
-app.get("/createClassification", getClassificationPage);
+app.get("/", asyncHandler(getLoginPage));
+app.get("/signup", asyncHandler(getSignupPage));
+app.get("/home", asyncHandler(getHomePage));
+app.get("/help", asyncHandler(getHelpPage));
+app.get("/create", asyncHandler(getCreatePage));
+app.get("/annotate", asyncHandler(getAnnotatePage));
+app.get("/review", asyncHandler(getReviewPage));
+app.get("/project", asyncHandler(getProjectPage));
+app.get("/config", asyncHandler(getConfigPage));
+app.get("/config/projSettings", asyncHandler(getProjectSettingsPage));
+app.get("/config/classSettings", asyncHandler(getClassSettingsPage));
+app.get("/config/accessSettings", asyncHandler(getAccessSettingsPage));
+app.get("/config/imageSettings", asyncHandler(getImageSettingsPage));
+app.get("/config/mergeSettings", asyncHandler(getMergeSettingsPage));
+app.get("/download", asyncHandler(getDownloadPage));
+app.get("/labeling", asyncHandler(getLabelingPage));
+app.get("/stats", asyncHandler(getStatsPage));
+app.get("/customTraining", asyncHandler(getCustomTrainingPage));
+app.get("/training", asyncHandler(getTrainingPage));
+app.get("/inference", asyncHandler(getInferencePage));
+app.get("/yolo", asyncHandler(getYoloPage));
+app.get("/yolo/yolov3Settings", asyncHandler(getYolo3SettingsPage));
+app.get("/yolo/yolovXSettings", asyncHandler(getYoloXSettingsPage));
+app.get("/yolo/yolovXInferenceSettings", asyncHandler(getYoloXInferenceSettingsPage));
+app.get("/yolo/yolovXTrainingSettings", asyncHandler(getYoloXTrainingSettingsPage));
+app.get("/inference/inceptionSettings", asyncHandler(getInceptionSettingsPage));
+app.get("/megadetector/settings", asyncHandler(getMegadetectorSettingsPage));
+app.get("/user", asyncHandler(getUserPage));
+app.get("/servstats", asyncHandler(getServerStatsPage));
+app.get("/homeV", asyncHandler(getValidationHomePage));
+app.get("/projectV", asyncHandler(getValidationProjectPage));
+app.get("/labelingV", asyncHandler(getValidationLabelingPage));
+app.get("/configV", asyncHandler(getValidationConfigPage));
+app.get("/statsV", asyncHandler(getValidationStatsPage));
+app.get("/createClassification", asyncHandler(getClassificationPage));
 app.get("/api/gpuinfo");
+app.get("/error", asyncHandler(getErrorPage));
 
-app.get("*", get404Page);
+app.get("*", asyncHandler(get404Page));
+
+app.use((err, req, res, next) => {
+    global.logger.error("Unhandled route error:", { path: req.path, error: err.message, stack: err.stack });
+
+    if (res.headersSent) {
+        return next(err);
+    }
+
+    if (req.accepts(["html", "json"]) === "json") {
+        return res.status(500).json({ Success: "No", error: err.message });
+    }
+
+    res.redirect(`/error?error=${encodeURIComponent(err.message || "Internal Server Error")}`);
+});
 
 module.exports = app;

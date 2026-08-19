@@ -547,10 +547,16 @@ async function yoloRun(req, res) {
                 imgW = imgData.width,
                 imgH = imgData.height;
 
-            const imageLabels = await queries.project.getLabelsForImageName(
-                projectPath,
-                targetImages[i].IName,
-            );
+            let imageLabels;
+            try {
+                imageLabels = await queries.project.getLabelsForImageName(
+                    projectPath,
+                    targetImages[i].IName,
+                );
+            } catch (err) {
+                global.logger.error(err);
+                return res.status(500).send("Error fetching labels");
+            }
 
             for (var j = 0; j < imageLabels.rows.length; j++) {
                 const classId = cnames.indexOf(imageLabels.rows[j].CName);

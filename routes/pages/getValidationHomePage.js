@@ -17,21 +17,12 @@ async function getValidationHomePage(req, res) {
     const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
     const projectsBaseDir = path.join(publicPath, "public", "projects");
 
-    let accessRows = [];
-    let accessAttempted = false;
-    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            if (userProjectsRes && userProjectsRes.success) {
-                accessAttempted = true;
-                accessRows = (userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-            }
-        } catch (err) {}
-    }
-    if (!accessAttempted && global.db && typeof global.db.allAsync === "function") {
-        try {
-            accessRows = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
+    let accessRows;
+    try {
+        ({ rows: accessRows } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading validation home page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
     const results = [];
@@ -39,29 +30,14 @@ async function getValidationHomePage(req, res) {
         for (let i = 0; i < accessRows.length; i++) {
             const acc = accessRows[i];
             let projRow = null;
-            let projAttempted = false;
-            if (queries.managed && typeof queries.managed.sql === "function") {
-                try {
-                    const projRes = await queries.managed.sql(
-                        "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND (Validate = ? OR Validate = ?)",
-                        [acc.PName, acc.Admin, 1, "1"]
-                    );
-                    if (projRes && projRes.success) {
-                        projAttempted = true;
-                        projRow = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
-                    }
-                } catch (err) {}
-            }
-            if (!projAttempted && global.db && typeof global.db.getAsync === "function") {
-                try {
-                    projRow = await global.db.getAsync(
-                        "SELECT * FROM `Projects` WHERE PName = '" +
-                        acc.PName +
-                        "' AND Admin = '" +
-                        acc.Admin +
-                        "' AND (Validate = 1 OR Validate = '1')"
-                    );
-                } catch (err) {}
+            try {
+                const projRes = await queries.managed.sql(
+                    "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND (Validate = ? OR Validate = ?)",
+                    [acc.PName, acc.Admin, 1, "1"]
+                );
+                projRow = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+            } catch (err) {
+                global.logger.error(`Error querying validation status for ${acc.PName}:`, err);
             }
 
             if (projRow) {

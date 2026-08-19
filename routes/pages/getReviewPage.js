@@ -16,155 +16,96 @@ async function getReviewPage(req, res) {
         return res.redirect("/home");
     }
 
-    let projects = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + username + "'");
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(username);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
-    }
+    let project, PName, admin, projectDir;
+    try {
+        const { rows: projects } = await queries.managed.getUserProjects(username);
 
-    const project = projects[idx];
-    if (!project) {
-        global.logger.error("No project found for IDX:", idx);
-        return res.redirect("/home");
+        project = projects[idx];
+        if (!project) {
+            global.logger.error("No project found for IDX:", idx);
+            return res.redirect("/home");
+        }
+
+        ({ PName, Admin: admin } = project);
+
+        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+    } catch (err) {
+        global.logger.error("Error loading review page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
-
-    const PName = project.PName;
-    const admin = project.Admin;
-
-    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
-    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
 
     let totalCount = 0;
     let images = [];
 
     if (isUnlabeledMode) {
-        if (global.sqlite3) {
-            try {
-                const dbPath = path.join(projectDir, `${PName}.db`);
-                const tdb = new global.sqlite3.Database(dbPath, () => {});
-                if (tdb && typeof tdb.all === "function") {
-                    totalCount = await new Promise((resolve) => {
-                        const sql = "SELECT COUNT(*) as count FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels)";
-                        tdb.all(sql, [], (err, rows) => {
-                            if (rows && rows[0]) {
-                                resolve(rows[0].count !== undefined ? rows[0].count : (rows[0]["COUNT(*)"] || 0));
-                            } else resolve(0);
-                        });
-                    });
-                }
-            } catch (err) {}
-        }
-        if (!totalCount && queries.project && typeof queries.project.sql === "function") {
-            try {
-                const countRes = await queries.project.sql(
-                    projectDir,
-                    "SELECT COUNT(*) as count FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels)",
-                    []
-                );
-                totalCount = (countRes && countRes.rows && countRes.rows[0]) ? (countRes.rows[0].count !== undefined ? countRes.rows[0].count : (countRes.rows[0]["COUNT(*)"] || 0)) : 0;
-            } catch (err) {}
+        try {
+            const countRes = await queries.project.sql(
+                projectDir,
+                "SELECT COUNT(*) as count FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels)",
+                []
+            );
+            totalCount = (countRes.rows && countRes.rows[0]) ? Number(countRes.rows[0].count) : 0;
+        } catch (err) {
+            global.logger.error("Error counting unlabeled images:", err);
         }
 
-        if (global.sqlite3) {
-            try {
-                const dbPath = path.join(projectDir, `${PName}.db`);
-                const tdb = new global.sqlite3.Database(dbPath, () => {});
-                if (tdb && typeof tdb.all === "function") {
-                    images = await new Promise((resolve) => {
-                        const sql = `SELECT Images.IName FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ${pageSize} OFFSET ${offset}`;
-                        tdb.all(sql, [], (err, rows) => resolve(rows || []));
-                    });
-                }
-            } catch (err) {}
-        }
-        if ((!images || images.length === 0) && queries.project && typeof queries.project.sql === "function") {
-            try {
-                const imgRes = await queries.project.sql(
-                    projectDir,
-                    "SELECT Images.IName FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ? OFFSET ?",
-                    [pageSize, offset]
-                );
-                images = (imgRes && imgRes.rows) ? imgRes.rows : [];
-            } catch (err) {}
+        try {
+            const imgRes = await queries.project.sql(
+                projectDir,
+                "SELECT Images.IName FROM Images WHERE Images.IName NOT IN (SELECT IName FROM Labels) LIMIT ? OFFSET ?",
+                [pageSize, offset]
+            );
+            images = imgRes.rows || [];
+        } catch (err) {
+            global.logger.error("Error fetching unlabeled images:", err);
         }
     } else {
-        if (queries.project && typeof queries.project.sql === "function") {
-            try {
-                const countRes = await queries.project.sql(
-                    projectDir,
-                    "SELECT COUNT(*) as count FROM Images INNER JOIN Labels ON Images.IName = Labels.IName WHERE Labels.CName = ?",
-                    [CName]
-                );
-                totalCount = (countRes && countRes.rows && countRes.rows[0]) ? (countRes.rows[0].count !== undefined ? countRes.rows[0].count : (countRes.rows[0]["COUNT(*)"] || 0)) : 0;
-            } catch (err) {}
+        try {
+            const countRes = await queries.project.sql(
+                projectDir,
+                "SELECT COUNT(*) as count FROM Images INNER JOIN Labels ON Images.IName = Labels.IName WHERE Labels.CName = ?",
+                [CName]
+            );
+            totalCount = (countRes.rows && countRes.rows[0]) ? Number(countRes.rows[0].count) : 0;
+        } catch (err) {
+            global.logger.error("Error counting labeled images:", err);
         }
-        if (queries.project && typeof queries.project.sql === "function") {
-            try {
-                const imgRes = await queries.project.sql(
-                    projectDir,
-                    "SELECT Images.IName FROM Images INNER JOIN Labels ON Images.IName = Labels.IName WHERE Labels.CName = ? LIMIT ? OFFSET ?",
-                    [CName, pageSize, offset]
-                );
-                images = (imgRes && imgRes.rows) ? imgRes.rows : [];
-            } catch (err) {}
+
+        try {
+            const imgRes = await queries.project.sql(
+                projectDir,
+                "SELECT Images.IName FROM Images INNER JOIN Labels ON Images.IName = Labels.IName WHERE Labels.CName = ? LIMIT ? OFFSET ?",
+                [CName, pageSize, offset]
+            );
+            images = imgRes.rows || [];
+        } catch (err) {
+            global.logger.error("Error fetching labeled images:", err);
         }
     }
 
-    totalCount = Number(totalCount) || 0;
-
-    const uniqueImages = (images || []).filter(
+    const uniqueImages = images.filter(
         (image, index, self) =>
             index === self.findIndex((img) => img.IName === image.IName)
     );
 
     const imageLabels = {};
-    for (let i = 0; i < uniqueImages.length; i++) {
-        const imageName = uniqueImages[i].IName;
-        let labels = [];
-        if (queries.project && typeof queries.project.getLabelsForImageName === "function") {
-            try {
-                const labelsRes = await queries.project.getLabelsForImageName(projectDir, imageName);
-                labels = (labelsRes && labelsRes.rows) ? labelsRes.rows : (Array.isArray(labelsRes) ? labelsRes : []);
-            } catch (err) {}
+    for (const image of uniqueImages) {
+        try {
+            const labelsRes = await queries.project.getLabelsForImageName(projectDir, image.IName);
+            imageLabels[image.IName] = labelsRes.rows || [];
+        } catch (err) {
+            global.logger.error(`Error fetching labels for ${image.IName}:`, err);
+            imageLabels[image.IName] = [];
         }
-        if ((!labels || labels.length === 0) && global.sqlite3) {
-            try {
-                const dbPath = path.join(projectDir, `${PName}.db`);
-                const tdb = new global.sqlite3.Database(dbPath, () => {});
-                if (tdb && typeof tdb.all === "function") {
-                    labels = await new Promise((resolve) => {
-                        tdb.all(`SELECT * FROM Labels WHERE IName = '${imageName}'`, [], (err, rows) => resolve(rows || []));
-                    });
-                }
-            } catch (err) {}
-        }
-        imageLabels[imageName] = labels;
     }
 
     let classes = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
-    }
-    if ((!classes || classes.length === 0) && global.sqlite3) {
-        try {
-            const dbPath = path.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classes = await new Promise((resolve) => {
-                    tdb.all("SELECT * FROM Classes", [], (err, rows) => resolve(rows || []));
-                });
-            }
-        } catch (err) {}
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
     }
 
     const totalPageCount = Math.ceil(totalCount / pageSize) || 1;

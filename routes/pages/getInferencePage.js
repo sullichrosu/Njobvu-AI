@@ -10,24 +10,21 @@ async function getInferencePage(req, res) {
     if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
+
     if (user === undefined) {
         return res.redirect("/");
     }
 
-    let projects = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading inference page:", err);
+
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    if (!projects || idx < 0 || idx >= projects.length) {
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
@@ -60,75 +57,59 @@ async function getInferencePage(req, res) {
             fsObj.mkdirSync(weightsPath, { recursive: true });
             fsObj.writeFileSync(pythonPathFile, "");
             fsObj.writeFileSync(darknetPathFile, "");
-        } catch (e) {}
+        } catch (e) { }
     }
+
     if (!fsObj.existsSync(inferencePath)) {
-        try { fsObj.mkdirSync(inferencePath, { recursive: true }); } catch (e) {}
+        try { fsObj.mkdirSync(inferencePath, { recursive: true }); } catch (e) { }
     }
+
     if (!fsObj.existsSync(infLogPath)) {
-        try { fsObj.mkdirSync(infLogPath, { recursive: true }); } catch (e) {}
+        try { fsObj.mkdirSync(infLogPath, { recursive: true }); } catch (e) { }
     }
+
     if (!fsObj.existsSync(infUploadPath)) {
-        try { fsObj.mkdirSync(infUploadPath, { recursive: true }); } catch (e) {}
+        try { fsObj.mkdirSync(infUploadPath, { recursive: true }); } catch (e) { }
     }
+
     if (!fsObj.existsSync(weightsPath)) {
-        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) {}
+        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) { }
     }
+
     if (!fsObj.existsSync(darknetPathFile)) {
-        try { fsObj.writeFileSync(darknetPathFile, ""); } catch (e) {}
+        try { fsObj.writeFileSync(darknetPathFile, ""); } catch (e) { }
     }
 
     let projRecord = null;
-    if (global.db && typeof global.db.getAsync === "function") {
-        try {
-            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-        } catch (err) {}
-    }
-    if (!projRecord && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let classes = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
-    }
-    if ((!classes || classes.length === 0) && global.sqlite3) {
-        try {
-            const dbPath = fsPath.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classes = await new Promise((resolve) => {
-                    tdb.all("SELECT * FROM Classes", (err, rows) => resolve(rows || []));
-                });
-            }
-        } catch (err) {}
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
     }
 
     let accessUsers = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            const acc = await global.db.allAsync("SELECT * FROM Access WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-            accessUsers = acc ? acc.map((r) => r.Username) : [];
-        } catch (err) {}
-    }
-    if ((!accessUsers || accessUsers.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     const readdirFn = global.readdirAsync || ((p) => new Promise((resolve, reject) => fs.readdir(p, (err, files) => err ? reject(err) : resolve(files))));
@@ -157,6 +138,7 @@ async function getInferencePage(req, res) {
     let runs = [];
     try {
         runs = await readdirFn(logPath);
+
         runs = (runs || []).filter((r) => {
             try {
                 return fsObj.statSync(fsPath.join(logPath, r)).isDirectory();
@@ -164,6 +146,7 @@ async function getInferencePage(req, res) {
                 return true;
             }
         });
+
         runs = runs.reverse();
     } catch (e) {
         runs = [];
@@ -182,6 +165,7 @@ async function getInferencePage(req, res) {
     let infRuns = [];
     try {
         infRuns = await readdirFn(infLogPath);
+
         infRuns = (infRuns || []).filter((r) => {
             try {
                 return fsObj.statSync(fsPath.join(infLogPath, r)).isDirectory();
@@ -189,6 +173,7 @@ async function getInferencePage(req, res) {
                 return true;
             }
         });
+
         infRuns = infRuns.reverse();
     } catch (e) {
         infRuns = [];
@@ -234,14 +219,17 @@ async function getInferencePage(req, res) {
         if (errIdx >= 0) {
             runStatus.push("FAILED");
             errFiles.push(logs[errIdx]);
+
             try {
                 errContents.push(fsObj.readFileSync(fsPath.join(runDir, logs[errIdx]), "utf8"));
             } catch (e) {
                 errContents.push("");
             }
+
             for (let j = 0; j < logs.length; j++) {
                 if (j === errIdx) continue;
                 if (["datatovalues.py", "images", "labels", "train", "weights"].includes(logs[j])) continue;
+
                 weight.push(logs[j]);
                 weightsNames.push(logs[j]);
             }
@@ -249,9 +237,11 @@ async function getInferencePage(req, res) {
             runStatus.push("DONE");
             errFiles.push("NULL");
             errContents.push("NULL");
+
             for (let j = 0; j < logs.length; j++) {
                 if (j === doneIdx) continue;
                 if (["datatovalues.py", "images", "labels", "train", "weights"].includes(logs[j])) continue;
+
                 weight.push(logs[j]);
                 weightsNames.push(logs[j]);
             }
@@ -259,12 +249,15 @@ async function getInferencePage(req, res) {
             runStatus.push("RUNNING");
             errFiles.push("NULL");
             errContents.push("NULL");
+
             for (let j = 0; j < logs.length; j++) {
                 if (["datatovalues.py", "images", "labels", "train", "weights"].includes(logs[j])) continue;
+
                 weight.push(logs[j]);
                 weightsNames.push(logs[j]);
             }
         }
+
         weightsList.push(weight);
         weightsFiles.push(weightsNames);
     }
@@ -276,9 +269,12 @@ async function getInferencePage(req, res) {
         } catch {
             return false;
         }
+
         for (const entry of entries) {
             const fullPath = fsPath.join(dirPath, entry.name);
+
             if (entry.name === target) return true;
+
             if (entry.isDirectory && entry.isDirectory()) {
                 if (fileExistsRecursive(fullPath, target)) return true;
             }
@@ -314,6 +310,7 @@ async function getInferencePage(req, res) {
         if (runTypePath >= 0) {
             try {
                 const type = fsObj.readFileSync(fsPath.join(runDirInf, logsInf[runTypePath]), "utf8");
+
                 if (type.trim() === "inception") {
                     runTypes.push("Inception");
                 } else if (type.trim() === "megadetector") {
@@ -348,13 +345,16 @@ async function getInferencePage(req, res) {
         if (errIdxInf >= 0 && doneIdxInf === -1) {
             runStatusInf.push("FAILED");
             errFilesInf.push(logsInf[errIdxInf]);
+
             try {
                 errContentsInf.push(fsObj.readFileSync(fsPath.join(runDirInf, logsInf[errIdxInf]), "utf8"));
             } catch (e) {
                 errContentsInf.push("");
             }
+
             for (let j = 0; j < logsInf.length; j++) {
                 if (j === errIdxInf || isReservedInferenceFile(logsInf[j])) continue;
+
                 weightInf.push(logsInf[j]);
                 weightsNamesInf.push(logsInf[j]);
             }
@@ -362,8 +362,10 @@ async function getInferencePage(req, res) {
             runStatusInf.push("DONE");
             errFilesInf.push("NULL");
             errContentsInf.push("NULL");
+
             for (let j = 0; j < logsInf.length; j++) {
                 if (j === doneIdxInf || isReservedInferenceFile(logsInf[j])) continue;
+
                 weightInf.push(logsInf[j]);
                 weightsNamesInf.push(logsInf[j]);
             }
@@ -371,12 +373,15 @@ async function getInferencePage(req, res) {
             runStatusInf.push("RUNNING");
             errFilesInf.push("NULL");
             errContentsInf.push("NULL");
+
             for (let j = 0; j < logsInf.length; j++) {
                 if (isReservedInferenceFile(logsInf[j])) continue;
+
                 weightInf.push(logsInf[j]);
                 weightsNamesInf.push(logsInf[j]);
             }
         }
+
         weightsInfList.push(weightInf);
         weightsFilesInf.push(weightsNamesInf);
     }

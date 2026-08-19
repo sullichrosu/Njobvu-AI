@@ -9,30 +9,21 @@ async function getTrainingPage(req, res) {
     if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
+
     if (user === undefined) {
         return res.redirect("/");
     }
 
-    let projects = [];
-    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
-            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading training page:", err);
+
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    if (!projects || idx < 0 || idx >= projects.length) {
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
@@ -56,61 +47,41 @@ async function getTrainingPage(req, res) {
             fsObj.mkdirSync(pythonPath, { recursive: true });
             fsObj.mkdirSync(weightsPath, { recursive: true });
             fsObj.writeFileSync(pythonPathFile, "");
-        } catch (e) {}
+        } catch (e) { }
     } else if (!fsObj.existsSync(weightsPath)) {
-        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) {}
+        try { fsObj.mkdirSync(weightsPath, { recursive: true }); } catch (e) { }
     }
 
     let projRecord = null;
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-        } catch (err) {}
-    }
-    if (!projRecord && global.db && typeof global.db.getAsync === "function") {
-        try {
-            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let classes = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
-    }
-    if ((!classes || classes.length === 0) && global.sqlite3) {
-        try {
-            const dbPath = path.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classes = await new Promise((resolve) => {
-                    const cb = (err, rows) => resolve(rows || []);
-                    if (tdb.all.length === 2) {
-                        tdb.all("SELECT * FROM Classes", cb);
-                    } else {
-                        tdb.all("SELECT * FROM Classes", [], cb);
-                    }
-                });
-            }
-        } catch (err) {}
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
     }
 
     let accessUsers = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : [];
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     let globalWeights = [];
@@ -123,6 +94,7 @@ async function getTrainingPage(req, res) {
     let runs = [];
     try {
         runs = fsObj.readdirSync(logPath);
+
         runs = (runs || []).filter((r) => {
             try {
                 return fsObj.statSync(path.join(logPath, r)).isDirectory();
@@ -130,6 +102,7 @@ async function getTrainingPage(req, res) {
                 return false;
             }
         });
+
         runs = runs.reverse();
     } catch (e) {
         runs = [];
@@ -165,6 +138,7 @@ async function getTrainingPage(req, res) {
         } catch (e) {
             logContent = "";
         }
+
         logContents.push(logContent);
 
         const errIdx = logs.indexOf(`${runName}-error.log`);
@@ -176,13 +150,16 @@ async function getTrainingPage(req, res) {
         if (errIdx >= 0) {
             runStatus.push("FAILED");
             errFiles.push(logs[errIdx]);
+
             try {
                 errContents.push(fsObj.readFileSync(path.join(runDir, logs[errIdx]), "utf8"));
             } catch (e) {
                 errContents.push("");
             }
+
             for (let j = 0; j < logs.length; j++) {
                 if (j === logIdx || j === errIdx) continue;
+
                 weight.push(path.join(runDir, logs[j]));
                 weightsNames.push(logs[j]);
             }
@@ -190,8 +167,10 @@ async function getTrainingPage(req, res) {
             runStatus.push("DONE");
             errFiles.push("NULL");
             errContents.push("NULL");
+
             for (let j = 0; j < logs.length; j++) {
                 if (j === logIdx || j === doneIdx) continue;
+
                 weight.push(path.join(runDir, logs[j]));
                 weightsNames.push(logs[j]);
             }
@@ -199,12 +178,15 @@ async function getTrainingPage(req, res) {
             runStatus.push("RUNNING");
             errFiles.push("NULL");
             errContents.push("NULL");
+
             for (let j = 0; j < logs.length; j++) {
                 if (j === logIdx) continue;
+
                 weight.push(path.join(runDir, logs[j]));
                 weightsNames.push(logs[j]);
             }
         }
+
         weightsList.push(weight);
         weightsFiles.push(weightsNames);
     }

@@ -40,24 +40,15 @@ async function getYoloXInferencePage(req, res) {
         return res.redirect("/l");
     }
 
-    let projects = [];
-    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {
-            projects = [];
-        }
-    }
-    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {
-            projects = [];
-        }
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading yoloX training settings page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    if (!projects || idx < 0 || idx >= projects.length) {
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
@@ -91,98 +82,58 @@ async function getYoloXInferencePage(req, res) {
     }
 
     let projRecord = null;
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-        } catch (err) {}
-    }
-    if (!projRecord && global.db && typeof global.db.getAsync === "function") {
-        try {
-            projRecord = await global.db.getAsync("SELECT * FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let classes = [];
-    let classesAttempted = false;
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            if (classRes) {
-                classesAttempted = true;
-                classes = Array.isArray(classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-            }
-        } catch (err) {}
-    }
-    if (!classesAttempted && global.sqlite3) {
-        try {
-            const dbPath = path.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classes = await new Promise((resolve) => {
-                    const cb = (err, rows) => resolve(rows || []);
-                    if (tdb.all.length === 2) {
-                        tdb.all("SELECT * FROM Classes", cb);
-                    } else {
-                        tdb.all("SELECT * FROM Classes", [], cb);
-                    }
-                });
-            }
-        } catch (err) {}
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
     }
 
     const classLabelCounts = {};
-    if (queries.project && typeof queries.project.getClassLabelCounts === "function") {
-        try {
-            const labelCountsResult = await queries.project.getClassLabelCounts(projectDir);
-            if (labelCountsResult && labelCountsResult.rows) {
-                labelCountsResult.rows.forEach((row) => {
-                    classLabelCounts[row.CName] = row.labelCount || 0;
-                });
-            }
-        } catch (err) {
-            if (global.logger && global.logger.error) global.logger.error(err);
-        }
+    try {
+        const labelCountsResult = await queries.project.getClassLabelCounts(projectDir);
+        (labelCountsResult.rows || []).forEach((row) => {
+            classLabelCounts[row.CName] = row.labelCount || 0;
+        });
+    } catch (err) {
+        global.logger.error(err);
     }
 
     const classImageCounts = {};
-    if (queries.project && typeof queries.project.getClassImageCounts === "function") {
-        try {
-            const imageCountsResult = await queries.project.getClassImageCounts(projectDir);
-            if (imageCountsResult && imageCountsResult.rows) {
-                imageCountsResult.rows.forEach((row) => {
-                    classImageCounts[row.CName] = row.imageCount || 0;
-                });
-            }
-        } catch (err) {
-            if (global.logger && global.logger.error) global.logger.error(err);
-        }
+    try {
+        const imageCountsResult = await queries.project.getClassImageCounts(projectDir);
+        (imageCountsResult.rows || []).forEach((row) => {
+            classImageCounts[row.CName] = row.imageCount || 0;
+        });
+    } catch (err) {
+        global.logger.error(err);
     }
 
-    classes = (classes || []).map((cls) => Object.assign({}, cls, {
+    classes = classes.map((cls) => Object.assign({}, cls, {
         labelCount: classLabelCounts[cls.CName] || 0,
         imageCount: classImageCounts[cls.CName] || 0,
     }));
 
     let accessUsers = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
-    }
-    if ((!accessUsers || accessUsers.length === 0) && global.db && typeof global.db.allAsync === "function") {
-        try {
-            const acc = await global.db.allAsync("SELECT * FROM Access WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-            accessUsers = acc ? acc.map((r) => r.Username) : [];
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     const readdirFn = global.readdirAsync || ((p) => new Promise((resolve, reject) => fs.readdir(p, (err, files) => err ? reject(err) : resolve(files))));

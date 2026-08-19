@@ -7,32 +7,19 @@ async function getUserPage(req, res) {
     }
 
     let userInfo = null;
+    try {
+        const userRes = await queries.managed.getUser(user);
+        userInfo = userRes.row || null;
+    } catch (err) {
+        global.logger.error("Error querying user record:", err);
+    }
+
     let allUsers = [];
-
-    if (global.db && typeof global.db.getAsync === "function") {
-        try {
-            userInfo = await global.db.getAsync("SELECT * FROM Users WHERE Username = '" + user + "'");
-        } catch (err) {}
-    }
-    if (!userInfo && queries.managed && typeof queries.managed.getUser === "function") {
-        try {
-            const userRes = await queries.managed.getUser(user);
-            userInfo = (userRes && userRes.row) ? userRes.row : null;
-        } catch (err) {}
-    }
-
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            const rows = await global.db.allAsync("SELECT * FROM Users");
-            allUsers = (rows || []).map((u) => u.Username);
-        } catch (err) {}
-    }
-    if ((!allUsers || allUsers.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const usersRes = await queries.managed.sql("SELECT * FROM Users", []);
-            const rows = (usersRes && usersRes.rows) ? usersRes.rows : [];
-            allUsers = rows.map((u) => u.Username);
-        } catch (err) {}
+    try {
+        const usersRes = await queries.managed.sql("SELECT * FROM Users", []);
+        allUsers = (usersRes.rows || []).map((u) => u.Username);
+    } catch (err) {
+        global.logger.error("Error querying users list:", err);
     }
 
     const Fname = userInfo ? userInfo.FirstName : "";

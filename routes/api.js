@@ -20,6 +20,7 @@ const unzipper = require("unzipper");
 
 const unzipFile = require("../utils/unzipFile");
 const pythonScript = require("../utils/pythonScript");
+const asyncHandler = require("../utils/asyncHandler");
 
 const logout = require("./user/logout");
 const login = require("./user/login");
@@ -106,110 +107,110 @@ const megadetectorInference = require("./inference/megadetectorInference");
 const { executePythonSandbox, handleRunSummary, handleListRuns, handleRunDocumentContext, handlePersistCustomSummary } = require("../controllers/sandboxController");
 
 // CHAT HARNESS ROUTES
-api.post("/api/chat", ollamaChat);
-api.get("/api/chat/config", getChatConfig);
-api.post("/api/chat/config", updateChatConfig);
-api.get("/api/chat/models", getOllamaModels);
+api.post("/api/chat", asyncHandler(ollamaChat));
+api.get("/api/chat/config", asyncHandler(getChatConfig));
+api.post("/api/chat/config", asyncHandler(updateChatConfig));
+api.get("/api/chat/models", asyncHandler(getOllamaModels));
 
 // SANDBOX & RUN SUMMARY ROUTES
-api.post("/api/sandbox/python", executePythonSandbox);
-api.post("/api/runs/summary", handleRunSummary);
-api.get("/api/runs/list", handleListRuns);
-api.post("/api/runs/list", handleListRuns);
-api.get("/api/runs/context", handleRunDocumentContext);
-api.post("/api/runs/context", handleRunDocumentContext);
-api.post("/api/runs/persist-summary", handlePersistCustomSummary);
+api.post("/api/sandbox/python", asyncHandler(executePythonSandbox));
+api.post("/api/runs/summary", asyncHandler(handleRunSummary));
+api.get("/api/runs/list", asyncHandler(handleListRuns));
+api.post("/api/runs/list", asyncHandler(handleListRuns));
+api.get("/api/runs/context", asyncHandler(handleRunDocumentContext));
+api.post("/api/runs/context", asyncHandler(handleRunDocumentContext));
+api.post("/api/runs/persist-summary", asyncHandler(handlePersistCustomSummary));
 
 // INFERENCE ROUTES
-api.post("/yolo-inf", yoloInference);
-api.post("/inception-inf", inceptionInference);
-api.post("/megadetector-inf", megadetectorInference);
-api.post("/upload_inference_file", uploadInferenceFile);
-api.get("/runs/:runId/images", getRunImages);
-api.post("/inference/add-inference-run-to-dataset", addYoloInferenceToDataset);
+api.post("/yolo-inf", asyncHandler(yoloInference));
+api.post("/inception-inf", asyncHandler(inceptionInference));
+api.post("/megadetector-inf", asyncHandler(megadetectorInference));
+api.post("/upload_inference_file", asyncHandler(uploadInferenceFile));
+api.get("/runs/:runId/images", asyncHandler(getRunImages));
+api.post("/inference/add-inference-run-to-dataset", asyncHandler(addYoloInferenceToDataset));
 
 // USER ROUTES
-api.post("/logout", logout);
-api.post("/login", login);
-api.post("/signup", signup);
-api.post("/addUser", addUser);
-api.post("/deleteUser", deleteUser);
-api.post("/changeUname", changeUserName);
-api.post("/changePassword", changePassword);
+api.post("/logout", asyncHandler(logout));
+api.post("/login", asyncHandler(login));
+api.post("/signup", asyncHandler(signup));
+api.post("/addUser", asyncHandler(addUser));
+api.post("/deleteUser", asyncHandler(deleteUser));
+api.post("/changeUname", asyncHandler(changeUserName));
+api.post("/changePassword", asyncHandler(changePassword));
 
-api.post("/changeFname", changeFname);
-api.post("/changeLname", changeLname);
-api.post("/changeEmail", changeEmail);
+api.post("/changeFname", asyncHandler(changeFname));
+api.post("/changeLname", asyncHandler(changeLname));
+api.post("/changeEmail", asyncHandler(changeEmail));
 
 // TRAINING ROUTES
-api.post("/api/createC", createClassification);
-api.post("/addClasses", addClasses);
-api.post("/upload_weights", uploadWeights);
-api.post("/yolovx", yolovx);
-api.post("/upload_pre_weights", uploadPreWeights);
-api.post("/yolo-run", yoloRun);
-api.post("/deleteRun", deleteRun);
-api.post("/python", python);
-api.post("/darknet", darknet);
-api.post("/remove_path", removePath);
-api.post("/remove_darknet_path", removeDarknetPath);
-api.post("/remove_weights", removeWeights);
-api.post("/remove_script", removeScript);
-api.post("/run", run);
-api.post("/updateClass", updateClass);
-api.post("/deleteClass", deleteClass);
+api.post("/api/createC", asyncHandler(createClassification));
+api.post("/addClasses", asyncHandler(addClasses));
+api.post("/upload_weights", asyncHandler(uploadWeights));
+api.post("/yolovx", asyncHandler(yolovx));
+api.post("/upload_pre_weights", asyncHandler(uploadPreWeights));
+api.post("/yolo-run", asyncHandler(yoloRun));
+api.post("/deleteRun", asyncHandler(deleteRun));
+api.post("/python", asyncHandler(python));
+api.post("/darknet", asyncHandler(darknet));
+api.post("/remove_path", asyncHandler(removePath));
+api.post("/remove_darknet_path", asyncHandler(removeDarknetPath));
+api.post("/remove_weights", asyncHandler(removeWeights));
+api.post("/remove_script", asyncHandler(removeScript));
+api.post("/run", asyncHandler(run));
+api.post("/updateClass", asyncHandler(updateClass));
+api.post("/deleteClass", asyncHandler(deleteClass));
 
 // PROJECT ROUTES
-api.post("/createP", createProject);
-api.post("/updateProject", updateProject);
-api.post("/deleteProject", deleteProject);
-api.post("/addImages", addImages);
-api.post("/deleteImage", deleteImage);
-api.post("/import", importProject);
-api.post("/api/projects/import-dataset", importDataset);
-api.post("/api/projects/import-yolo", importYolo);
-api.post("/api/projects/import-kwcoco", importKwCoco);
-api.post("/api/projects/import-ifcb", importIfcb);
-api.post("/mergeLocal", mergeLocal);
-api.post("/removeAccess", removeAccess);
-api.post("/transferAdmin", transferAdmin);
-api.post("/script", script);
-api.post("/deleteImagesWithoutLabel", deleteImagesWithoutLabel);
-api.get("/api/v2/projects", getFilteredProjectsApi);
-api.get("/api/v2/projects/:IDX/images", getFilteredImagesApi);
-api.get("/api/projects/filter", getFilteredProjectsApi);
-api.get("/api/projects/filter-images", getFilteredImagesApi);
+api.post("/createP", asyncHandler(createProject));
+api.post("/updateProject", asyncHandler(updateProject));
+api.post("/deleteProject", asyncHandler(deleteProject));
+api.post("/addImages", asyncHandler(addImages));
+api.post("/deleteImage", asyncHandler(deleteImage));
+api.post("/import", asyncHandler(importProject));
+api.post("/api/projects/import-dataset", asyncHandler(importDataset));
+api.post("/api/projects/import-yolo", asyncHandler(importYolo));
+api.post("/api/projects/import-kwcoco", asyncHandler(importKwCoco));
+api.post("/api/projects/import-ifcb", asyncHandler(importIfcb));
+api.post("/mergeLocal", asyncHandler(mergeLocal));
+api.post("/removeAccess", asyncHandler(removeAccess));
+api.post("/transferAdmin", asyncHandler(transferAdmin));
+api.post("/script", asyncHandler(script));
+api.post("/deleteImagesWithoutLabel", asyncHandler(deleteImagesWithoutLabel));
+api.get("/api/v2/projects", asyncHandler(getFilteredProjectsApi));
+api.get("/api/v2/projects/:IDX/images", asyncHandler(getFilteredImagesApi));
+api.get("/api/projects/filter", asyncHandler(getFilteredProjectsApi));
+api.get("/api/projects/filter-images", asyncHandler(getFilteredImagesApi));
 
 // S3 BUCKET ROUTES (strangler-fig v2, mounts an S3 bucket as a project's image volume)
-api.post("/api/v2/projects/:admin/:projectName/s3-bucket", attachS3Bucket);
-api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
-api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
-api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
+api.post("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(attachS3Bucket));
+api.get("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(getS3Bucket));
+api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(deleteS3Bucket));
+api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", asyncHandler(syncS3Bucket));
 
 // LABELLING ROUTES
-api.post("/updateLabels", updateLabels);
-api.delete("/deleteBadLabels/:Admin/:PName/:Lid", deleteLabels);
-api.put("/api/switchLabels", switchLabels);
+api.post("/updateLabels", asyncHandler(updateLabels));
+api.delete("/deleteBadLabels/:Admin/:PName/:Lid", asyncHandler(deleteLabels));
+api.put("/api/switchLabels", asyncHandler(switchLabels));
 
 // DOWNLOAD ROUTES
-api.post("/downloadDataset", downloadDataset);
-api.post("/downloadProject", downloadProject);
-api.post("/downloadScript", downloadScript);
-api.post("/downloadWeights", downloadWeights);
-api.post("/downloadRun", downloadRun);
-api.post("/downloadClasses", downloadClasses);
+api.post("/downloadDataset", asyncHandler(downloadDataset));
+api.post("/downloadProject", asyncHandler(downloadProject));
+api.post("/downloadScript", asyncHandler(downloadScript));
+api.post("/downloadWeights", asyncHandler(downloadWeights));
+api.post("/downloadRun", asyncHandler(downloadRun));
+api.post("/downloadClasses", asyncHandler(downloadClasses));
 
 // VALIDATION ROUTES
-api.post("/changeValidation", changeValidation);
-api.post("/deleteLabelValidation", deleteLabelValidation);
-api.post("/batch-change-class", batchChangeClass);
-api.post("/solo-change-class", changeClass);
+api.post("/changeValidation", asyncHandler(changeValidation));
+api.post("/deleteLabelValidation", asyncHandler(deleteLabelValidation));
+api.post("/batch-change-class", asyncHandler(batchChangeClass));
+api.post("/solo-change-class", asyncHandler(changeClass));
 
 // TEST ROUTES
-api.post("/test", test);
-api.post("/mergeTest", mergeTest);
+api.post("/test", asyncHandler(test));
+api.post("/mergeTest", asyncHandler(mergeTest));
 
 // BOOTSTRAP ROUTES
-api.post("/bootstrap", bootstrapController);
+api.post("/bootstrap", asyncHandler(bootstrapController));
 
 module.exports = api;

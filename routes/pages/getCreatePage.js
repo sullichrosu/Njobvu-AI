@@ -3,12 +3,14 @@ const queries = require("../../queries/queries");
 async function getCreatePage(req, res) {
     const username = req.cookies ? req.cookies.Username : undefined;
     let PNames = [];
+
     if (username) {
         try {
             const projectsRes = await queries.managed.sql(
                 "SELECT * FROM Access WHERE Admin = ?",
                 [username]
             );
+
             const rows = (projectsRes && projectsRes.rows) ? projectsRes.rows : [];
             PNames = rows.map((p) => p.PName);
         } catch (err) {

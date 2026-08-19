@@ -12,68 +12,40 @@ async function getAnnotatePage(req, res) {
         idx = 0;
         return res.redirect("/home");
     }
+
     if (user === undefined) {
         return res.redirect("/");
     }
 
-    let projects = [];
-    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
-            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
-    }
+    let projects, PName, admin, projectDir, relProjectPath, classNames;
 
-    if (!projects || idx < 0 || idx >= projects.length) {
-        return res.redirect("/home");
-    }
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
 
-    const PName = projects[idx].PName;
-    const admin = projects[idx].Admin;
+        if (idx < 0 || idx >= projects.length) {
+            return res.redirect("/home");
+        }
 
-    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
-    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
-    const relProjectPath = `projects/${admin}-${PName}`;
+        ({ PName, Admin: admin } = projects[idx]);
 
-    let classRows = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classRows = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
+        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+        relProjectPath = `projects/${admin}-${PName}`;
+
+        const { rows: classRows } = await queries.project.getAllClasses(projectDir);
+
+        classNames = classRows.map((c) => c.CName);
+    } catch (err) {
+        global.logger.error("Error loading annotate page:", err);
+
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
-    if ((!classRows || classRows.length === 0) && global.sqlite3) {
-        try {
-            const dbPath = path.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classRows = await new Promise((resolve) => {
-                    const cb = (err, rows) => resolve(rows || []);
-                    if (tdb.all.length === 2) {
-                        tdb.all("SELECT * FROM Classes", cb);
-                    } else {
-                        tdb.all("SELECT * FROM Classes", [], cb);
-                    }
-                });
-            }
-        } catch (err) {}
-    }
-    const classNames = (classRows || []).map((c) => c.CName);
 
     let allImages = [];
     try {
         const imgRes = await queries.project.getAllImages(projectDir);
+
         allImages = (imgRes && imgRes.rows) ? imgRes.rows : [];
     } catch (err) {
         global.logger.error("Error fetching images for annotate page:", err);
@@ -86,6 +58,7 @@ async function getAnnotatePage(req, res) {
             "SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = ?",
             [IName]
         );
+
         rowidRecord = (rowidRes && rowidRes.rows && rowidRes.rows.length > 0) ? rowidRes.rows[0] : null;
     } catch (err) {
         global.logger.error("Error querying image rowid:", err);
@@ -94,6 +67,7 @@ async function getAnnotatePage(req, res) {
     let labels = [];
     try {
         const labelRes = await queries.project.getLabelsForImageName(projectDir, IName);
+
         labels = (labelRes && labelRes.rows) ? labelRes.rows : [];
     } catch (err) {
         global.logger.error("Error querying image labels:", err);
@@ -102,37 +76,34 @@ async function getAnnotatePage(req, res) {
     let imageRecord = null;
     try {
         const imgDetailRes = await queries.project.getImage(projectDir, IName);
+
         imageRecord = (imgDetailRes && imgDetailRes.row) ? imgDetailRes.row : null;
     } catch (err) {
         global.logger.error("Error querying image record:", err);
     }
 
     let projRecord = null;
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-        } catch (err) {}
-    }
-    if (!projRecord && global.db && typeof global.db.getAsync === "function") {
-        try {
-            projRecord = await global.db.getAsync("SELECT AutoSave FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let accessUsers = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : [];
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     if (!currClass && classNames.length > 0) {
@@ -150,6 +121,7 @@ async function getAnnotatePage(req, res) {
     }
 
     const relImagePath = `${relProjectPath}/images/${imageRecord.IName}`;
+
     let imgData;
     try {
         const imgBuffer = fsObj.readFileSync(absImagePath);
@@ -178,6 +150,7 @@ async function getAnnotatePage(req, res) {
     if (allImages && currIndex > 1 && allImages[currIndex - 2]) {
         prevIName = allImages[currIndex - 2].IName;
     }
+
     if (allImages && currIndex < allImages.length && allImages[currIndex]) {
         nextIName = allImages[currIndex].IName;
     }
@@ -185,10 +158,12 @@ async function getAnnotatePage(req, res) {
     const colors = [];
     let colorIdx = 0;
     const colorList = global.colorsJSON || [];
+
     while (colors.length < classNames.length) {
         if (colorIdx >= colorList.length) {
             colorIdx = 0;
         }
+
         colors.push(colorList[colorIdx]);
         colorIdx++;
     }

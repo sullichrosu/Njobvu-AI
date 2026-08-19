@@ -16,25 +16,23 @@ async function getProjectPage(req, res) {
     const sortBy = req.query.sortBy || "name";
     const sortOrder = req.query.sortOrder || "asc";
 
+    if (user === undefined) {
+        return res.redirect("/");
+    }
+
     if (isNaN(idx) || idx === undefined) {
         idx = 0;
-        return res.redirect("/home");
     }
 
-    let projects = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading project page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    if (!projects || idx < 0 || idx >= projects.length) {
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
@@ -57,6 +55,7 @@ async function getProjectPage(req, res) {
             "SELECT Images.IName, Images.reviewImage, Images.validateImage, COUNT(Labels.LID) AS numLabels FROM Images LEFT JOIN Labels ON Images.IName = Labels.IName GROUP BY Images.IName",
             []
         );
+
         rawImages = (imgRes && imgRes.rows) ? imgRes.rows : [];
     } catch (err) {
         global.logger.error("Error querying images for project page:", err);
@@ -77,21 +76,15 @@ async function getProjectPage(req, res) {
     const listCounter = paginatedImages.map((img) => img.numLabels || 0);
 
     let accessUsers = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            const acc = await global.db.allAsync("SELECT * FROM Access WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-            accessUsers = acc ? acc.map((r) => r.Username) : [];
-        } catch (err) {}
-    }
-    if ((!accessUsers || accessUsers.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : [];
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     res.render("project", {

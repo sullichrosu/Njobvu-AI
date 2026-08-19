@@ -13,31 +13,34 @@ async function changeValidation(req, res) {
         res.send({ Success: "No" });
         return;
     }
-    if (status === 0) {
-        await queries.managed.sql(
-            "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",
-            [Number(1), PName, admin],
-        );
-        await queries.project.sql(
-            projectPath,
-            "UPDATE Images SET reviewImage = 1",
-        );
+    try {
+        if (status === 0) {
+            await queries.managed.sql(
+                "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",
+                [Number(1), PName, admin],
+            );
+            await queries.project.sql(
+                projectPath,
+                "UPDATE Images SET reviewImage = 1",
+            );
+        }
 
-        res.send({ Success: "Yes" });
+        if (status == 1) {
+            await queries.managed.sql(
+                "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",
+                [Number(0), PName, admin],
+            );
+            await queries.project.sql(
+                projectPath,
+                "UPDATE Images SET reviewImage = 0",
+            );
+        }
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).send("Error updating validation status");
     }
 
-    if (status == 1) {
-        await queries.managed.sql(
-            "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",
-            [Number(0), PName, admin],
-        );
-        await queries.project.sql(
-            projectPath,
-            "UPDATE Images SET reviewImage = 0",
-        );
-
-        res.send({ Success: "Yes" });
-    }
+    res.send({ Success: "Yes" });
 }
 
 module.exports = changeValidation;

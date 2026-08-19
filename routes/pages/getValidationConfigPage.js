@@ -13,26 +13,15 @@ async function getValidationConfigPage(req, res) {
         return res.redirect("/");
     }
 
-    let projects = [];
-    if (queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql("SELECT * FROM Access WHERE Username = ?", [user]);
-            projects = (accRes && accRes.rows) ? accRes.rows : (Array.isArray(accRes) ? accRes : []);
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
+    let projects;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading validation config page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    if (!projects || idx < 0 || idx >= projects.length) {
+    if (idx < 0 || idx >= projects.length) {
         return res.redirect("/home");
     }
 
@@ -40,14 +29,14 @@ async function getValidationConfigPage(req, res) {
     const admin = projects[idx].Admin;
 
     let mergeProjects = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const mergeRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE Username = ? AND NOT PName = ?",
-                [user, PName]
-            );
-            mergeProjects = (mergeRes && mergeRes.rows) ? mergeRes.rows : [];
-        } catch (err) {}
+    try {
+        const mergeRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE Username = ? AND NOT PName = ?",
+            [user, PName]
+        );
+        mergeProjects = mergeRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error fetching merge project candidates:", err);
     }
 
     const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
@@ -82,58 +71,55 @@ async function getValidationConfigPage(req, res) {
     }
 
     let projRecord = null;
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes && projRes.row ? projRes.row : null);
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let classes = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classes = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
+    try {
+        const classRes = await queries.project.getAllClasses(projectDir);
+        classes = classRes.rows || [];
+    } catch (err) {
+        global.logger.error("Error querying project classes:", err);
     }
 
     let accessOtherUsers = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ? AND Username != ?",
-                [PName, admin, user]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : [];
-            accessOtherUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ? AND Username != ?",
+            [PName, admin, user]
+        );
+        accessOtherUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     let otherAdminProjects = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const otherProjRes = await queries.managed.sql(
-                "SELECT * FROM Projects WHERE PName = ? AND Admin != ?",
-                [PName, user]
-            );
-            const rows = (otherProjRes && otherProjRes.rows) ? otherProjRes.rows : [];
-            otherAdminProjects = rows.map((r) => r.Admin);
-        } catch (err) {}
+    try {
+        const otherProjRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin != ?",
+            [PName, user]
+        );
+        otherAdminProjects = (otherProjRes.rows || []).map((r) => r.Admin);
+    } catch (err) {
+        global.logger.error("Error querying other admin projects:", err);
     }
 
     let allAccessUsers = [];
-    if (queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const allAccRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (allAccRes && allAccRes.rows) ? allAccRes.rows : [];
-            allAccessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const allAccRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        allAccessUsers = (allAccRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying full access list:", err);
     }
 
     const colors = [];

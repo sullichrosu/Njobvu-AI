@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const { Client } = require("./client");
 
 function getDbClient(projectPath) {
@@ -25,20 +26,23 @@ function getDbClient(projectPath) {
         }
     }
 
-    // Determine actual .db file path
+    // determine actual .db file path
     let dbFile = normalized;
     if (!dbFile.endsWith(".db")) {
         const folderName = path.basename(normalized);
         const parts = folderName.split("-");
         const pName = parts.length > 1 ? parts.slice(1).join("-") : folderName;
+
         dbFile = path.join(normalized, `${pName}.db`);
     }
 
     if (fs.existsSync(dbFile)) {
         const client = new Client(dbFile);
+
         client.open();
         global.projectDbClients[projectPath] = client;
         global.projectDbClients[normalized] = client;
+
         return client;
     }
 

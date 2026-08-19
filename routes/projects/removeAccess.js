@@ -9,7 +9,12 @@ async function removeAccess(req, res) {
 
     var OldUser = req.body.OldUser;
 
-    await queries.managed.deleteAccessFromProject(OldUser, PName);
+    try {
+        await queries.managed.deleteAccessFromProject(OldUser, PName);
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).send("Error removing access");
+    }
 
     if (validation) return res.redirect("/configV?IDX=" + IDX);
     return res.redirect("/config/accessSettings?IDX=" + IDX);

@@ -18,49 +18,26 @@ async function getValidationLabelingPage(req, res) {
         return res.redirect("/");
     }
 
-    let projects = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-        } catch (err) {}
-    }
-    if ((!projects || projects.length === 0) && queries.managed && typeof queries.managed.getUserProjects === "function") {
-        try {
-            const userProjectsRes = await queries.managed.getUserProjects(user);
-            projects = (userProjectsRes && userProjectsRes.rows) ? userProjectsRes.rows : (Array.isArray(userProjectsRes) ? userProjectsRes : []);
-        } catch (err) {}
-    }
+    let projects, PName, admin, projectDir, relProjectPath, classNames;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
 
-    if (!projects || idx < 0 || idx >= projects.length) {
-        return res.redirect("/home");
-    }
+        if (idx < 0 || idx >= projects.length) {
+            return res.redirect("/home");
+        }
 
-    const PName = projects[idx].PName;
-    const admin = projects[idx].Admin;
+        ({ PName, Admin: admin } = projects[idx]);
 
-    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
-    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
-    const relProjectPath = `projects/${admin}-${PName}`;
+        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+        relProjectPath = `projects/${admin}-${PName}`;
 
-    let classRows = [];
-    if (queries.project && typeof queries.project.getAllClasses === "function") {
-        try {
-            const classRes = await queries.project.getAllClasses(projectDir);
-            classRows = (classRes && classRes.rows) ? classRes.rows : (Array.isArray(classRes) ? classRes : []);
-        } catch (err) {}
+        const { rows: classRows } = await queries.project.getAllClasses(projectDir);
+        classNames = classRows.map((c) => c.CName);
+    } catch (err) {
+        global.logger.error("Error loading validation labeling page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
-    if ((!classRows || classRows.length === 0) && global.sqlite3) {
-        try {
-            const dbPath = path.join(projectDir, `${PName}.db`);
-            const tdb = new global.sqlite3.Database(dbPath, () => {});
-            if (tdb && typeof tdb.all === "function") {
-                classRows = await new Promise((resolve) => {
-                    tdb.all("SELECT * FROM Classes", (err, rows) => resolve(rows || []));
-                });
-            }
-        } catch (err) {}
-    }
-    const classNames = (classRows || []).map((c) => c.CName);
 
     let images = [];
     const isInvalidClass = !imageClass || imageClass === "null" || !classNames.includes(imageClass);
@@ -190,19 +167,14 @@ async function getValidationLabelingPage(req, res) {
     } catch (err) {}
 
     let projRecord = null;
-    if (global.db && typeof global.db.getAsync === "function") {
-        try {
-            projRecord = await global.db.getAsync("SELECT AutoSave FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-        } catch (err) {}
-    }
-    if (!projRecord && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const projRes = await queries.managed.sql(
-                "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            projRecord = (projRes && projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : null;
-        } catch (err) {}
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
     let validations = [];
@@ -212,21 +184,14 @@ async function getValidationLabelingPage(req, res) {
     } catch (err) {}
 
     let accessUsers = [];
-    if (global.db && typeof global.db.allAsync === "function") {
-        try {
-            const acc = await global.db.allAsync("SELECT * FROM Access WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-            accessUsers = acc ? acc.map((r) => r.Username) : [];
-        } catch (err) {}
-    }
-    if ((!accessUsers || accessUsers.length === 0) && queries.managed && typeof queries.managed.sql === "function") {
-        try {
-            const accRes = await queries.managed.sql(
-                "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
-                [PName, admin]
-            );
-            const rows = (accRes && accRes.rows) ? accRes.rows : [];
-            accessUsers = rows.map((r) => r.Username);
-        } catch (err) {}
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
     if (!currClass && classNames.length > 0) {
