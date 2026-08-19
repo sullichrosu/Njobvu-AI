@@ -56,7 +56,7 @@
                         <p>Do not add leading or trailing spaces between classes</p>
                     </div>
                     <div class="form-group col-md-6">
-                        <label for="blank_frame_rate">Video Sampling Rate <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Only used when uploading videos. Number of frames to skip between each extracted frame: 1 keeps every frame, 30 keeps 1 out of every 30 frames. Defaults to 30 if left blank">?</span></label>
+                        <label for="blank_frame_rate">Video Sampling Rate <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Only used when uploading videos. Default number of frames to skip between each extracted frame, pre-filled into the per-video prompt you'll get for each uploaded video (override it there if a video needs a different rate): 1 keeps every frame, 30 keeps 1 out of every 30 frames. Defaults to 30 if left blank">?</span></label>
                         <input id="blank_frame_rate" name="frame_rate" aria-label="Video sampling rate" type="text" class="form-control" placeholder="30">
                     </div>
                 </div>
@@ -168,7 +168,7 @@
                         <p>Do not add leading or trailing spaces between classes</p>
                     </div>
                     <div class="form-group col-md-6">
-                        <label for="bootstrap_frame_rate">Video Sampling Rate <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Only used when uploading videos. Number of frames to skip between each extracted frame: 1 keeps every frame, 30 keeps 1 out of every 30 frames. Defaults to 30 if left blank">?</span></label>
+                        <label for="bootstrap_frame_rate">Video Sampling Rate <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Only used when uploading videos. Default number of frames to skip between each extracted frame, pre-filled into the per-video prompt you'll get for each uploaded video (override it there if a video needs a different rate): 1 keeps every frame, 30 keeps 1 out of every 30 frames. Defaults to 30 if left blank">?</span></label>
                         <input id="bootstrap_frame_rate" name="frame_rate" aria-label="Video sampling rate" type="text" class="form-control" placeholder="30">
                     </div>
                 </div>
@@ -369,18 +369,43 @@
         return VIDEO_EXTENSIONS.some(ext => file.name.endsWith(ext));
     }
 
-    function applyVideoUploads(formData, uploadImagesInput) {
+    // Swaps a selected `upload_images` file list for one or more `upload_video`
+    // entries when the user picked raw video files instead of an images zip.
+    // Each video is prompted for its own framerate separately (pre-filled
+    // with the form's "Video Sampling Rate" field as a default so a batch of
+    // videos that all use the same rate is still a quick Enter-Enter-Enter),
+    // so the server can split every video at the fps chosen for that
+    // specific video instead of one rate applied to all of them.
+    // `frame_rate` is appended once per video, in the same order as
+    // `upload_video`, so the server can pair each rate with its video.
+    // Returns false if the user cancelled a frame-rate prompt, so the caller
+    // can abort the submit.
+    function applyVideoUploads(formData, uploadImagesInput, defaultFrameRate) {
         const files = Array.from(uploadImagesInput.files);
         if (files.length === 0 || !files.some(isVideoFile)) {
             return true;
         }
 
-        formData.delete('upload_images');
-        for (const file of files) {
-            if (isVideoFile(file)) {
-                formData.append('upload_video', file);
+        const videoFiles = files.filter(isVideoFile);
+        const frameRates = [];
+
+        for (const file of videoFiles) {
+            const frameRate = prompt(
+                `Please enter a number for the framerate "${file.name}" should be split by. (ex: 30)`,
+                defaultFrameRate || '30',
+            );
+            if (!frameRate) {
+                return false;
             }
+            frameRates.push(frameRate);
         }
+
+        formData.delete('upload_images');
+        formData.delete('frame_rate');
+        videoFiles.forEach((file, index) => {
+            formData.append('upload_video', file);
+            formData.append('frame_rate', frameRates[index]);
+        });
 
         return true;
     }
@@ -443,8 +468,9 @@
 
             if (formId === 'blankForm') {
                 const uploadImages = document.getElementById('blank_upload_images');
+                const defaultFrameRate = document.getElementById('blank_frame_rate').value;
 
-                if (!applyVideoUploads(formData, uploadImages)) {
+                if (!applyVideoUploads(formData, uploadImages, defaultFrameRate)) {
                     progress.textContent = "";
                     document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
                     return;
@@ -453,8 +479,9 @@
 
             if (formId === 'bootstrapForm') {
                 const uploadImages = document.getElementById('bootstrap_upload_images');
+                const defaultFrameRate = document.getElementById('bootstrap_frame_rate').value;
 
-                if (!applyVideoUploads(formData, uploadImages)) {
+                if (!applyVideoUploads(formData, uploadImages, defaultFrameRate)) {
                     progress.textContent = "";
                     document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
                     return;

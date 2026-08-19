@@ -256,12 +256,7 @@ async function createProject(req, res) {
         // is submitted once per video, in the same order as upload_video, so
         // each video is split at the fps the user picked for it specifically.
         const uploadVideos = Array.isArray(uploadVideo) ? uploadVideo : [uploadVideo];
-
-        let frameStep = Number(frameRate);
-        if (!Number.isFinite(frameStep) || frameStep <= 0) {
-            frameStep = 30;
-        }
-        frameStep = Math.round(frameStep);
+        const frameRates = Array.isArray(frameRate) ? frameRate : [frameRate];
 
         const usedFramePrefixes = new Set();
 
@@ -269,7 +264,13 @@ async function createProject(req, res) {
             for (let i = 0; i < uploadVideos.length; i++) {
                 const video = uploadVideos[i];
                 // fall back to the last rate provided if fewer rates than videos were sent
-                const videoFrameRate = frameRates[i] ?? frameRates[frameRates.length - 1];
+                const requestedFrameRate = frameRates[i] ?? frameRates[frameRates.length - 1];
+
+                let frameStep = Number(requestedFrameRate);
+                if (!Number.isFinite(frameStep) || frameStep <= 0) {
+                    frameStep = 30;
+                }
+                frameStep = Math.round(frameStep);
 
                 var videoPath = imagesPath + "/" + video.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
 
@@ -277,7 +278,6 @@ async function createProject(req, res) {
 
                 const framePrefix = nextVideoFramePrefix(video.name, usedFramePrefixes);
                 const outputPattern = imagesPath + "/" + framePrefix + "_%d.jpg";
-
 
                 await execFileAsync("ffmpeg", [
                     "-y",
@@ -287,10 +287,9 @@ async function createProject(req, res) {
                     outputPattern,
                 ]);
 
-                await videoHandle.fnExtractFrameToJPG(imagesPath, {
-                    every_n_frames: videoFrameRate * 30,
-                    file_name: framePrefix,
-                });
+                zeroPadExtractedFrames(imagesPath, framePrefix);
+
+                fs.unlinkSync(videoPath);
             }
 
             await cleanFiles();

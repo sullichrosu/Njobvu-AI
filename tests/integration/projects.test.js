@@ -422,13 +422,11 @@ describe('Project Routes - Basic Tests', () => {
     };
 
     const extractFrameCalls = [];
-    const ffmpeg = require('ffmpeg');
-    ffmpeg.mockImplementation(() => Promise.resolve({
-      fnExtractFrameToJPG: jest.fn((destination, options) => {
-        extractFrameCalls.push(options);
-        return Promise.resolve();
-      }),
-    }));
+    const childProcess = require('child_process');
+    childProcess.execFile.mockImplementation((file, args, callback) => {
+      extractFrameCalls.push(args);
+      callback(null, '', '');
+    });
 
     const res = await request(app)
       .post('/createP')
@@ -441,9 +439,15 @@ describe('Project Routes - Basic Tests', () => {
 
     expect(res.statusCode).toBe(200);
     expect(extractFrameCalls).toHaveLength(2);
-    expect(extractFrameCalls.map((options) => options.every_n_frames)).toEqual([60, 150]);
 
-    ffmpeg.mockReset();
+    // Each video's own requested rate (not one rate shared across every
+    // video) drives the `select=not(mod(n\,<rate>))` frame-skip filter ffmpeg
+    // is invoked with for that video.
+    const frameSelectFilters = extractFrameCalls.map(
+      (args) => args[args.indexOf('-vf') + 1],
+    );
+    expect(frameSelectFilters[0]).toContain('mod(n\\,2)');
+    expect(frameSelectFilters[1]).toContain('mod(n\\,5)');
   });
 
   /*

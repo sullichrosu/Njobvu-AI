@@ -338,12 +338,39 @@ You can delete a run, including all logs, weights, and any other output file ass
 **Cloud Usage**
 You can host Njobvu-AI on the cloud to enable users to access it via the internet.
 
-1) Within the Njobvu-AI directory navigate to `/controllers/training/config`
-2) Open the file *config.json*
-3) Fill the parameters with a specific port, and hostname.
-4) If your connection is secure, fill the parameters with the location of your sites SSL key and ceritification. Also add this line to the options variable in server.js:   host: '*your hostname here*'  
-5) Run `node server.js`
-6) (Optional) It is reccomended to use a program like `screen` to keep your server running uninterrupted on the host machine
+1) Within the Njobvu-AI directory, open *config.json* (or set environment variables).
+2) Fill the parameters with a specific port, hostname, paths, and Ollama configuration.
+3) If your connection is secure, fill the parameters with the location of your site's SSL key and certification.
+4) Run `node server.js`
+
+**Docker & Environment Variable Configuration**
+When running in Docker containers or cloud deployments where modifying `config.json` directly is not feasible, Njobvu-AI can be fully configured via environment variables.
+
+Supported environment variables (or prefixed with `CONFIG_` e.g., `CONFIG_PORT`):
+- `PORT` / `CONFIG_PORT` - Port number (default: `3000`)
+- `HOSTNAME` / `CONFIG_HOSTNAME` - Hostname URL (default: `http://localhost`)
+- `OLLAMA_URL` / `CONFIG_OLLAMA_URL` - Ollama server endpoint (default: `http://localhost:11434`)
+- `OLLAMA_DEFAULT_MODEL` / `CONFIG_OLLAMA_DEFAULT_MODEL` - Default LLM model name (default: `gemma4:14b`)
+- `DEFAULT_PYTHON_PATH` / `CONFIG_DEFAULT_PYTHON_PATH` - Path to Python binary (default: `/usr/bin/python3`)
+- `DEFAULT_PYTHON_VENV_PATH` / `CONFIG_DEFAULT_PYTHON_VENV_PATH` - Path to Python virtualenv
+- `DEFAULT_DARKNET_PATH` / `CONFIG_DEFAULT_DARKNET_PATH` - Darknet binary/folder path
+- `DEFAULT_YOLO_PATH` / `CONFIG_DEFAULT_YOLO_PATH` - YOLO executable path
+- `DEFAULT_7Z_PATH` / `CONFIG_DEFAULT_7Z_PATH` - 7-zip executable path
+- `TRAINING_MAX_BUFFER_SIZE` / `CONFIG_TRAINING_MAX_BUFFER_SIZE` - Max buffer size for training (default: `5`)
+- `SSL_KEY_PATH` / `CONFIG_SSL_KEY_PATH` - Path to SSL private key file
+- `SSL_CERT_PATH` / `CONFIG_SSL_CERT_PATH` - Path to SSL certificate file
+- `CHAT_REQUIRED_ROLE` / `CONFIG_CHAT_REQUIRED_ROLE` - Required user role for AI chat (default: `user`)
+- `CONFIG_JSON` - Alternatively, pass a complete JSON string of configuration key-value pairs.
+
+Example running with Docker:
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -e PORT=3000 \
+  -e OLLAMA_URL="http://host.docker.internal:11434" \
+  --name njobvu-ai \
+  ghcr.io/sullichrosu/njobvu-ai/app:latest
+```
 
 
 
