@@ -380,4 +380,81 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
       expect(html).not.toContain("js/flabeling.js");
     });
   });
+
+  describe("GET /labelingV filtered prev/next navigation", () => {
+    // curr_index used to come from a ROW_NUMBER() query over the *entire*
+    // unfiltered Images table, while prev/next indexed into results2 (a
+    // filtered/sorted subset, e.g. sort=needs_review). Once a filter shrank
+    // results2 below the image's global row number, results2[curr_index - 2]
+    // or results2[curr_index] went out of bounds and the whole process crashed
+    // with an uncaught TypeError. Regression covers a 6-image project where
+    // the "needs review" image under test is the 4th row globally, but only
+    // the 2nd of 3 in the filtered set.
+    function mockLabelingVDb() {
+      const sqlite3 = require("sqlite3");
+      // getValidationLabelingPage.js references the bare `sqlite3`/`fs`
+      // globals (set by server.js in production) rather than local requires.
+      global.sqlite3 = sqlite3;
+      global.fs = require("fs");
+      const allImages = [
+        { IName: "c1.png", reviewImage: 0, validateImage: 0 },
+        { IName: "c2.png", reviewImage: 1, validateImage: 0 },
+        { IName: "c3.png", reviewImage: 0, validateImage: 0 },
+        { IName: "c4.png", reviewImage: 1, validateImage: 0 },
+        { IName: "c5.png", reviewImage: 0, validateImage: 0 },
+        { IName: "c6.png", reviewImage: 1, validateImage: 0 },
+      ];
+      const dbMock = {
+        all: jest.fn((sql, params, cb) => {
+          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
+          const s = String(sql);
+          if (!callback) return;
+
+          if (s.includes("FROM `Classes`")) return callback(null, [{ CName: "cat" }]);
+          if (s.includes("WHERE reviewImage=1")) return callback(null, allImages.filter((img) => img.reviewImage === 1));
+          if (s.includes("UPDATE Images SET reviewImage")) return callback(null, []);
+          if (s.includes("FROM `Labels` WHERE IName")) return callback(null, []);
+          if (s.includes("FROM `Images` WHERE IName")) {
+            const match = s.match(/IName = '([^']+)'/);
+            const img = allImages.find((i) => i.IName === (match && match[1]));
+            return callback(null, img ? [img] : []);
+          }
+          if (s.includes("FROM `Validation` WHERE IName")) return callback(null, []);
+          if (s.includes("FROM `Images`")) return callback(null, allImages);
+          return callback(null, []);
+        }),
+        get: jest.fn((sql, cb) => cb && cb(null, {})),
+        close: jest.fn((cb) => cb && cb(null)),
+      };
+      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
+        if (cb) cb(null);
+        return dbMock;
+      });
+      return dbMock;
+    }
+
+    it("does not crash and returns the correct filtered neighbors for a middle needs_review image", async () => {
+      mockLabelingVDb();
+
+      const res = await request(app)
+        .get("/labelingV?IDX=0&IName=c4.png&sort=needs_review")
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.text).toContain('name="prev_IName" value="c2.png"');
+      expect(res.text).toContain('name="next_IName" value="c6.png"');
+    });
+
+    it("still resolves correct neighbors with no filter active", async () => {
+      mockLabelingVDb();
+
+      const res = await request(app)
+        .get("/labelingV?IDX=0&IName=c3.png")
+        .set("Cookie", ["Username=testuser"]);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.text).toContain('name="prev_IName" value="c2.png"');
+      expect(res.text).toContain('name="next_IName" value="c4.png"');
+    });
+  });
 });

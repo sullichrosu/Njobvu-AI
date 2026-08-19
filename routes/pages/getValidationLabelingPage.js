@@ -246,18 +246,15 @@ async function getValidationLabelingPage(req, res) {
         }
     }
 
-    /*
-    var rowid;
-    for (var b = 0; b < results2.length; b++) {
-        if (IName == results2[b].IName) {
-            rowid = { rowid: b + 1 };
-            break;
-        }
-    }*/
-
-    var rowid = await ldb.getAsync(
-        `SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = '${String(IName)}'`,
+    // curr_index must be the image's position within results2 (the active
+    // filtered/sorted list), not its row position in the whole Images table —
+    // results2 can be a subset (e.g. sort=needs_review, or a single class), so
+    // a global row number doesn't line up with it and prev/next below can index
+    // out of bounds.
+    var displayIndex = results2.findIndex(
+        (img) => img && String(img.IName) === String(IName),
     );
+    var rowid = { display_id: displayIndex >= 0 ? displayIndex + 1 : 1 };
 
     await ldb.allAsync(
         "UPDATE Images SET reviewImage = 0 WHERE IName = '" + IName + "'",
