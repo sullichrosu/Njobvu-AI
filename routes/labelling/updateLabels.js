@@ -125,6 +125,8 @@ async function updateLabels(req, res) {
             newMax = newMax + 1;
         }
 
+        var reviewFilter = req.body.reviewFilter || "all";
+
         if (formAction == "save") {
             return res.redirect(
                 "/annotate?IDX=" +
@@ -132,7 +134,9 @@ async function updateLabels(req, res) {
                     "&IName=" +
                     IName +
                     "&curr_class=" +
-                    currClass,
+                    currClass +
+                    "&reviewFilter=" +
+                    encodeURIComponent(reviewFilter),
             );
         } else if (formAction == "auto-prev") {
             return res.redirect(
@@ -141,7 +145,9 @@ async function updateLabels(req, res) {
                     "&IName=" +
                     prev_IName +
                     "&curr_class=" +
-                    currClass,
+                    currClass +
+                    "&reviewFilter=" +
+                    encodeURIComponent(reviewFilter),
             );
         } else if (formAction == "auto-next") {
             return res.redirect(
@@ -150,7 +156,9 @@ async function updateLabels(req, res) {
                     "&IName=" +
                     next_IName +
                     "&curr_class=" +
-                    currClass,
+                    currClass +
+                    "&reviewFilter=" +
+                    encodeURIComponent(reviewFilter),
             );
         } else if (formAction == "saveV") {
             return res.redirect(
@@ -206,7 +214,9 @@ async function updateLabels(req, res) {
                 "&IName=" +
                 IName +
                 "&curr_class=" +
-                currClass,
+                currClass +
+                "&reviewFilter=" +
+                encodeURIComponent(reviewFilter),
         );
     } catch (err) {
         global.logger.error(err);

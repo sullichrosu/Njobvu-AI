@@ -27,12 +27,13 @@
 					<option value="desc" <%= (typeof sortOrder !== 'undefined' && sortOrder === 'desc') ? 'selected' : '' %>>Descending</option>
 				</select>
 			</div>
-			<div class="col-md-3">
+			<div class="col-md-3 d-flex align-items-center">
 				<select class="form-control" id="image-review-filter" onchange="applyImageFilters()">
 					<option value="all" <%= (typeof reviewFilter !== 'undefined' && reviewFilter === 'all') ? 'selected' : '' %>>All Review Statuses</option>
 					<option value="true" <%= (typeof reviewFilter !== 'undefined' && (reviewFilter === 'true' || reviewFilter === '1')) ? 'selected' : '' %>>Needs Review Only</option>
 					<option value="false" <%= (typeof reviewFilter !== 'undefined' && (reviewFilter === 'false' || reviewFilter === '0')) ? 'selected' : '' %>>No Review Needed</option>
 				</select>
+				<button type="button" class="btn btn-secondary ml-2" id="toggle-all-review-btn" onclick="toggleAllReviewImages('<%= PName %>', '<%= Admin %>')" style="border-radius: 0; white-space: nowrap;">Toggle Review All</button>
 			</div>
 		</div>
 	</div>
@@ -48,7 +49,7 @@
 	<div class="col-md-12">
 		<table class="table table-striped" style="table-layout: fixed; width: 100%;">
 		<colgroup>
-		<col style="width: 25%;">  <col style="width: 20%;"> <col style="width: 5%;"> <col style="width: 20%;">  <col style="width: 20%;"> </colgroup>
+		<col style="width: 25%;">  <col style="width: 20%;"> <col style="width: 5%;"> <col style="width: 25%;">  <col style="width: 15%;"> </colgroup>
 			<thead class="thead-dark" style="width: 100%;">
 				<tr>
 					<th scope="col" colspan="2">Image Name</th>
@@ -58,7 +59,7 @@
 			<tbody>
 				<% for(var i=0; i<images.length; i++) {%>
 				<tr>
-					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/annotate?IDX=<%= IDX %>&IName=<%= images[i].IName %>"><%= images[i].IName %></a></td>
+					<td style="overflow: hidden; text-overflow: epllipsis; white-space: nowrap;"><a href="/annotate?IDX=<%= IDX %>&IName=<%= images[i].IName %>&reviewFilter=<%= typeof reviewFilter !== 'undefined' ? reviewFilter : 'all' %>"><%= images[i].IName %></a></td>
 					<!-- input checkbox for review here -->
 					<td class="text-left"> 
 					    <% if(images[i].reviewImage != 0) {%>
@@ -66,7 +67,12 @@
 						<%}%>
 					</td>
 					<td class="text-right"><%= list_counter[i] %></td>
-					<td class="text-right"><a class="btn btn-primary" href="/annotate?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0">Annotate</a>
+					<td class="text-right">
+						<a class="btn btn-primary" href="/annotate?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>&reviewFilter=<%= typeof reviewFilter !== 'undefined' ? reviewFilter : 'all' %>" role="button" style="border-radius: 0">Annotate</a>
+						<% if(images[i].reviewImage != 0) {%>
+						<a class="btn btn-warning" href="/review?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>" role="button" style="border-radius: 0; margin-left: 5px;">Review</a>
+						<%}%>
+					</td>
 					<td class="text-right"> <button type="button" class="button btn-danger" style="border-radius: 0" 
 					    onclick="deleteImage('<%= String(images[i].IName) %>')" aria-label="Delete image <%= images[i].IName %>">X</a></td>
 				</tr>
@@ -197,6 +203,30 @@
 				applyImageFilters();
 			}
 		});
+	}
+
+	async function toggleAllReviewImages(PName, Admin) {
+		if (!confirm("Are you sure you want to toggle the review state for all images in this project?")) {
+			return;
+		}
+		try {
+			var formData = new FormData();
+			formData.append("PName", PName);
+			formData.append("Admin", Admin);
+			var resp = await fetch('/toggleAllReview', {
+				method: 'POST',
+				body: formData
+			});
+			var data = await resp.json();
+			if (data.Success === "Yes") {
+				window.location.reload();
+			} else {
+				alert("Error toggling review state: " + (data.error || "Unknown error"));
+			}
+		} catch (err) {
+			console.error("Failed to toggle all review state:", err);
+			alert("An error occurred while toggling review state.");
+		}
 	}
 </script>
 
