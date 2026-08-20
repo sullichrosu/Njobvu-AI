@@ -80,7 +80,8 @@
 
         var messageDiv = document.getElementById('response-message');
         messageDiv.innerHTML = '<div class="alert alert-info">Importing... Please wait.</div>';
-
+        var submitBtn = this.querySelector('button[type="submit"]');
+        if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Importing...");
 
         fetch('/api/projects/import-dataset', {
             method: 'POST',
@@ -92,10 +93,12 @@
                 messageDiv.innerHTML = '<div class="alert alert-success">Import successful! Redirecting to home...</div>';
                 setTimeout(() => window.location.replace("/home"), 2000);
             } else {
+                if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                 messageDiv.innerHTML = '<div class="alert alert-danger">Error: ' + data.message + '</div>';
             }
         })
         .catch(error => {
+            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
             messageDiv.innerHTML = '<div class="alert alert-danger">Error: ' + error + '</div>';
         });
     });

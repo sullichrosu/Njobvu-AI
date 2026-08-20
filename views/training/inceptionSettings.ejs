@@ -231,6 +231,9 @@ document.forms['add-weights'].addEventListener('submit', (event) => {
         formData.append("PName", "<%= PName %>");
         formData.append("Admin", "<%= Admin %>");
 
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading weights...");
+
         fetch(event.target.action, {
             method: 'POST',
             body: formData
@@ -241,6 +244,7 @@ document.forms['add-weights'].addEventListener('submit', (event) => {
 
             window.location.replace("/inference/inceptionSettings?IDX=<%= IDX %>");
         }).catch((error) => {
+            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
             console.log(error);
         });
     }
@@ -277,6 +281,9 @@ document.getElementById("inception-inf").addEventListener('submit', (event) => {
     formData.append("using_imagenet_classes", document.getElementById("ImageNet").checked);
     formData.append("topK", topK);
 
+    const submitBtn = document.getElementById("Infbtn");
+    if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Running inference...");
+
     fetch(event.target.action, {
         method: 'POST',
         body: formData
@@ -288,6 +295,7 @@ document.getElementById("inception-inf").addEventListener('submit', (event) => {
         window.location.replace("/inference?IDX=<%= IDX %>");
 
     }).catch((error) => {
+        if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
         console.log(error);
     });
 });

@@ -2,6 +2,7 @@ const StreamZip = require("node-stream-zip");
 const rimraf = require("../../public/libraries/rimraf");
 const queries = require("../../queries/queries");
 const { Client } = require("../../queries/client");
+const flattenDirectory = require("../../utils/flattenDirectory");
 
 async function importProject(req, res) {
     req.setTimeout(600000);
@@ -108,6 +109,9 @@ async function importProject(req, res) {
                 return res.status(500).send("Error removing .zip file");
             }
 
+            if (fs.existsSync(imagesPath)) {
+                await flattenDirectory(imagesPath);
+            }
             let images = await readdirAsync(imagesPath);
             let oldImages;
 

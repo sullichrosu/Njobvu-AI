@@ -10,6 +10,7 @@ const {
     ensureTrainingImagesLocal,
     cleanupJitTrainingImages,
 } = require("../../utils/jitTrainingImages");
+const { generateModelCard } = require("../../utils/runSummaryGenerator");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -952,6 +953,21 @@ async function yoloRun(req, res) {
         }
 
         fs.writeFileSync(`${runPath}/done.log`, success);
+        await cleanupJitTrainingImages(jitDownloadedFiles);
+
+        if (!err) {
+            try {
+                await generateModelCard(runPath, {
+                    runType: "training",
+                    runName: `${PName}_${date}`,
+                    task: yoloTask,
+                    projectName: PName,
+                });
+            } catch (cardErr) {
+                global.logger.error("Error generating model card:", cardErr);
+            }
+        }
+
         await cleanupJitTrainingImages(jitDownloadedFiles);
     });
 

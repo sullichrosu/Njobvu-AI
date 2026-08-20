@@ -229,6 +229,8 @@
                                 formData.append("PName", "<%= PName %>");
                                 formData.append("Admin", "<%= Admin %>");
 
+                                const submitBtn = event.target.querySelector('button[type="submit"]');
+                                if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading file...");
 
                                 fetch(event.target.action, {
                                     method: 'POST',
@@ -241,6 +243,7 @@
                                     window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
 
                                 }).catch((error) => {
+                                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                     console.log(error);
                                 });
                             }
@@ -263,6 +266,8 @@
                                 formData.append("PName", "<%= PName %>");
                                 formData.append("Admin", "<%= Admin %>");
 
+                                const submitBtn = event.target.querySelector('button[type="submit"]');
+                                if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading weights...");
 
                                 fetch(event.target.action, {
                                     method: 'POST',
@@ -275,6 +280,7 @@
                                     window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
 
                                 }).catch((error) => {
+                                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                     console.log(error);
                                 });
                             }
@@ -290,6 +296,8 @@
                             formData.append("PName", "<%= PName %>");
                             formData.append("Admin", "<%= Admin %>");
 
+                            const submitBtn = event.target.querySelector('button[type="submit"]');
+                            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Adding path...");
 
                             fetch(event.target.action, {
                                 method: 'POST',
@@ -303,6 +311,7 @@
                                 window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
 
                             }).catch((error) => {
+                                if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                 console.log(error);
                             });
                         });
@@ -344,59 +353,9 @@
                             formData.append("yolo_version", document.getElementById("yolo_version").value);
                             formData.append("yolo_task", document.getElementById("yolo_task").value);
                             formData.append("yolo_mode", document.getElementById("yolo_mode").value);
-                            // formData.append("options", document.getElementById("options").value);
-                            // formData.append("device", document.getElementById("device").value);
 
-                            console.log(formData);
-
-                            fetch(event.target.action, {
-                                method: 'POST',
-                                body: formData
-                            }).then((resp) => {
-                                return resp.json();
-                            }).then((body) => {
-                                console.log(body);
-
-                                alert(body.Success);
-                                window.location.replace("/inference?IDX=<%= IDX %>");
-
-                            }).catch((error) => {
-                                console.log(error);
-                            });
-                        });
-
-
-                        document.forms['yolo-run'].addEventListener('submit', (event) => {
-                            event.preventDefault();
-                            console.log('Form for yolo-run handler')
-
-                            var yolovx_path = document.getElementById("Yolo").value;
-                            var weights_file = document.getElementById("Weights").value;
-                            var inference_file = document.getElementById("Inference").value;
-
-                            console.log("weights_file: ", weights_file)
-                            if (weights_file == "") {
-                                alert("Must select a weights file")
-                                return;
-                            }
-
-                            var formData = new FormData();
-                            formData.append("PName", "<%= PName %>");
-                            formData.append("Admin", "<%= Admin %>");
-                            formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
-                            formData.append("batch", document.getElementById("batch").value);
-                            formData.append("subdiv", document.getElementById("subdiv").value);
-                            formData.append("yolovx_path", document.getElementById("Yolo").value);
-                            formData.append("weights", document.getElementById("Weights").value);
-                            formData.append("width", document.getElementById("width").value);
-                            formData.append("height", document.getElementById("height").value);
-                            formData.append("yolo_version", document.getElementById("yolo_version").value);
-                            formData.append("yolo_task", document.getElementById("yolo_task").value);
-                            formData.append("yolo_mode", document.getElementById("yolo_mode").value);
-                            formData.append("epochs", document.getElementById("epochs").value);
-                            formData.append("options", document.getElementById("options").value);
-                            formData.append("imgsz", document.getElementById("imgsz").value);
-                            formData.append("device", document.getElementById("device").value);
+                            const submitBtn = document.getElementById("Infbtn");
+                            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Running inference...");
 
                             fetch(event.target.action, {
                                 method: 'POST',
@@ -410,9 +369,65 @@
                                 window.location.replace("/inference?IDX=<%= IDX %>");
 
                             }).catch((error) => {
+                                if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                 console.log(error);
                             });
                         });
+
+
+                        if (document.forms['yolo-run']) {
+                            document.forms['yolo-run'].addEventListener('submit', (event) => {
+                                event.preventDefault();
+                                console.log('Form for yolo-run handler')
+
+                                var yolovx_path = document.getElementById("Yolo").value;
+                                var weights_file = document.getElementById("Weights").value;
+                                var inference_file = document.getElementById("Inference").value;
+
+                                console.log("weights_file: ", weights_file)
+                                if (weights_file == "") {
+                                    alert("Must select a weights file")
+                                    return;
+                                }
+
+                                var formData = new FormData();
+                                formData.append("PName", "<%= PName %>");
+                                formData.append("Admin", "<%= Admin %>");
+                                formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+                                formData.append("batch", document.getElementById("batch").value);
+                                formData.append("subdiv", document.getElementById("subdiv").value);
+                                formData.append("yolovx_path", document.getElementById("Yolo").value);
+                                formData.append("weights", document.getElementById("Weights").value);
+                                formData.append("width", document.getElementById("width").value);
+                                formData.append("height", document.getElementById("height").value);
+                                formData.append("yolo_version", document.getElementById("yolo_version").value);
+                                formData.append("yolo_task", document.getElementById("yolo_task").value);
+                                formData.append("yolo_mode", document.getElementById("yolo_mode").value);
+                                formData.append("epochs", document.getElementById("epochs").value);
+                                formData.append("options", document.getElementById("options").value);
+                                formData.append("imgsz", document.getElementById("imgsz").value);
+                                formData.append("device", document.getElementById("device").value);
+
+                                const submitBtn = event.target.querySelector('button[type="submit"]');
+                                if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Starting...");
+
+                                fetch(event.target.action, {
+                                    method: 'POST',
+                                    body: formData
+                                }).then((resp) => {
+                                    return resp.json();
+                                }).then((body) => {
+                                    console.log(body);
+
+                                    alert(body.Success);
+                                    window.location.replace("/inference?IDX=<%= IDX %>");
+
+                                }).catch((error) => {
+                                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
+                                    console.log(error);
+                                });
+                            });
+                        }
                     });
 
                 </script>

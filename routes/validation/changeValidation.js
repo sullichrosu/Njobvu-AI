@@ -18,10 +18,6 @@ async function changeValidation(req, res) {
             "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",
             [Number(1), PName, admin],
         );
-        await queries.project.sql(
-            projectPath,
-            "UPDATE Images SET reviewImage = 1",
-        );
 
         res.send({ Success: "Yes" });
     }
@@ -30,10 +26,6 @@ async function changeValidation(req, res) {
         await queries.managed.sql(
             "UPDATE Projects SET Validate = ? WHERE PName = ? AND Admin = ?",
             [Number(0), PName, admin],
-        );
-        await queries.project.sql(
-            projectPath,
-            "UPDATE Images SET reviewImage = 0",
         );
 
         res.send({ Success: "Yes" });

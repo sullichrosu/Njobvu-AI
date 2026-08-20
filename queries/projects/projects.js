@@ -204,6 +204,20 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0, Source VARCHAR DEFAULT NULL, SourceKey VARCHAR DEFAULT NULL)",
             );
+            try {
+                await db.run(
+                    "ALTER TABLE Images ADD COLUMN reviewImage INTEGER NOT NULL DEFAULT 0",
+                );
+            } catch (e) {
+                // Column already exists
+            }
+            try {
+                await db.run(
+                    "ALTER TABLE Images ADD COLUMN validateImage INTEGER NOT NULL DEFAULT 0",
+                );
+            } catch (e) {
+                // Column already exists
+            }
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Labels (LID INTEGER PRIMARY KEY, CName VARCHAR NOT NULL, X VARCHAR NOT NULL, Y VARCHAR NOT NULL, W INTEGER NOT NULL, H INTEGER NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(CName) REFERENCES Classes(CName), FOREIGN KEY(IName) REFERENCES Images(IName))",
             );

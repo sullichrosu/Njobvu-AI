@@ -307,7 +307,7 @@
 
         const submitBtn = document.getElementById('s3SubmitBtn');
         const progress = document.getElementById('progress');
-        submitBtn.style.display = "none";
+        if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Creating project...");
 
         try {
             progress.textContent = "Creating project...";
@@ -326,6 +326,7 @@
             }
 
             progress.textContent = "Attaching S3 bucket...";
+            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Attaching S3 bucket...");
 
             const attachRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket`, {
                 method: 'POST',
@@ -347,6 +348,7 @@
             }
 
             progress.textContent = "Syncing images from S3...";
+            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Syncing images from S3...");
 
             const syncRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket/sync`, {
                 method: 'POST',
@@ -362,7 +364,7 @@
             window.location.replace('/home');
         } catch (err) {
             progress.textContent = "";
-            submitBtn.style.display = "inline-block";
+            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
             alert("Something went wrong setting up the S3-backed project.\nReason: " + err.message);
         }
     }
@@ -386,23 +388,26 @@
             const formData = new FormData(this);
             const xhr = new XMLHttpRequest();
             const progress = document.getElementById('progress');
+            const submitBtn = this.querySelector('input[type="submit"], button[type="submit"]');
 
             progress.textContent = "Percent Uploaded: 0%";
-            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "none");
+            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading 0%...");
 
             xhr.upload.addEventListener('progress', function(e) {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
                     progress.textContent = `Percent Uploaded: ${percent}%`;
+                    if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, `Uploading ${percent}%...`);
                     if (percent === 100) {
                         progress.textContent = "Upload Finished. Server processing upload. Please wait for the closing prompt.";
+                        if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Processing...");
                     }
                 }
             });
 
             xhr.onreadystatechange = function() {
                 if (xhr.readyState === 4) {
-                    document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 
                     if (xhr.status === 200) {
                         alert("Project creation successful");
@@ -438,7 +443,7 @@
                             formData.append('frame_rate', frameRate);
                         } else {
                             progress.textContent = "";
-                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                             return;
                         }
                     }
@@ -460,7 +465,7 @@
                             formData.append('frame_rate', frameRate);
                         } else {
                             progress.textContent = "";
-                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                             return;
                         }
                     }

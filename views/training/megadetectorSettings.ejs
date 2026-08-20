@@ -127,6 +127,9 @@
                     formData.append("PName", "<%= PName %>");
                     formData.append("Admin", "<%= Admin %>");
 
+                    const submitBtn = document.getElementById("MdInfUploadBtn");
+                    if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading file...");
+
                     fetch(event.target.action, {
                         method: 'POST',
                         body: formData
@@ -136,6 +139,7 @@
                         alert(body.Success);
                         window.location.replace("/megadetector/settings?IDX=<%= IDX %>");
                     }).catch((error) => {
+                        if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                         console.log(error);
                     });
                 });
@@ -161,6 +165,9 @@
                     formData.append("fps", fps);
                     formData.append("inference_file", inferenceFile);
 
+                    const submitBtn = document.getElementById("MdInfBtn");
+                    if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Running MegaDetector...");
+
                     fetch(event.target.action, {
                         method: 'POST',
                         body: formData
@@ -170,6 +177,7 @@
                         alert(body.Success);
                         window.location.replace("/inference?IDX=<%= IDX %>");
                     }).catch((error) => {
+                        if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                         console.log(error);
                     });
                 });
