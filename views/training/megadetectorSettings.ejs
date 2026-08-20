@@ -27,9 +27,10 @@
                                         <div class="form-row">
                                             <div class="form-group col-md-6">
                                                 <h5><label for="upload-md-inference" style="width: 200%;">Upload
-                                                        inference file (.jpg, .png, .gif, .tif, .mp4)</label></h5>
+                                                        inference file (.jpg, .png, .gif, .tif, .mp4, .mov, .zip)</label></h5>
                                                 <input id="upload-md-inference" name="upload-inference" type="file"
-                                                    class="form-control-file" required>
+                                                    class="form-control-file" accept=".jpg,.jpeg,.png,.gif,.tif,.tiff,.mp4,.mov,.zip" required>
+                                                <p>Upload single images/videos or a .zip archive containing images/videos.</p>
                                             </div>
                                         </div>
                                         <div class="col text-left">
@@ -38,6 +39,7 @@
                                         </div>
                                     </form>
                                     <br>
+                                    <%- include('../includes/s3BucketForm') %>
                                     <br>
                                     <form class="Configure Project For MegaDetector" action="/megadetector-inf"
                                         enctype="multipart/form-data" id="megadetector-inf" method="post">
@@ -83,8 +85,8 @@
                                                 <h5><label for="Inference_md">Inference Files:</label></h5>
                                                 <select name="Inference_md" id="Inference_md" style="width:100%">
                                                     <% for(var i=0; i<global_inference_upload.length; i++) {%>
-                                                        <option>
-                                                            <%= global_inference_upload[i]%>
+                                                        <option value="<%= global_inference_upload[i] %>">
+                                                            <%= global_inference_upload[i] === 's3' || global_inference_upload[i] === 's3_bucket' ? '[Attached S3 Bucket]' : global_inference_upload[i] %>
                                                         </option>
                                                         <% } %>
                                                 </select>

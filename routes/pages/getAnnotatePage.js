@@ -1,9 +1,11 @@
-const path = require('path');
-const fs = require('fs');
-const sqlite3 = require('sqlite3').verbose();
-const probe = require('probe-image-size');
+const queries = require("../../queries/queries");
+const { buildS3Client, getObjectStream } = require("../../utils/s3Client");
 
 async function getAnnotatePage(req, res) {
+    var path = global.path || require("path");
+    var fs = global.fs || require("fs");
+    var sqlite3 = global.sqlite3 || require("sqlite3").verbose();
+    var probe = global.probe || require("probe-image-size");
     var IDX = parseInt(req.query.IDX),
         IName = String(req.query.IName),
         curr_class = req.query.curr_class,
@@ -133,22 +135,61 @@ async function getAnnotatePage(req, res) {
         }
     }
 
-    var abs_image_path = path.join(project_path, "images", IName);
+    var abs_image_path = project_path + "/images/" + IName;
+    var imageExistsLocally = fs.existsSync(abs_image_path);
+    var imageRow = results4 && results4[0];
 
-    if (!results4 || results4.length === 0 || !fs.existsSync(abs_image_path)) {
+    // A "download"-mode (or local-import) image is a real file at
+    // abs_image_path, same as always. A "stream"-mode S3 image never has
+    // one - it's only ever fetched live, on view, via the on-demand proxy
+    // below - so only 404 here if neither a local file nor an S3-backed row
+    // exists for this name.
+    if (!imageRow || (!imageExistsLocally && imageRow.Source !== "s3")) {
         ldb.close();
         res.render("404", {
             title: "404",
             user: req.cookies.Username,
         });
     } else {
-        var rel_image_path = rel_project_path + "/images/" + results4[0].IName;
-        var img = fs.readFileSync(abs_image_path),
-            img_data = probe.sync(img),
-            img_w = img_data.width,
-            img_h = img_data.height,
-            image_ratio = img_h / img_w,
-            image_width = img_w,
+        var rel_image_path;
+        var img_w, img_h;
+
+        if (imageExistsLocally) {
+            rel_image_path = rel_project_path + "/images/" + imageRow.IName;
+            var img = fs.readFileSync(project_path + "/images/" + imageRow.IName);
+            var img_data = probe.sync(img);
+            img_w = img_data.width;
+            img_h = img_data.height;
+        } else {
+            // Point the browser at the on-demand proxy instead of a static
+            // path that doesn't exist. Probe just enough of the object's
+            // header (over that same live fetch, aborted by probe() once it
+            // has what it needs) to lay out the page, rather than pulling
+            // the whole image server-side just to measure it.
+            rel_image_path = `api/v2/projects/${admin}/${PName}/images/${imageRow.IName}`;
+
+            try {
+                var bucketResult = await queries.managed.getBucket(PName, admin);
+                var bucket = bucketResult && bucketResult.row;
+                var s3Client = buildS3Client({
+                    region: bucket.Region,
+                    accessKeyId: bucket.AccessKeyId,
+                    secretAccessKey: bucket.SecretAccessKey,
+                    endpoint: bucket.Endpoint,
+                });
+                var objectStream = await getObjectStream(s3Client, bucket.BucketName, imageRow.SourceKey);
+                var probed = await probe(objectStream.body);
+                img_w = probed.width;
+                img_h = probed.height;
+            } catch (err) {
+                global.logger.error(err);
+                img_w = 0;
+                img_h = 0;
+            }
+        }
+
+        var image_ratio = img_w ? img_h / img_w : 1,
+            image_width = img_w || 0,
             image_height = image_ratio * image_width,
             prev_IName = -1,
             next_IName = -1;
