@@ -217,9 +217,12 @@ module.exports = {
             // SQLite has no ADD COLUMN IF NOT EXISTS. SourceKey holds the literal S3 object
             // key (which may differ from IName once collisions are disambiguated), decoupled
             // from the display name.
-            const imageColumns = await db.all("PRAGMA table_info(Images)");
+            const imageColumnsResult = await db.all("PRAGMA table_info(Images)");
+            const imageColumns = Array.isArray(imageColumnsResult)
+                ? imageColumnsResult
+                : (imageColumnsResult && imageColumnsResult.rows) || [];
             const existingColumnNames = new Set(
-                (imageColumns.rows || []).map((column) => column.name),
+                imageColumns.map((column) => column.name),
             );
 
             const backfillColumns = [

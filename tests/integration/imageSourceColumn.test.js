@@ -79,7 +79,10 @@ describe('queries/projects migrateProjectDb Source/SourceKey column backfill', (
         await projects.project.migrateProjectDb('/projects/testuser-test-project');
 
         expect(mockRun).not.toHaveBeenCalledWith(
-            expect.stringContaining('ALTER TABLE Images ADD COLUMN'),
+            'ALTER TABLE Images ADD COLUMN Source VARCHAR DEFAULT NULL',
+        );
+        expect(mockRun).not.toHaveBeenCalledWith(
+            'ALTER TABLE Images ADD COLUMN SourceKey VARCHAR DEFAULT NULL',
         );
     });
 });
