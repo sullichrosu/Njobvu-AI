@@ -3,6 +3,8 @@
 // or admin configuration is needed.
 const MEGADETECTOR_MODELS = ["MDV5A", "MDV5B", "MDv1000-redwood"];
 
+const queries = require("../../queries/queries");
+
 async function getMegadetectorSettingsPage(req, res) {
     // get URL variables
     var IDX = parseInt(req.query.IDX),
@@ -43,10 +45,10 @@ async function getMegadetectorSettingsPage(req, res) {
 
     var acc = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
+        PName +
+        "' AND Admin = '" +
+        admin +
+        "'",
     );
     var access = [];
     for (var i = 0; i < acc.length; i++) {

@@ -1,3 +1,5 @@
+const queries = require("../../queries/queries");
+
 async function getYoloXInferencePage(req, res) {
     const readdir = util.promisify(fs.readdir);
     const readFile = util.promisify(fs.readFile);
