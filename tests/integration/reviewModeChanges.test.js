@@ -211,6 +211,10 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
             if (callback) callback(null, []);
           }
         }),
+        run: jest.fn((sql, params, cb) => {
+          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
+          if (callback) callback(null);
+        }),
         close: jest.fn((cb) => cb && cb(null)),
       };
       jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
