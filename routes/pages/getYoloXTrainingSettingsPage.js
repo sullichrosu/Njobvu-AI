@@ -78,12 +78,12 @@ async function getYoloXInferencePage(req, res) {
         fs.mkdirSync(log_path);
         fs.mkdirSync(python_path);
         fs.mkdirSync(weights_path);
-        fs.writeFile(python_path_file, "", function (err) {
+        fs.writeFile(python_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
         });
-        fs.writeFile(yolovx_path_file, "", function (err) {
+        fs.writeFile(yolovx_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
@@ -91,7 +91,7 @@ async function getYoloXInferencePage(req, res) {
     } else if (!fs.existsSync(weights_path)) {
         fs.mkdirSync(weights_path);
     } else if (!fs.existsSync(yolovx_path_file)) {
-        fs.writeFile(yolovx_path_file, "", function (err) {
+        fs.writeFile(yolovx_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
@@ -107,10 +107,10 @@ async function getYoloXInferencePage(req, res) {
     });
 
     // create async database object functions
-    tdb.getAsync = function (sql) {
+    tdb.getAsync = function(sql) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.get(sql, function(err, row) {
                 if (err) {
                     global.logger.error("runAsync ERROR!", err)
                     reject(err);
@@ -120,10 +120,10 @@ async function getYoloXInferencePage(req, res) {
             global.logger.error(err);
         });
     };
-    tdb.allAsync = function (sql) {
+    tdb.allAsync = function(sql) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.all(sql, function(err, row) {
                 if (err) {
                     global.logger.error("runAsync ERROR!", err)
                     reject(err);
@@ -148,7 +148,7 @@ async function getYoloXInferencePage(req, res) {
     try {
         var countsResult = await queries.project.getClassLabelCounts(project_path);
         if (countsResult && countsResult.rows) {
-            countsResult.rows.forEach(function (row) {
+            countsResult.rows.forEach(function(row) {
                 classLabelCounts[row.CName] = row.labelCount;
             });
         }
@@ -161,7 +161,7 @@ async function getYoloXInferencePage(req, res) {
     try {
         var imageCountsResult = await queries.project.getClassImageCounts(project_path);
         if (imageCountsResult && imageCountsResult.rows) {
-            imageCountsResult.rows.forEach(function (row) {
+            imageCountsResult.rows.forEach(function(row) {
                 classImageCounts[row.CName] = row.imageCount;
             });
         }
@@ -169,7 +169,7 @@ async function getYoloXInferencePage(req, res) {
         global.logger.error(err);
     }
 
-    results2 = results2.map(function (cls) {
+    results2 = results2.map(function(cls) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
             imageCount: classImageCounts[cls.CName] || 0,
@@ -224,13 +224,13 @@ async function getYoloXInferencePage(req, res) {
         weight = [];
         run_path = `${log_path}${runs[i]}/`;
         run_paths.push(run_path);
-        
+
         // get all files for each run (including subdirectories)
         var runFiles = [];
-        
+
         // Read main directory files
         logs = await readdirAsync(`${run_path}`);
-        
+
         // Add files from main directory
         for (var j = 0; j < logs.length; j++) {
             var filePath = run_path + logs[j];
@@ -249,7 +249,7 @@ async function getYoloXInferencePage(req, res) {
                 global.logger.debug("Error reading file stats:", err);
             }
         }
-        
+
         // Read subdirectories for additional files (like plots, results, etc.)
         // We need to go deeper since YOLO puts training files in train/ subdirectory
         for (var j = 0; j < logs.length; j++) {
@@ -301,9 +301,9 @@ async function getYoloXInferencePage(req, res) {
                 global.logger.debug("Error checking directory:", err);
             }
         }
-        
+
         all_run_files.push(runFiles);
-        
+
         // get index of log file
         log_idx = logs.indexOf(`${runs[i]}.log`);
         // get log file for each run
@@ -369,7 +369,7 @@ async function getYoloXInferencePage(req, res) {
     }
 
     // close the database
-    tdb.close(function (err) {
+    tdb.close(function(err) {
         if (err) {
             global.logger.error(err);
         } else {
