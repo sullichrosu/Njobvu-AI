@@ -204,20 +204,6 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0, Source VARCHAR DEFAULT NULL, SourceKey VARCHAR DEFAULT NULL)",
             );
-            try {
-                await db.run(
-                    "ALTER TABLE Images ADD COLUMN reviewImage INTEGER NOT NULL DEFAULT 0",
-                );
-            } catch (e) {
-                // Column already exists
-            }
-            try {
-                await db.run(
-                    "ALTER TABLE Images ADD COLUMN validateImage INTEGER NOT NULL DEFAULT 0",
-                );
-            } catch (e) {
-                // Column already exists
-            }
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Labels (LID INTEGER PRIMARY KEY, CName VARCHAR NOT NULL, X VARCHAR NOT NULL, Y VARCHAR NOT NULL, W INTEGER NOT NULL, H INTEGER NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(CName) REFERENCES Classes(CName), FOREIGN KEY(IName) REFERENCES Images(IName))",
             );
@@ -225,18 +211,20 @@ module.exports = {
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
 
-            // Images predates the Source/SourceKey columns, so CREATE TABLE IF NOT EXISTS
-            // above is a no-op on any project database created before this change.
-            // Back-fill them here, guarded by a PRAGMA check since SQLite has no
-            // ADD COLUMN IF NOT EXISTS. SourceKey holds the literal S3 object key (which
-            // may differ from IName once collisions are disambiguated), decoupled from the
-            // display name.
+            // Images predates the reviewImage/validateImage/Source/SourceKey columns, so
+            // CREATE TABLE IF NOT EXISTS above is a no-op on any project database created
+            // before this change. Back-fill them here, guarded by a PRAGMA check since
+            // SQLite has no ADD COLUMN IF NOT EXISTS. SourceKey holds the literal S3 object
+            // key (which may differ from IName once collisions are disambiguated), decoupled
+            // from the display name.
             const imageColumns = await db.all("PRAGMA table_info(Images)");
             const existingColumnNames = new Set(
                 (imageColumns.rows || []).map((column) => column.name),
             );
 
             const backfillColumns = [
+                { name: "reviewImage", ddl: "reviewImage INTEGER NOT NULL DEFAULT 0" },
+                { name: "validateImage", ddl: "validateImage INTEGER NOT NULL DEFAULT 0" },
                 { name: "Source", ddl: "Source VARCHAR DEFAULT NULL" },
                 { name: "SourceKey", ddl: "SourceKey VARCHAR DEFAULT NULL" },
             ];

@@ -1,11 +1,11 @@
-const path = require("path");
-const fs = require("fs");
-const sqlite3 = require("sqlite3").verbose();
-const probe = require("probe-image-size");
 const queries = require("../../queries/queries");
 const { buildS3Client, getObjectStream } = require("../../utils/s3Client");
 
 async function getAnnotatePage(req, res) {
+    var path = global.path || require("path");
+    var fs = global.fs || require("fs");
+    var sqlite3 = global.sqlite3 || require("sqlite3").verbose();
+    var probe = global.probe || require("probe-image-size");
     var IDX = parseInt(req.query.IDX),
         IName = String(req.query.IName),
         curr_class = req.query.curr_class,

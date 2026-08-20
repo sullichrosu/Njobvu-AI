@@ -24,17 +24,21 @@ const getAnnotatePage = require('../../routes/pages/getAnnotatePage');
 // Mirrors the real sqlite3 driver's callback style, since getAnnotatePage.js
 // wraps `this.get`/`this.all` in its own Promise-returning getAsync/allAsync
 // right after construction - only the raw callback methods are ever called.
+// getAsync/allAsync always invoke the 3-arg form (sql, params, callback), so
+// these must accept that arity rather than the 2-arg (sql, callback) form.
 function makeFakeProjectDb({ classesRows = [], labelsRows = [], imagesRows = [], displayRow }) {
     return {
-        get: jest.fn((sql, cb) => {
-            if (sql.includes('display_id')) return cb(null, displayRow);
-            return cb(null, undefined);
+        get: jest.fn((sql, params, cb) => {
+            const callback = typeof params === 'function' ? params : cb;
+            if (sql.includes('display_id')) return callback(null, displayRow);
+            return callback(null, undefined);
         }),
-        all: jest.fn((sql, cb) => {
-            if (sql.includes('Classes')) return cb(null, classesRows);
-            if (sql.includes('Labels')) return cb(null, labelsRows);
-            if (sql.includes('Images')) return cb(null, imagesRows);
-            return cb(null, []);
+        all: jest.fn((sql, params, cb) => {
+            const callback = typeof params === 'function' ? params : cb;
+            if (sql.includes('Classes')) return callback(null, classesRows);
+            if (sql.includes('Labels')) return callback(null, labelsRows);
+            if (sql.includes('Images')) return callback(null, imagesRows);
+            return callback(null, []);
         }),
         each: jest.fn((sql, cb) => cb(null, undefined)),
         close: jest.fn((cb) => cb && cb(null)),
