@@ -246,22 +246,54 @@ async function getValidationLabelingPage(req, res) {
         }
     }
 
-    /*
-    var rowid;
-    for (var b = 0; b < results2.length; b++) {
-        if (IName == results2[b].IName) {
-            rowid = { rowid: b + 1 };
-            break;
+    // curr_index must be the image's position within results2 (the active
+    // filtered/sorted list), not its row position in the whole Images table —
+    // results2 can be a subset (e.g. sort=needs_review, or a single class), so
+    // a global row number doesn't line up with it and prev/next below can index
+    // out of bounds.
+    var displayIndex = results2.findIndex(
+        (img) => img && String(img.IName) === String(IName),
+    );
+
+    var hasActiveFilter =
+        (sortFilter && sortFilter !== "null" && sortFilter !== "undefined") ||
+        (imageClass && imageClass !== "null" && imageClass !== "undefined");
+
+    if (displayIndex === -1 && hasActiveFilter) {
+        ldb.close(function (err) {
+            if (err) global.logger.error(err);
+        });
+
+        if (results2 && results2.length > 0) {
+            var targetClass = (curr_class && curr_class !== "undefined") ? curr_class : ((results1 && results1.length > 0) ? results1[0].CName : "");
+            return res.redirect(
+                "/labelingV?IDX=" +
+                    IDX +
+                    "&IName=" +
+                    results2[0].IName +
+                    "&curr_class=" +
+                    targetClass +
+                    "&sort=" +
+                    (sortFilter || "null") +
+                    "&class=" +
+                    (imageClass || "null") +
+                    "&classFilter=" +
+                    (classFilter || "false"),
+            );
+        } else {
+            return res.redirect(
+                "/projectV?IDX=" +
+                    IDX +
+                    "&page=1&perPage=10&sort=" +
+                    (sortFilter || "null") +
+                    "&class=" +
+                    (imageClass || "null"),
+            );
         }
-    }*/
+    }
 
-    var rowid = await ldb.getAsync(
-        `SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = '${String(IName)}'`,
-    );
+    var rowid = { display_id: displayIndex >= 0 ? displayIndex + 1 : 1 };
 
-    await ldb.allAsync(
-        "UPDATE Images SET reviewImage = 0 WHERE IName = '" + IName + "'",
-    );
 
     var results3 = await ldb.allAsync(
         "SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'",
@@ -331,11 +363,13 @@ async function getValidationLabelingPage(req, res) {
 
         curr_index = Number(rowid.display_id);
 
-        if (curr_index != 1) {
-            prev_IName = results2[curr_index - 2]["IName"];
-        }
-        if (curr_index != results2.length) {
-            next_IName = results2[curr_index]["IName"];
+        if (displayIndex !== -1) {
+            if (displayIndex > 0 && results2[displayIndex - 1]) {
+                prev_IName = results2[displayIndex - 1]["IName"];
+            }
+            if (displayIndex < results2.length - 1 && results2[displayIndex + 1]) {
+                next_IName = results2[displayIndex + 1]["IName"];
+            }
         }
         // close the database
         ldb.close(function (err) {
@@ -372,7 +406,7 @@ async function getValidationLabelingPage(req, res) {
         }
 
         res.render("labelingV", {
-            title: "labeling",
+            title: "labelingV",
             user: user,
             access: access,
             image_width: image_width,
@@ -399,9 +433,9 @@ async function getValidationLabelingPage(req, res) {
             AutoSave: results5["AutoSave"],
             logged: req.query.logged,
             stats: statsO,
-            sortFilter: sortFilter,
-            imageClass: imageClass,
-            classFilter: classFilter,
+            sortFilter: sortFilter || "null",
+            imageClass: imageClass || "null",
+            classFilter: classFilter || "false",
         });
     }
 }

@@ -34,6 +34,7 @@
 					<option><%= projectClasses[f]%></option>
 				<% } %>
 			</select>
+			<button type="button" class="btn btn-secondary" id="toggle-all-review-btn" onclick="toggleAllReviewImages('<%= PName %>', '<%= Admin %>')" style="border-radius: 0; white-space: nowrap;">Toggle Review All</button>
 		</div>
 		<div style="padding-top: 20px; padding-bottom: 5px;">
 			<form class="Batch Change" action="/batch-change-class" enctype="multipart/form-data" id="batch-change-class">
@@ -268,6 +269,30 @@
 			}).catch((error) => {
 				console.log(error);
 			});
+		}
+	}
+
+	async function toggleAllReviewImages(PName, Admin) {
+		if (!confirm("Are you sure you want to toggle the review state for all images in this project?")) {
+			return;
+		}
+		try {
+			var formData = new FormData();
+			formData.append("PName", PName);
+			formData.append("Admin", Admin);
+			var resp = await fetch('/toggleAllReview', {
+				method: 'POST',
+				body: formData
+			});
+			var data = await resp.json();
+			if (data.Success === "Yes") {
+				window.location.reload();
+			} else {
+				alert("Error toggling review state: " + (data.error || "Unknown error"));
+			}
+		} catch (err) {
+			console.error("Failed to toggle all review state:", err);
+			alert("An error occurred while toggling review state.");
 		}
 	}
 </script>

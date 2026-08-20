@@ -196,7 +196,8 @@
 		formData.append("PName", "<%= PName %>");
 		formData.append("Admin", "<%= Admin %>");
 
-		console.log(files)
+		const submitBtn = event.target.querySelector('button[type="submit"]');
+		if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Adding file...");
 
 		fetch(event.target.action, {
 			method: 'POST',
@@ -209,6 +210,7 @@
 			window.location.replace("/training?IDX=<%= IDX %>");
   
 		}).catch((error) => {
+			if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 			console.log(error);
 		});
 	});
@@ -232,6 +234,8 @@
 			formData.append("PName", "<%= PName %>");
 			formData.append("Admin", "<%= Admin %>");
 
+			const submitBtn = event.target.querySelector('button[type="submit"]');
+			if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading weights...");
 
 			fetch(event.target.action, {
 				method: 'POST',
@@ -244,6 +248,7 @@
 				window.location.replace("/training?IDX=<%= IDX %>");
   	
 			}).catch((error) => {
+				if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 				console.log(error);
 			});
 		}
@@ -259,6 +264,8 @@
 		formData.append("PName", "<%= PName %>");
 		formData.append("Admin", "<%= Admin %>");
 
+		const submitBtn = event.target.querySelector('button[type="submit"]');
+		if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Adding path...");
 
 		fetch(event.target.action, {
 			method: 'POST',
@@ -272,6 +279,7 @@
 			window.location.replace("/training?IDX=<%= IDX %>");
   
 		}).catch((error) => {
+			if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 			console.log(error);
 		});
 	});
@@ -302,6 +310,8 @@
 		formData.append("PName", "<%= PName %>");
 		formData.append("Admin", "<%= Admin %>");
 	
+		const submitBtn = document.getElementById("Trainbtn");
+		if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Starting training...");
 
 		fetch(event.target.action, {
 			method: 'POST',
@@ -315,6 +325,7 @@
 			window.location.replace("/training?IDX=<%= IDX %>");
   
 		}).catch((error) => {
+			if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 			console.log(error);
 		});
 	});

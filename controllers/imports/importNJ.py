@@ -123,12 +123,18 @@ def create_project(db_name, txt_file, nj_path, class_label, img_dir, classificat
     
     if classification == '':
         print("Copying images for non-classification mode...")
-        for img_name in os.listdir(img_dir):
-            src = os.path.join(img_dir, img_name)
-            dst = os.path.join(project_path, 'images', img_name)
-            if os.path.isfile(src):
-                shutil.copy(src,dst)
-                print(f"Copied: {src} -> {dst}")
+        image_exts = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.gif', '.webp')
+        for root, dirs, files in os.walk(img_dir):
+            if '__MACOSX' in root:
+                continue
+            for file in files:
+                if file.lower().endswith(image_exts):
+                    src = os.path.join(root, file)
+                    rel_path = os.path.relpath(src, img_dir)
+                    new_img_name = rel_path.replace(os.sep, '_').replace(' ', '_').replace('+', '_')
+                    dst = os.path.join(project_path, 'images', new_img_name)
+                    shutil.copy(src, dst)
+                    print(f"Copied: {src} -> {dst}")
     else:
         print("Copying images for classification mode...")
         for dir_name in os.listdir(img_dir):

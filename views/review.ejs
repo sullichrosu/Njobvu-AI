@@ -79,10 +79,13 @@
                                 <%= image.IName %>
                             </td>
                             <td>
-                                <img class="UnlabeledImage"
+                                <img class="Image"
                                     src="/projects/<%= admin %>-<%= PName %>/images/<%= image.IName %>"
                                     aria-label="<%=PName %> <%= image.IName%>"
-                                    style="max-width: 200px; max-height: 200px;">
+                                    style="display: none;">
+                                <canvas class="cropCanvas"
+                                    style="max-width: 200px; max-height: 200px; display: block; cursor: pointer;"
+                                    data-toggle="modal" data-target="#myModal"></canvas>
                             </td>
                             <td>
                                 <form class="SwitchForm" action="/api/switchLabels" method="PUT">
@@ -127,8 +130,8 @@
                                                         <input type="hidden" class="LabelY" value="<%= label.Y %>">
                                                         <input type="hidden" class="LabelWidth" value="<%= label.W %>">
                                                         <input type="hidden" class="LabelHeight" value="<%= label.H %>">
-                                                        <canvas id="cropCanvas"
-                                                            style="max-width: 100%; height: 100%; display: block; cursor: pointer;"
+                                                        <canvas class="cropCanvas"
+                                                            style="max-width: 200px; max-height: 200px; display: block; cursor: pointer;"
                                                             data-toggle="modal" data-target="#myModal"></canvas>
                                                     </td>
                                                     <td>
@@ -361,47 +364,113 @@
         console.log('hello:', className);
     </script>
 
+    <script src="/libraries/tiffjs/tiff.min.js"></script>
     <script>
+        let tiffInitialized = false;
+
+        // Browsers can't natively decode TIFF/SCN images, so those formats are
+        // fetched as raw bytes and converted to a canvas-drawable Image via Tiff.js.
+        function loadImageSmart(url) {
+            return new Promise(function (resolve, reject) {
+                if (/\.(tiff|tif|scn)$/i.test(url) && typeof Tiff !== 'undefined') {
+                    if (!tiffInitialized) {
+                        Tiff.initialize({ TOTAL_MEMORY: 16777216 * 10 });
+                        tiffInitialized = true;
+                    }
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.responseType = 'arraybuffer';
+                    xhr.open('GET', url);
+                    xhr.onload = function () {
+                        try {
+                            const tiff = new Tiff({ buffer: xhr.response });
+                            const image = new Image();
+                            image.onload = function () { resolve(image); };
+                            image.onerror = reject;
+                            image.src = tiff.toDataURL();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    };
+                    xhr.onerror = reject;
+                    xhr.send();
+                    return;
+                }
+
+                const image = new Image();
+                image.onload = function () { resolve(image); };
+                image.onerror = reject;
+                image.src = url;
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             let images = document.querySelectorAll('.Image');
+            let canvases = document.querySelectorAll('.cropCanvas');
 
             images.forEach(function (imageElement, index) {
-                const cropX = document.querySelectorAll('.LabelX')[index].value;
-                const cropY = document.querySelectorAll('.LabelY')[index].value;
-                const cropWidth = document.querySelectorAll('.LabelWidth')[index].value;
-                const cropHeight = document.querySelectorAll('.LabelHeight')[index].value;
+                const canvas = canvases[index];
+                if (!canvas) return;
+
+                const cropXEl = document.querySelectorAll('.LabelX')[index];
+                const cropYEl = document.querySelectorAll('.LabelY')[index];
+                const cropWidthEl = document.querySelectorAll('.LabelWidth')[index];
+                const cropHeightEl = document.querySelectorAll('.LabelHeight')[index];
+
+                const cropX = cropXEl ? parseFloat(cropXEl.value) : 0;
+                const cropY = cropYEl ? parseFloat(cropYEl.value) : 0;
+                const cropWidth = cropWidthEl ? parseFloat(cropWidthEl.value) : 0;
+                const cropHeight = cropHeightEl ? parseFloat(cropHeightEl.value) : 0;
+
                 const imageData = {
                     imageUrl: imageElement.src,
                     crop: {
-                        x: parseFloat(cropX),
-                        y: parseFloat(cropY),
-                        width: parseFloat(cropWidth),
-                        height: parseFloat(cropHeight)
+                        x: isNaN(cropX) ? 0 : cropX,
+                        y: isNaN(cropY) ? 0 : cropY,
+                        width: isNaN(cropWidth) ? 0 : cropWidth,
+                        height: isNaN(cropHeight) ? 0 : cropHeight
                     }
                 };
-                const canvas = document.querySelectorAll('#cropCanvas')[index];
+
                 const ctx = canvas.getContext('2d');
-                const image = new Image();
-                image.src = imageData.imageUrl;
-                image.onload = function () {
-                    canvas.width = imageData.crop.width;
-                    canvas.height = imageData.crop.height;
+                loadImageSmart(imageData.imageUrl).then(function (image) {
+                    let drawX = imageData.crop.x;
+                    let drawY = imageData.crop.y;
+                    let drawW = imageData.crop.width;
+                    let drawH = imageData.crop.height;
+
+                    if (drawW <= 0 || drawH <= 0 || drawX < 0 || drawY < 0 || (drawX + drawW) > image.naturalWidth || (drawY + drawH) > image.naturalHeight) {
+                        drawX = 0;
+                        drawY = 0;
+                        drawW = image.naturalWidth || 200;
+                        drawH = image.naturalHeight || 200;
+                    }
+
+                    canvas.width = drawW;
+                    canvas.height = drawH;
                     ctx.drawImage(
                         image,
-                        imageData.crop.x,
-                        imageData.crop.y,
-                        imageData.crop.width,
-                        imageData.crop.height,
+                        drawX,
+                        drawY,
+                        drawW,
+                        drawH,
                         0,
                         0,
-                        imageData.crop.width,
-                        imageData.crop.height
+                        drawW,
+                        drawH
                     );
-                };
+                }).catch(function () {
+                    imageElement.style.display = 'block';
+                    canvas.style.display = 'none';
+                });
                 canvas.addEventListener("click", function () {
                     $('#myModel').modal('show');
                     const modalImage = document.getElementById("expandedImg");
-                    modalImage.src = canvas.toDataURL();
+                    try {
+                        modalImage.src = canvas.toDataURL();
+                    } catch (e) {
+                        modalImage.src = imageData.imageUrl;
+                    }
                     const modalName = document.getElementById("imageModalLabel");
                     modalName.innerHTML = imageData.imageUrl.split('/').pop();
                 });

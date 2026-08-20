@@ -60,6 +60,15 @@ async function getProjectPage(req, res) {
         global.logger.info("Connected to pdb.")
     });
 
+    pdb.runAsync = function(sql, params) {
+        var that = this;
+        return new Promise(function(resolve) {
+            that.run(sql, params || [], function() {
+                resolve();
+            });
+        });
+    };
+
     pdb.allAsync = function(sql) {
         var that = this;
         return new Promise(function(resolve, reject) {
@@ -74,6 +83,10 @@ async function getProjectPage(req, res) {
             return [];
         });
     };
+
+    // Ensure schema compatibility for legacy project databases
+    await pdb.runAsync("ALTER TABLE Images ADD COLUMN reviewImage INTEGER NOT NULL DEFAULT 0");
+    await pdb.runAsync("ALTER TABLE Images ADD COLUMN validateImage INTEGER NOT NULL DEFAULT 0");
 
     var rawImages = await pdb.allAsync(
         "SELECT Images.IName, Images.reviewImage, Images.validateImage, COUNT(Labels.LID) AS numLabels " +
