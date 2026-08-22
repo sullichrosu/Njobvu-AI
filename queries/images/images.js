@@ -38,6 +38,14 @@ module.exports = {
 
             return result;
         },
+        getUnlabeledImages: async function (projectPath) {
+            const db = getDbClient(projectPath);
+            const query =
+                "SELECT * FROM Images WHERE IName NOT IN (SELECT IName FROM Labels)";
+            const result = await db.all(query);
+
+            return result;
+        },
         updateImageName: async function (projectPath, oldName, newName) {
             const db = getDbClient(projectPath);
             const query = "UPDATE Images SET IName = ? WHERE IName = ?";
