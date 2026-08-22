@@ -26,6 +26,13 @@ services:
       - ./db:/app/db
       - ./data:/app/data
       - ./public/projects:/app/public/projects
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   ollama:
     image: ollama/ollama:0.32.14
@@ -33,3 +40,16 @@ services:
     restart: unless-stopped
     ports:
       - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama:
+
