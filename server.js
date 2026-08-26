@@ -1,6 +1,7 @@
 global.logger = require('./utils/logger');
 const app = require('./app');
 const { Client } = require("./queries/client");
+const queries = require("./queries/queries");
 
 global.configFile = require("./utils/config");
 
@@ -41,14 +42,17 @@ try {
     global.logger.error(`Error creating directory: ${err.message}`);
 }
 
-for (const project of fs.readdirSync(allProjectsPath)) {
-    const projectPath = path.join(allProjectsPath, project);
+async function bootstrapProjectDatabases() {
+    for (const project of fs.readdirSync(allProjectsPath)) {
+        const projectPath = path.join(allProjectsPath, project);
 
-    for (const file of fs.readdirSync(projectPath)) {
-        if (file.endsWith(".db")) {
-            const dbFile = path.join(projectPath, file);
+        for (const file of fs.readdirSync(projectPath)) {
+            if (file.endsWith(".db")) {
+                const dbFile = path.join(projectPath, file);
 
-            global.projectDbClients[projectPath] = new Client(dbFile);
+                global.projectDbClients[projectPath] = new Client(dbFile);
+                await queries.project.migrateProjectDb(projectPath);
+            }
         }
     }
 }
@@ -145,10 +149,16 @@ app.set("port", process.env.port || port);
 app.set("views", __dirname + "/views");
 app.set("view engine", "ejs"); // template engine
 
-if (secure) {
-    https.createServer(options, app).listen(port);
-} else {
-    app.listen(port, () => {
-        global.logger.info(`Server started on ${hostname}:${port}`);
+bootstrapProjectDatabases()
+    .catch((err) => {
+        global.logger.error("Error migrating project databases: " + err);
+    })
+    .then(() => {
+        if (secure) {
+            https.createServer(options, app).listen(port);
+        } else {
+            app.listen(port, () => {
+                global.logger.info(`Server started on ${hostname}:${port}`);
+            });
+        }
     });
-}

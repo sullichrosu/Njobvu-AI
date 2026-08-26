@@ -210,6 +210,21 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
+            // Videos/Frames: one row per decoded frame of an uploaded video (not just
+            // the ones extracted as a JPEG), keyed to a real ffprobe timestamp, so the
+            // client can binary-search playback position against ground truth instead
+            // of estimating frame boundaries from an assumed FPS. IName is only set on
+            // the subset of frames that were actually extracted (the ones a user can
+            // step to and annotate); every other row exists purely for playback sync.
+            await db.run(
+                "CREATE TABLE IF NOT EXISTS Videos (VideoId INTEGER PRIMARY KEY AUTOINCREMENT, OriginalFileName VARCHAR NOT NULL, StoredFileName VARCHAR NOT NULL, FramePrefix VARCHAR NOT NULL, FrameStep INTEGER NOT NULL, DurationSec REAL, Fps REAL, CreatedAt TEXT NOT NULL DEFAULT (datetime('now')))",
+            );
+            await db.run(
+                "CREATE TABLE IF NOT EXISTS Frames (VideoId INTEGER NOT NULL, FrameNumber INTEGER NOT NULL, TimestampSec REAL NOT NULL, IName VARCHAR, PRIMARY KEY (VideoId, FrameNumber), FOREIGN KEY(VideoId) REFERENCES Videos(VideoId), FOREIGN KEY(IName) REFERENCES Images(IName))",
+            );
+            await db.run(
+                "CREATE INDEX IF NOT EXISTS idx_frames_iname ON Frames(IName)",
+            );
         },
         addImages: async function(
             projectPath,

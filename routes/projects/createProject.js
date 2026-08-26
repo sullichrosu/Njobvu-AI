@@ -1,10 +1,12 @@
 const fs = require("fs");
+const path = require("path");
 const { exec, execFile } = require("child_process");
 const StreamZip = require("node-stream-zip");
 const queries = require("../../queries/queries");
 const rimraf = require("../../public/libraries/rimraf");
 const { Client } = require("../../queries/client");
 const { nextVideoFramePrefix, zeroPadExtractedFrames } = require("../../utils/videoFramePrefix");
+const { parseFfprobeFrameTimes, buildFrameRows } = require("../../utils/videoFrameTimestamps");
 
 // Deliberately not promisify(execFile) at module load time: several test
 // suites mock `child_process` with only `{ exec }`, and promisifying an
@@ -41,6 +43,66 @@ function sortFileNamesNaturally(names) {
     );
 }
 
+async function persistVideoFrameTimestamps(
+    projectPath,
+    videoPath,
+    originalFileName,
+    storedFileName,
+    framePrefix,
+    frameStep,
+    extractedFrames,
+) {
+    let durationSec = null;
+
+    try {
+        const { stdout: durationStdout } = await execFileAsync("ffprobe", [
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "csv=p=0",
+            videoPath,
+        ]);
+        const parsedDuration = parseFloat(durationStdout);
+        durationSec = Number.isFinite(parsedDuration) ? parsedDuration : null;
+    } catch (err) {
+        global.logger.error("ffprobe duration lookup failed: " + err);
+    }
+
+    let timestamps = [];
+
+    try {
+        const { stdout: frameStdout } = await execFileAsync("ffprobe", [
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "frame=pkt_pts_time,pkt_dts_time",
+            "-of", "csv=p=0",
+            videoPath,
+        ]);
+        timestamps = parseFfprobeFrameTimes(frameStdout);
+    } catch (err) {
+        global.logger.error("ffprobe frame timestamp lookup failed: " + err);
+    }
+
+    const frameRows = buildFrameRows(timestamps, frameStep, extractedFrames);
+
+    try {
+        const videoResult = await queries.project.createVideo(
+            projectPath,
+            originalFileName,
+            storedFileName,
+            framePrefix,
+            frameStep,
+            durationSec,
+            null,
+        );
+
+        if (frameRows.length > 0) {
+            await queries.project.insertFrames(projectPath, videoResult.lastID, frameRows);
+        }
+    } catch (err) {
+        global.logger.error("Failed to persist video frame timestamps: " + err);
+    }
+}
+
 async function createProject(req, res) {
     const files = req.files || {};
 
@@ -61,6 +123,7 @@ async function createProject(req, res) {
     var mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
         projectPath = mainPath + username + "-" + projectName, // $LABELING_TOOL_PATH/public/projects/projectName
         imagesPath = projectPath + "/images", // $LABELING_TOOL_PATH/public/projects/projectName/images
+        videosPath = projectPath + "/videos", // retained source videos, for playback in the video player
         bootstrapPath = projectPath + "/bootstrap",
         trainingPath = projectPath + "/training",
         logsPath = trainingPath + "/logs",
@@ -75,6 +138,7 @@ async function createProject(req, res) {
     if (!fs.existsSync(projectPath)) {
         fs.mkdirSync(projectPath);
         fs.mkdirSync(imagesPath);
+        fs.mkdirSync(videosPath);
         fs.mkdirSync(bootstrapPath);
         fs.mkdirSync(trainingPath);
         fs.mkdirSync(weightsPath);
@@ -186,9 +250,13 @@ async function createProject(req, res) {
                 const usedFramePrefixes = new Set();
 
                 for (const videoFile of videoFiles) {
-                    const videoPath = imagesPath + "/" + videoFile;
+                    const extractedVideoPath = imagesPath + "/" + videoFile;
                     const framePrefix = nextVideoFramePrefix(videoFile, usedFramePrefixes);
+                    const storedFileName = framePrefix + path.extname(videoFile);
+                    const videoPath = videosPath + "/" + storedFileName;
                     const outputPattern = imagesPath + "/" + framePrefix + "_%d.jpg";
+
+                    fs.renameSync(extractedVideoPath, videoPath);
 
                     await execFileAsync("ffmpeg", [
                         "-y",
@@ -198,9 +266,17 @@ async function createProject(req, res) {
                         outputPattern,
                     ]);
 
-                    zeroPadExtractedFrames(imagesPath, framePrefix);
+                    const extractedFrames = zeroPadExtractedFrames(imagesPath, framePrefix);
 
-                    fs.unlinkSync(videoPath);
+                    await persistVideoFrameTimestamps(
+                        projectPath,
+                        videoPath,
+                        videoFile,
+                        storedFileName,
+                        framePrefix,
+                        frameStep,
+                        extractedFrames,
+                    );
                 }
             }
 
@@ -272,11 +348,16 @@ async function createProject(req, res) {
                 }
                 frameStep = Math.round(frameStep);
 
-                var videoPath = imagesPath + "/" + video.name; // $LABELING_TOOL_PATH/public/projects/{projectName}/{zip_file_name}
+                const framePrefix = nextVideoFramePrefix(video.name, usedFramePrefixes);
+                const storedFileName = framePrefix + path.extname(video.name);
+                // Uploaded straight into videosPath (not imagesPath) and retained
+                // there so the video player can play it back afterward -- served by
+                // the existing express.static mount, which already supports the
+                // Range requests seeking needs.
+                var videoPath = videosPath + "/" + storedFileName;
 
                 await video.mv(videoPath);
 
-                const framePrefix = nextVideoFramePrefix(video.name, usedFramePrefixes);
                 const outputPattern = imagesPath + "/" + framePrefix + "_%d.jpg";
 
                 await execFileAsync("ffmpeg", [
@@ -287,9 +368,17 @@ async function createProject(req, res) {
                     outputPattern,
                 ]);
 
-                zeroPadExtractedFrames(imagesPath, framePrefix);
+                const extractedFrames = zeroPadExtractedFrames(imagesPath, framePrefix);
 
-                fs.unlinkSync(videoPath);
+                await persistVideoFrameTimestamps(
+                    projectPath,
+                    videoPath,
+                    video.name,
+                    storedFileName,
+                    framePrefix,
+                    frameStep,
+                    extractedFrames,
+                );
             }
 
             await cleanFiles();

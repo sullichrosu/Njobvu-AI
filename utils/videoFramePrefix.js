@@ -40,8 +40,7 @@ function nextVideoFramePrefix(videoFileName, usedPrefixes) {
 // tool) would order "prefix_10.jpg" before "prefix_2.jpg". This renames one
 // video's extracted frames in place to a zero-padded width sized to *that
 // video's own* frame count -- a 9-frame video gets single-digit names, a
-// 10,000-frame video gets 5-digit ones -- so plain string order matches
-// playback order however many frames came out.
+
 function zeroPadExtractedFrames(imagesPath, framePrefix) {
     const escapedPrefix = framePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const frameNamePattern = new RegExp(`^${escapedPrefix}_(\\d+)\\.jpg$`);
@@ -54,11 +53,12 @@ function zeroPadExtractedFrames(imagesPath, framePrefix) {
         .filter(Boolean);
 
     if (frames.length === 0) {
-        return;
+        return [];
     }
 
     const width = String(Math.max(...frames.map((frame) => frame.num))).length;
 
+    const renamed = [];
     for (const { name, num } of frames) {
         const paddedName = `${framePrefix}_${String(num).padStart(width, "0")}.jpg`;
         if (paddedName !== name) {
@@ -67,7 +67,11 @@ function zeroPadExtractedFrames(imagesPath, framePrefix) {
                 path.join(imagesPath, paddedName),
             );
         }
+        renamed.push({ frameNumber: num, iName: paddedName });
     }
+
+    renamed.sort((a, b) => a.frameNumber - b.frameNumber);
+    return renamed;
 }
 
 module.exports = { sanitizeFrameToken, nextVideoFramePrefix, zeroPadExtractedFrames };

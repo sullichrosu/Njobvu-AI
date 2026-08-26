@@ -1,3 +1,5 @@
+const queries = require("../../queries/queries");
+
 async function getAnnotatePage(req, res) {
     var IDX = parseInt(req.query.IDX),
         IName = String(req.query.IName),
@@ -175,6 +177,29 @@ async function getAnnotatePage(req, res) {
             }
         });
 
+        // Only populated when this image is an extracted video frame -- gates
+        // all video-player UI/logic client-side. `null` for plain-image
+        // projects (old or new), which keeps them rendering exactly as before.
+        var videoInfo = null;
+        try {
+            const videoRow = await queries.project.getVideoForImage(project_path, IName);
+            if (videoRow && videoRow.row) {
+                const framesResult = await queries.project.getFramesForVideo(
+                    project_path,
+                    videoRow.row.VideoId,
+                );
+                videoInfo = {
+                    videoId: videoRow.row.VideoId,
+                    videoUrl: rel_project_path + "/videos/" + videoRow.row.StoredFileName,
+                    frameStep: videoRow.row.FrameStep,
+                    durationSec: videoRow.row.DurationSec,
+                    frames: framesResult.rows || [],
+                };
+            }
+        } catch (err) {
+            global.logger.error("Error looking up video info for annotate page: " + err);
+        }
+
         var colors = [];
         var i = 0;
         while (colors.length < Classes.length) {
@@ -212,6 +237,7 @@ async function getAnnotatePage(req, res) {
             AutoSave: results5 ? results5["AutoSave"] : 0,
             logged: req.query.logged,
             activePage: "project",
+            videoInfo: videoInfo,
         });
     }
 }

@@ -47,6 +47,30 @@
           <% } %>
         </div>
           <div id="editor-area" class="col-md-12 pt-2 pb-2 mx-auto" style="background: #4C4C4C">
+            <% if (videoInfo) { %>
+            <div id="video-controls" class="text-center mb-2 mx-auto" style="width: <%= image_width %>px;">
+              <div id="video-canvas-stack" style="position: relative;">
+                <video id="annotate-video" src="<%= videoInfo.videoUrl %>" preload="metadata" width="<%= image_width %>" height="<%= image_height %>" style="display: block;"></video>
+                <canvas id="canvas"
+                        width="<%= image_width %>"
+                        height="<%= image_height %>"
+                        role="application"
+                        aria-label="Image annotation canvas for <%= image_name %>. Use mouse to draw bounding boxes."
+                        tabindex="0"
+                        style="cursor: crosshair;">
+                </canvas>
+              </div>
+              <div class="row justify-content-center mt-1">
+                <button type="button" id="video-step-prev" class="mr-1 ml-1 btn btn-dark" aria-label="Previous frame"><i class="fas fa-step-backward"></i> Prev Frame</button>
+                <button type="button" id="video-play-pause" class="mr-1 ml-1 btn btn-primary">Play</button>
+                <button type="button" id="video-step-next" class="mr-1 ml-1 btn btn-dark" aria-label="Next frame">Next Frame <i class="fas fa-step-forward"></i></button>
+              </div>
+              <div id="video-status" class="mt-1" style="color: white;">
+                Frame: <span id="video-frame-label">-</span> &nbsp;&nbsp; Time: <span id="video-time-label">0:00 / 0:00</span>
+              </div>
+              <input type="range" id="video-scrub" min="0" step="0.001" value="0" style="width: 100%;" aria-label="Video scrub bar">
+            </div>
+            <% } else { %>
             <canvas id="canvas"
                     width="<%= image_width %>"
                     height="<%= image_height %>"
@@ -56,6 +80,7 @@
                     style=" cursor: crosshair;
                             margin: auto">
             </canvas>
+            <% } %>
         </div>
 
         <div id="dynamic_form">
@@ -287,7 +312,12 @@
 
 <button id="swap-tool">Swap Tool</button>
 
+<script type="application/json" id="video-frame-data"><%- JSON.stringify(videoInfo) %></script>
 <script>
+  window.AutoSaveEnabled = <%= AutoSave %> == 1;
+
+  window.isVideoFrameMode = <%- videoInfo ? 'true' : 'false' %>;
+
   function toggleClassList() {
     var classList = document.getElementById("class-list");
     var showClass = document.getElementById("showClassesButton");

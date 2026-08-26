@@ -82,6 +82,8 @@ jest.mock('../../queries/queries', () => ({
     createClass: jest.fn().mockResolvedValue({ row: { success: true } }),
     addImages: jest.fn().mockResolvedValue({ row: { success: true } }),
     deleteImage: jest.fn().mockResolvedValue({ row: { success: true } }),
+    createVideo: jest.fn().mockResolvedValue({ success: true, lastID: 1 }),
+    insertFrames: jest.fn().mockResolvedValue(undefined),
     sql: jest.fn().mockResolvedValue({ row: { success: true } }),
   },
 }));
@@ -96,6 +98,7 @@ jest.mock('fs', () => ({
   readdirSync: jest.fn().mockReturnValue([]),
   unlinkSync: jest.fn(),
   rename: jest.fn((oldPath, newPath, callback) => callback(null)),
+  renameSync: jest.fn(),
   readFileSync: jest.fn().mockReturnValue(''),
 }));
 
@@ -314,7 +317,12 @@ describe('Project Routes - Basic Tests', () => {
     const extractFrameCalls = [];
     const childProcess = require('child_process');
     childProcess.execFile.mockImplementation((file, args, callback) => {
-      extractFrameCalls.push(args);
+      // Phase 1 also shells out to ffprobe (frame-timestamp ingest) alongside
+      // ffmpeg; these tests only assert on the ffmpeg extraction calls, so
+      // ffprobe's calls are excluded here rather than shifting every index.
+      if (file === 'ffmpeg') {
+        extractFrameCalls.push(args);
+      }
       callback(null, '', '');
     });
 
@@ -374,7 +382,12 @@ describe('Project Routes - Basic Tests', () => {
     const extractFrameCalls = [];
     const childProcess = require('child_process');
     childProcess.execFile.mockImplementation((file, args, callback) => {
-      extractFrameCalls.push(args);
+      // Phase 1 also shells out to ffprobe (frame-timestamp ingest) alongside
+      // ffmpeg; these tests only assert on the ffmpeg extraction calls, so
+      // ffprobe's calls are excluded here rather than shifting every index.
+      if (file === 'ffmpeg') {
+        extractFrameCalls.push(args);
+      }
       callback(null, '', '');
     });
 
@@ -424,7 +437,12 @@ describe('Project Routes - Basic Tests', () => {
     const extractFrameCalls = [];
     const childProcess = require('child_process');
     childProcess.execFile.mockImplementation((file, args, callback) => {
-      extractFrameCalls.push(args);
+      // Phase 1 also shells out to ffprobe (frame-timestamp ingest) alongside
+      // ffmpeg; these tests only assert on the ffmpeg extraction calls, so
+      // ffprobe's calls are excluded here rather than shifting every index.
+      if (file === 'ffmpeg') {
+        extractFrameCalls.push(args);
+      }
       callback(null, '', '');
     });
 

@@ -125,6 +125,15 @@ async function updateLabels(req, res) {
             newMax = newMax + 1;
         }
 
+        // The video player saves the outgoing frame via AJAX on every
+        // play/pause/step -- everything above this (label save, review
+        // update) is the same save path a normal form submit takes; only the
+        // response differs, so a video-frame-mode save never triggers a
+        // full-page redirect.
+        if (req.body.ajax === "1") {
+            return res.json({ success: true, IName, reviewImage });
+        }
+
         if (formAction == "save") {
             return res.redirect(
                 "/annotate?IDX=" +

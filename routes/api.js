@@ -75,6 +75,8 @@ const {
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
 const switchLabels = require("./labelling/switchLabels");
+const getFrameData = require("./labelling/getFrameData");
+const updateReviewImageApi = require("./labelling/updateReviewImageApi");
 
 const downloadDataset = require("./downloads/downloadDataset");
 const downloadProject = require("./downloads/downloadProject");
@@ -190,6 +192,8 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
 api.post("/updateLabels", updateLabels);
 api.delete("/deleteBadLabels/:Admin/:PName/:Lid", deleteLabels);
 api.put("/api/switchLabels", switchLabels);
+api.get("/api/annotate/frame", getFrameData);
+api.post("/api/annotate/review", updateReviewImageApi);
 
 // DOWNLOAD ROUTES
 api.post("/downloadDataset", downloadDataset);

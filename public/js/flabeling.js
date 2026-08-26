@@ -630,6 +630,16 @@ var canvas = new fabric.Canvas('canvas', {
     selection: false
 });
 
+// Video mode stacks the canvas directly on top of the <video> element (see
+// views/annotate.ejs) so boxes stay visible/editable while the video plays --
+// fabric wraps the <canvas> in its own container div, which needs to be
+// pulled out of normal flow to sit exactly over the video underneath it.
+if (window.isVideoFrameMode && canvas.wrapperEl) {
+    canvas.wrapperEl.style.position = 'absolute';
+    canvas.wrapperEl.style.top = '0';
+    canvas.wrapperEl.style.left = '0';
+}
+
 //set available shapes
 console.log("Initializing segmentation strategy");
 var shapetool = new ShapeDrawer(canvas, RectangleStrategy);
@@ -724,11 +734,7 @@ canvas.setWidth(new_width);
 canvas.setHeight(new_height);
 
 // set background
-canvas.setBackgroundImage(imageUrl, canvas.renderAll.bind(canvas), {
-    width: canvas.getWidth(),
-    height: canvas.getHeight()
-});
-canvas.calcOffset();
+setCanvasBackgroundImage(imageUrl);
 
 //Converting from .tiff to image
 if (imageUrl.includes(".tiff") || imageUrl.includes(".tif") || imageUrl.includes(".SCN")) {
@@ -739,11 +745,7 @@ if (imageUrl.includes(".tiff") || imageUrl.includes(".tif") || imageUrl.includes
     xhr.onload = function(e) {
         //console.log(xhr.response)
         var tiff = new Tiff({ buffer: xhr.response });
-        canvas.setBackgroundImage(tiff.toDataURL(), canvas.renderAll.bind(canvas), {
-            width: canvas.getWidth(),
-            height: canvas.getHeight()
-        });
-        canvas.calcOffset();
+        setCanvasBackgroundImage(tiff.toDataURL());
     };
     xhr.send();
 }
@@ -890,8 +892,31 @@ canvas.renderAll();
 // change review status
 function reviewStatus() {
     console.log("reviewStatus");
-    //console.log("before edit")
-    //console.log($('#rev_image').val());
+    var newVal = ($('#rev_image').val() == 0) ? 1 : 0;
+
+    // In video-frame mode (set by videoPlayer.js) a "C" keypress must not run
+    // the full form-submit save path -- that's the delete-and-recreate-all
+    // label save in updateLabels.js, and triggering it on every review toggle
+    // during playback/stepping would risk clobbering in-progress unsaved box
+    // edits on the current frame. Toggle via the dedicated AJAX endpoint
+    // instead; the full form-save path below is untouched for plain images.
+    if (window.isVideoFrameMode) {
+        $('#rev_image').val(newVal);
+        document.getElementById("Review").style.backgroundColor = newVal == 1 ? "red" : "white";
+        $.ajax({
+            url: '/api/annotate/review',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                PName: $("input[name='PName']").val(),
+                Admin: $("input[name='Admin']").val(),
+                IName: $("input[name='IName']").val(),
+                reviewImage: newVal,
+            }),
+        });
+        return;
+    }
+
     if ($('#rev_image').val() == 0) {
         $('#rev_image').val(1);
         //console.log("after edit:");
@@ -966,20 +991,14 @@ function resetLabels() {
         $('#labels-counter').val(counter);
         $(".labels").remove();
         canvas.clear();
-        canvas.setBackgroundImage(imageUrl, canvas.renderAll.bind(canvas), {
-            width: canvas.getWidth(),
-            height: canvas.getHeight()
-        });
+        setCanvasBackgroundImage(imageUrl);
     }
 }
 $("#reset-labeling").click(resetLabels);
 
 // undo label action
 function undoLabel() {
-    canvas.setBackgroundImage(imageUrl, canvas.renderAll.bind(canvas), {
-        width: canvas.getWidth(),
-        height: canvas.getHeight()
-    });
+    setCanvasBackgroundImage(imageUrl);
     if ($(".labels").length != 0) {
         $(".labels").last().remove();
         $(".labels").last().remove();
@@ -1134,11 +1153,7 @@ $(window).resize(function() {
     $("#image_height").val(new_height);
     canvas.setWidth(new_width);
     canvas.setHeight(new_height);
-    canvas.setBackgroundImage(imageUrl, canvas.renderAll.bind(canvas), {
-        width: canvas.getWidth(),
-        height: canvas.getHeight()
-    });
-    canvas.calcOffset();
+    setCanvasBackgroundImage(imageUrl);
     resizeRectangles(diff_width_ratio);
     //resizeRectangles(diff_height_ratio);
 });
@@ -1173,3 +1188,147 @@ setInterval(function() {
         }
     }
 }, 1000);
+
+// --- Video-frame support ---------------------------------------------------
+// The functions below let videoPlayer.js swap the existing fabric.js canvas
+// to a different extracted frame's image + labels via AJAX, without a page
+// reload. They are additive: nothing above this point is changed in behavior
+// for a plain (non-video) image, and these functions are never called unless
+// videoPlayer.js finds video frame data on the page.
+
+// Sets the canvas's background image -- except in video mode, where the
+// canvas is a transparent overlay stacked on top of the <video> element
+// (see views/annotate.ejs / videoPlayer.js) and must never paint its own
+// opaque background over it. Used everywhere the codebase (re)sets the
+// canvas background: initial load, window resize, reset, and undo.
+function setCanvasBackgroundImage(url) {
+    if (window.isVideoFrameMode) {
+        return;
+    }
+    canvas.setBackgroundImage(url, canvas.renderAll.bind(canvas), {
+        width: canvas.getWidth(),
+        height: canvas.getHeight()
+    });
+    canvas.calcOffset();
+}
+
+// Removes every drawn label (rect/polygon + its text) and its hidden .labels
+// inputs, but leaves the crosshair guide lines in place.
+function clearAnnotationObjects() {
+    var toRemove = canvas.getObjects().filter(function(o) {
+        return o !== verticalLine && o !== horizontalLine;
+    });
+    toRemove.forEach(function(o) {
+        canvas.remove(o);
+    });
+    $(".labels").remove();
+}
+
+// Emits the same 6 hidden inputs per label that addLabelToForm() and the
+// server-rendered EJS loop both use, so the existing save path (updateLabels)
+// and in-place editing (resizeRectangles, deleteObjects, undoLabel) work
+// unchanged for a label loaded this way.
+function addLabelInputsToForm(lid, cname, x, y, w, h) {
+    $('#dynamic_form').append(
+        '<input class="labels label-' + lid + ' label-id" type="hidden" name="LabelingID" value="' + lid + '">' +
+        '<input class="labels label-' + lid + ' label-c" type="hidden" name="CName" value="' + cname + '">' +
+        '<input class="labels label-' + lid + ' label-x" type="hidden" name="X" value="' + x + '">' +
+        '<input class="labels label-' + lid + ' label-y" type="hidden" name="Y" value="' + y + '">' +
+        '<input class="labels label-' + lid + ' label-w" type="hidden" name="W" value="' + w + '">' +
+        '<input class="labels label-' + lid + ' label-h" type="hidden" name="H" value="' + h + '">'
+    );
+}
+
+// Reconstructs one fabric.js Rect/Polygon from a Labels row, using the same
+// rect-vs-polygon disambiguation (comma-joined X/Y => polygon) as the
+// server-rendered redraw loop above.
+function addLabelObjectToCanvas(labelId, className, xVal, yVal, wVal, hVal) {
+    xVal = String(xVal);
+    yVal = String(yVal);
+
+    if (!xVal.includes(",") && !yVal.includes(",")) {
+        var rect = new fabric.Rect({
+            id: labelId,
+            stroke: classes[allClasses.indexOf(className)].style.backgroundColor,
+            strokeWidth: 2 / canvas.getZoom(),
+            fill: "transparent",
+            left: parseFloat(xVal) * diff_width_ratio,
+            top: parseFloat(yVal) * diff_width_ratio,
+            originX: 'left',
+            originY: 'top',
+            width: parseFloat(wVal) * diff_width_ratio,
+            height: parseFloat(hVal) * diff_width_ratio,
+            angle: 0,
+            transparentCorners: false,
+            hasBorders: false,
+            hasControls: false,
+            selectable: true,
+            class: className,
+            classId: allClasses.indexOf(className) + 1
+        });
+        rect.lockMovementX = true;
+        rect.lockMovementY = true;
+        canvas.add(rect);
+    } else {
+        var xCoords = xVal.split(',');
+        var yCoords = yVal.split(',');
+        var points = [];
+        for (var j = 0; j < xCoords.length; j++) {
+            points.push({ x: parseFloat(xCoords[j]), y: parseFloat(yCoords[j]) });
+        }
+
+        var minX = Math.min(...xCoords);
+        var minY = Math.min(...yCoords);
+
+        var normalizedPoints = points.map(function(p) {
+            return { x: p.x - minX, y: p.y - minY };
+        });
+
+        var polygon = new fabric.Polygon(normalizedPoints, {
+            id: labelId,
+            left: minX,
+            top: minY,
+            originX: 'left',
+            originY: 'top',
+            fill: 'transparent',
+            stroke: classes[allClasses.indexOf(className)].style.backgroundColor,
+            strokeWidth: 2 / canvas.getZoom(),
+            selectable: true,
+            hasBorders: false,
+            hasControls: false,
+            objectCaching: false,
+            class: className,
+            classId: allClasses.indexOf(className) + 1,
+            segmentationComplete: true
+        });
+        polygon.lockMovementX = true;
+        polygon.lockMovementY = true;
+        canvas.add(polygon);
+    }
+}
+
+// Loads a different frame's image + labels into the existing canvas. Called
+// only by videoPlayer.js, only when the current image is part of a video.
+window.renderAnnotateFrame = function(newImageUrl, newIName, labelRows, reviewImage) {
+    clearAnnotationObjects();
+
+    imageUrl = newImageUrl;
+    $("#image_path").val(newImageUrl);
+    $("input[name='IName']").val(newIName);
+
+    // No background image is set here: this function only ever runs in
+    // video mode, where the <video> element underneath supplies the visible
+    // frame and the canvas stays a transparent box-drawing overlay on top of
+    // it (see setCanvasBackgroundImage()).
+    counter = 0;
+    (labelRows || []).forEach(function(label) {
+        addLabelInputsToForm(label.LID, label.CName, label.X, label.Y, label.W, label.H);
+        addLabelObjectToCanvas(label.LID, label.CName, label.X, label.Y, label.W, label.H);
+        counter += 1;
+    });
+    $('#labels-counter').val(counter);
+    canvas.renderAll();
+
+    $('#rev_image').val(reviewImage);
+    document.getElementById("Review").style.backgroundColor = (reviewImage != 0) ? "red" : "white";
+};
