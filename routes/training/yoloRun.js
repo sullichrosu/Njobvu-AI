@@ -11,6 +11,7 @@ const {
     cleanupJitTrainingImages,
 } = require("../../utils/jitTrainingImages");
 const { generateModelCard } = require("../../utils/runSummaryGenerator");
+const conig = require("../../../config/config");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
