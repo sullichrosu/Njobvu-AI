@@ -469,7 +469,7 @@ async function yoloRun(req, res) {
             try {
                 const parsed = JSON.parse(input);
                 if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
-            } catch (e) {}
+            } catch (e) { }
             return input.split(",").map((s) => String(s).trim()).filter(Boolean);
         }
         return null;
@@ -765,7 +765,7 @@ async function yoloRun(req, res) {
         for (let i = 0; i < shuffledImages.length; i++) {
             const image = shuffledImages[i];
             const sourceImagePath = path.join(imagesPath, image.IName);
-            
+
             let targetBaseDir;
             if (i < trainDataImageSplit) {
                 targetBaseDir = absDarknetClassificationTrainImagesDir;
@@ -875,9 +875,9 @@ async function yoloRun(req, res) {
     var cmd = "";
 
     if (yoloMode == "train") {
-        cmd = `python3 ${yoloScript} -d ${runPath} -t ${yoloTask} -m ${yoloMode} -i ${darknetImagesPath} -n ${classesPath} -p ${trainDataPer} -l ${absDarknetProjectRun}/${log} -f ${darknetPath} -w ${weightPath} -b ${batch} -s ${subdiv} -x ${width} -y ${height} -v ${yoloVersion} -e ${epochs} -I ${imgsz} -D ${device} -o "${options}"`;
+        cmd = `${config["default_python_path"] || "python3"} ${yoloScript} -d ${runPath} -t ${yoloTask} -m ${yoloMode} -i ${darknetImagesPath} -n ${classesPath} -p ${trainDataPer} -l ${absDarknetProjectRun}/${log} -f ${darknetPath} -w ${weightPath} -b ${batch} -s ${subdiv} -x ${width} -y ${height} -v ${yoloVersion} -e ${epochs} -I ${imgsz} -D ${device} -o "${options}"`;
     } else {
-        cmd = `python3 --version`;
+        cmd = `${config["default_python_path"] || "python3"} --version`;
     }
 
     global.logger.debug(cmd);
