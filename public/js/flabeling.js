@@ -1036,6 +1036,15 @@ $(document).keydown(function(event) {
         cancelInProgressPolygon();
     }
 
+    // Ctrl+Z / Cmd+Z: undo, before the unmodified "z" -> resetZoom() branch below,
+    // and prevent the browser's native undo from also firing.
+    var rawKeyCode = event.keyCode ? event.keyCode : event.which;
+    if ((event.ctrlKey || event.metaKey) && rawKeyCode === 90) {
+        event.preventDefault();
+        undoLabel();
+        return;
+    }
+
     var key = (event.keyCode ? event.keyCode : event.which) - 49;
     //console.log(key)
     if (0 <= key && key < Math.min(10, classes.length)) {
