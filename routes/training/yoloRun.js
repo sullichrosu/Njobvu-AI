@@ -8,8 +8,7 @@ const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 const { generateModelCard } = require("../../utils/runSummaryGenerator");
 
-// Draws a uniform random sample of `count` images (without replacement) from `images`,
-// used to cap how many unlabeled images are pulled in as background/negative examples.
+// draws a uniform random sample of `count` images (without replacement) from `images`
 function sampleImages(images, count) {
     if (count >= images.length) {
         return images.slice();
@@ -483,7 +482,7 @@ async function yoloRun(req, res) {
             try {
                 const parsed = JSON.parse(input);
                 if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
-            } catch (e) {}
+            } catch (e) { }
             return input.split(",").map((s) => String(s).trim()).filter(Boolean);
         }
         return null;
@@ -498,16 +497,15 @@ async function yoloRun(req, res) {
         );
     }
 
-    // How many unlabeled images (no rows in Labels) to sample in as background/negative
-    // examples, from the "Unlabeled" range slider (0 to the project's total unlabeled
-    // image count). Absent/blank means the slider wasn't submitted at all (legacy
-    // callers/API integrations): keep the old behavior of including every unlabeled image.
+    // how many unlabeled images to sample in as background/negative
+    // examples. Absent or blank means the slider wasn't submitted at all, so we
+    // keep the old behavior of including every unlabeled image
     const rawUnlabeledCount = req.body.unlabeled_count ?? req.body.unlabeledCount;
     const unlabeledCountProvided =
         rawUnlabeledCount !== undefined && rawUnlabeledCount !== null && rawUnlabeledCount !== "";
     const requestedUnlabeledCount = parseInt(rawUnlabeledCount, 10);
 
-    // Parse maximum image clamping
+    // parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
     let includedUnlabeledCount = 0;
@@ -519,15 +517,15 @@ async function yoloRun(req, res) {
 
             const sampledUnlabeled = unlabeledCountProvided
                 ? sampleImages(
-                      unlabeledImages,
-                      Math.max(
-                          0,
-                          Math.min(
-                              unlabeledImages.length,
-                              Number.isFinite(requestedUnlabeledCount) ? requestedUnlabeledCount : 0,
-                          ),
-                      ),
-                  )
+                    unlabeledImages,
+                    Math.max(
+                        0,
+                        Math.min(
+                            unlabeledImages.length,
+                            Number.isFinite(requestedUnlabeledCount) ? requestedUnlabeledCount : 0,
+                        ),
+                    ),
+                )
                 : unlabeledImages;
 
             includedUnlabeledCount = sampledUnlabeled.length;
@@ -812,7 +810,7 @@ async function yoloRun(req, res) {
         for (let i = 0; i < shuffledImages.length; i++) {
             const image = shuffledImages[i];
             const sourceImagePath = path.join(imagesPath, image.IName);
-            
+
             let targetBaseDir;
             if (i < trainDataImageSplit) {
                 targetBaseDir = absDarknetClassificationTrainImagesDir;
