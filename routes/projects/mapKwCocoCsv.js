@@ -70,20 +70,32 @@ async function mapKwCocoCsv(req, res) {
             }
         }
 
-        // 2. Ensure referenced images exist in Images table
+        // 2. Only images that already have a real backing image — a local file, or a
+        // previously-synced S3-streamed row (Source = "s3") — can be registered/labeled.
+        // Otherwise the annotate/validation pages 404 on a DB row with no way to fetch
+        // its bytes. A filename never seen before (not already in Images, whether local
+        // or S3) has no way to be resolved here, so it's only accepted if a local file
+        // for it exists.
+        const imagesDir = path.join(projectPath, 'images');
         const existingImageResult = await queries.project.getAllImages(projectPath);
         const existingImageRows = existingImageResult?.rows || [];
         const existingImageSet = new Set(existingImageRows.map(i => i.IName));
 
         const uniqueImages = new Set(parsedAnnotations.map(a => a.filename));
         let imagesRegistered = 0;
+        const missingImages = new Set();
 
         for (const iname of uniqueImages) {
-            if (!existingImageSet.has(iname)) {
-                await queries.project.sql(projectPath, "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", [iname]);
-                existingImageSet.add(iname);
-                imagesRegistered++;
+            if (existingImageSet.has(iname)) {
+                continue;
             }
+            if (!fs.existsSync(path.join(imagesDir, iname))) {
+                missingImages.add(iname);
+                continue;
+            }
+            await queries.project.sql(projectPath, "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", [iname]);
+            existingImageSet.add(iname);
+            imagesRegistered++;
         }
 
         // 3. Get current max LID in Labels table
@@ -94,9 +106,14 @@ async function mapKwCocoCsv(req, res) {
             nextLid = maxLidRows[0].LID + 1;
         }
 
-        // 4. Insert labels
+        // 4. Insert labels, skipping annotations whose image has no resolvable backing file
         let labelsInserted = 0;
+        let labelsSkipped = 0;
         for (const ann of parsedAnnotations) {
+            if (missingImages.has(ann.filename)) {
+                labelsSkipped++;
+                continue;
+            }
             await queries.project.createLabel(
                 projectPath,
                 nextLid++,
@@ -110,12 +127,18 @@ async function mapKwCocoCsv(req, res) {
             labelsInserted++;
         }
 
+        const message = missingImages.size > 0
+            ? `Mapped ${labelsInserted} KW COCO annotations. Skipped ${labelsSkipped} annotation(s) for ${missingImages.size} image(s) not found locally or via a synced S3 source — upload or sync those images first.`
+            : `Successfully mapped ${labelsInserted} KW COCO annotations.`;
+
         return res.json({
             success: true,
-            message: `Successfully mapped ${labelsInserted} KW COCO annotations.`,
+            message,
             labelsInserted,
+            labelsSkipped,
             classesAdded,
-            imagesRegistered
+            imagesRegistered,
+            missingImages: Array.from(missingImages)
         });
 
     } catch (err) {
