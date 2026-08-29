@@ -1,44 +1,49 @@
+const path = require("path");
 const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 async function getReviewPage(req, res) {
+    var sqlite3 = global.sqlite3 || require("sqlite3").verbose();
     var username = req.cookies.Username;
     var CName = req.query.class;
-    var IDX = req.query.IDX;
-    var isUnlabeledMode = CName === UNLABELED_CLASS;
+    var IName = req.query.IName;
+    var IDX = parseInt(req.query.IDX, 10);
 
-    var page = parseInt(req.query.page) || 1;
+    if (isNaN(IDX) || IDX === undefined) {
+        IDX = 0;
+    }
+
+    var page = parseInt(req.query.page, 10) || 1;
     var pageSize = 100;
     var offset = (page - 1) * pageSize;
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + username + "'",
-    );
+    var projects = [];
+    if (global.managedDbClient && global.managedDbClient.all) {
+        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [username]);
+        projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
+    } else if (global.db && global.db.allAsync) {
+        projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + username + "'");
+    }
+
     var project = projects[IDX];
 
     if (!project) {
-        global.logger.error("No project found for IDX:", IDX);
+        if (global.logger) global.logger.error("No project found for IDX:", IDX);
         return res.redirect("/home");
     }
 
     var PName = project.PName;
     var admin = project.Admin;
 
-    var public_path = currentPath;
-    var db_path =
-        public_path +
-        "public/projects/" +
-        admin +
-        "-" +
-        PName +
-        "/" +
-        PName +
-        ".db";
+    var public_path = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    var project_path = path.join(public_path, "public", "projects");
+    var db_path = path.join(project_path, admin + "-" + PName, PName + ".db");
 
     var pdb = new sqlite3.Database(db_path, (err) => {
         if (err) {
-            return global.logger.error("Database connection error:", err.message);
+            if (global.logger) global.logger.error("Database connection error:", err.message);
+            return;
         }
-        global.logger.info("Connected to pdb.")
+        if (global.logger) global.logger.info("Connected to pdb.");
     });
 
     pdb.allAsync = function (sql, params) {
@@ -46,39 +51,100 @@ async function getReviewPage(req, res) {
         return new Promise(function (resolve, reject) {
             that.all(sql, params, function (err, row) {
                 if (err) {
-                    global.logger.error("runAsync ERROR!", err)
+                    if (global.logger) global.logger.error("runAsync ERROR!", err);
                     reject(err);
                 } else {
-                    resolve(row);
+                    resolve(row || []);
                 }
             });
         }).catch((err) => {
-            global.logger.error(err);
+            if (global.logger) global.logger.error(err);
+            return [];
         });
     };
+
+    // If CName is missing but IName was provided, look up the label class for IName
+    if (!CName && IName) {
+        let matchingLabels = await pdb.allAsync(
+            "SELECT CName FROM Labels WHERE IName = ? LIMIT 1",
+            [IName]
+        );
+        if (matchingLabels && matchingLabels.length > 0) {
+            CName = matchingLabels[0].CName;
+        } else {
+            CName = UNLABELED_CLASS;
+        }
+    } else if (!CName) {
+        let firstClass = await pdb.allAsync("SELECT CName FROM Classes LIMIT 1");
+        if (firstClass && firstClass.length > 0) {
+            CName = firstClass[0].CName;
+        } else {
+            CName = UNLABELED_CLASS;
+        }
+    }
+
+    var isUnlabeledMode = CName === UNLABELED_CLASS;
 
     var totalImages;
     var images;
 
     if (isUnlabeledMode) {
         // Unlabeled bucket: images with zero rows in Labels at all.
-        totalImages = await pdb.allAsync(
-            `
+        if (IName) {
+            totalImages = await pdb.allAsync(
+                `
+				SELECT COUNT(*) as count
+				FROM Images
+				WHERE Images.IName = ? AND Images.IName NOT IN (SELECT IName FROM Labels)
+			`,
+                [IName]
+            );
+            images = await pdb.allAsync(
+                `
+				SELECT Images.IName
+				FROM Images
+				WHERE Images.IName = ? AND Images.IName NOT IN (SELECT IName FROM Labels)
+				LIMIT ? OFFSET ?
+			`,
+                [IName, pageSize, offset]
+            );
+            if (!images || images.length === 0) {
+                totalImages = await pdb.allAsync(
+                    `
+					SELECT COUNT(*) as count
+					FROM Images
+					WHERE Images.IName NOT IN (SELECT IName FROM Labels)
+				`
+                );
+                images = await pdb.allAsync(
+                    `
+					SELECT Images.IName
+					FROM Images
+					WHERE Images.IName NOT IN (SELECT IName FROM Labels)
+					LIMIT ? OFFSET ?
+				`,
+                    [pageSize, offset]
+                );
+            }
+        } else {
+            totalImages = await pdb.allAsync(
+                `
 				SELECT COUNT(*) as count
 				FROM Images
 				WHERE Images.IName NOT IN (SELECT IName FROM Labels)
-			`,
-        );
+			`
+            );
 
-        images = await pdb.allAsync(
-            `
+            images = await pdb.allAsync(
+                `
 				SELECT Images.IName
 				FROM Images
 				WHERE Images.IName NOT IN (SELECT IName FROM Labels)
 				LIMIT ? OFFSET ?
 			`,
-            [pageSize, offset],
-        );
+                [pageSize, offset]
+            );
+        }
     } else {
         totalImages = await pdb.allAsync(
             `
@@ -87,7 +153,7 @@ async function getReviewPage(req, res) {
 				INNER JOIN Labels ON Images.IName = Labels.IName
 				WHERE Labels.CName = ?
 			`,
-            [CName],
+            [CName]
         );
 
         images = await pdb.allAsync(
@@ -98,13 +164,13 @@ async function getReviewPage(req, res) {
 				WHERE Labels.CName = ?
 				LIMIT ? OFFSET ?
 			`,
-            [CName, pageSize, offset],
+            [CName, pageSize, offset]
         );
     }
 
-    let uniqueImages = images.filter(
+    let uniqueImages = (images || []).filter(
         (image, index, self) =>
-            index === self.findIndex((img) => img.IName === image.IName),
+            index === self.findIndex((img) => img.IName === image.IName)
     );
 
     var imageLabels = {};
@@ -115,7 +181,7 @@ async function getReviewPage(req, res) {
             `
 				SELECT * FROM Labels WHERE IName = ?
 			`,
-            [imageName],
+            [imageName]
         );
 
         imageLabels[imageName] = labels;
@@ -124,13 +190,14 @@ async function getReviewPage(req, res) {
     var classes = await pdb.allAsync("SELECT * FROM `Classes`");
 
     pdb.close((err) => {
-        if (err) {
+        if (err && global.logger) {
             global.logger.error("Error closing database connection:", err.message);
         }
-        global.logger.debug("Closed pdb connection.");
+        if (global.logger) global.logger.debug("Closed pdb connection.");
     });
 
-    let totalImagesCount = Math.ceil(totalImages[0].count / pageSize);
+    let totalCount = (totalImages && totalImages[0] && totalImages[0].count) ? totalImages[0].count : 0;
+    let totalImagesCount = Math.ceil(totalCount / pageSize) || 1;
 
     res.render("review", {
         user: username,
@@ -140,11 +207,11 @@ async function getReviewPage(req, res) {
         unlabeledClass: UNLABELED_CLASS,
         images: uniqueImages,
         imageLabels: imageLabels,
-        PName: PName, // Added PName to the render call
-        classes: classes,
+        PName: PName,
+        classes: classes || [],
         currentPage: page,
         totalPageCount: totalImagesCount,
-        selectedClass: req.query.class,
+        selectedClass: CName,
         IDX: IDX,
         admin: admin,
         activePage: "Label",

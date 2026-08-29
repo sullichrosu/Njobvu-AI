@@ -1,4 +1,6 @@
+const path = require("path");
 const queries = require("../../queries/queries");
+const flattenDirectory = require("../../utils/flattenDirectory");
 
 async function boostrap(req, res) {
     var projectName = req.body.PName,
@@ -56,7 +58,7 @@ async function boostrap(req, res) {
 
     var zip = new StreamZip.async({ file: zipPath });
 
-    await zip.extract(mergeImages);
+    await zip.extract(null, mergeImages);
     await zip.close();
 
     rimraf(zipPath, (err) => {
@@ -67,30 +69,24 @@ async function boostrap(req, res) {
     });
 
     let files = await readdirAsync(imagesPath);
-    let newFiles = await readdirAsync(mergeImages);
+    let newFiles = await flattenDirectory(mergeImages);
 
     for (var i = 0; i < newFiles.length; i++) {
-        var temp = mergeImages + "/" + newFiles[i];
-        newFiles[i] = newFiles[i].trim();
-        newFiles[i] = newFiles[i].split(" ").join("_");
-        newFiles[i] = newFiles[i].split("+").join("_");
-        fs.rename(temp, mergeImages + "/" + newFiles[i], () => {});
-        if (newFiles[i] == "__MACOSX") {
-            continue;
-        } else if (!files.includes(newFiles[i])) {
+        const imageName = newFiles[i];
+        if (!files.includes(imageName)) {
             try {
                 fs.renameSync(
-                    mergeImages + "/" + newFiles[i],
-                    imagesPath + "/" + newFiles[i],
+                    path.join(mergeImages, imageName),
+                    path.join(imagesPath, imageName),
                 );
 
-                await queries.project.addImages(projectPath, newFiles[i], 0, 1);
+                await queries.project.addImages(projectPath, imageName, 0, 1);
 
-                newImages.push(newFiles[i]);
-                bootstrapString += newFiles[i] + "\n";
+                newImages.push(imageName);
+                bootstrapString += imageName + "\n";
             } catch (err) {
                 global.logger.error(err);
-                return res.stauts(500).send("Error inserting images");
+                return res.status(500).send("Error inserting images");
             }
         }
     }

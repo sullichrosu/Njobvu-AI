@@ -202,7 +202,7 @@ module.exports = {
                 "CREATE TABLE IF NOT EXISTS Classes (CName VARCHAR NOT NULL PRIMARY KEY)",
             );
             await db.run(
-                "CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS Images (IName VARCHAR NOT NULL PRIMARY KEY, reviewImage INTEGER NOT NULL DEFAULT 0, validateImage INTEGER NOT NULL DEFAULT 0, Source VARCHAR DEFAULT NULL, SourceKey VARCHAR DEFAULT NULL)",
             );
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Labels (LID INTEGER PRIMARY KEY, CName VARCHAR NOT NULL, X VARCHAR NOT NULL, Y VARCHAR NOT NULL, W INTEGER NOT NULL, H INTEGER NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(CName) REFERENCES Classes(CName), FOREIGN KEY(IName) REFERENCES Images(IName))",
@@ -210,20 +210,51 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
+
+            // Images predates the reviewImage/validateImage/Source/SourceKey columns, so
+            // CREATE TABLE IF NOT EXISTS above is a no-op on any project database created
+            // before this change. Back-fill them here, guarded by a PRAGMA check since
+            // SQLite has no ADD COLUMN IF NOT EXISTS. SourceKey holds the literal S3 object
+            // key (which may differ from IName once collisions are disambiguated), decoupled
+            // from the display name.
+            const imageColumnsResult = await db.all("PRAGMA table_info(Images)");
+            const imageColumns = Array.isArray(imageColumnsResult)
+                ? imageColumnsResult
+                : (imageColumnsResult && imageColumnsResult.rows) || [];
+            const existingColumnNames = new Set(
+                imageColumns.map((column) => column.name),
+            );
+
+            const backfillColumns = [
+                { name: "reviewImage", ddl: "reviewImage INTEGER NOT NULL DEFAULT 0" },
+                { name: "validateImage", ddl: "validateImage INTEGER NOT NULL DEFAULT 0" },
+                { name: "Source", ddl: "Source VARCHAR DEFAULT NULL" },
+                { name: "SourceKey", ddl: "SourceKey VARCHAR DEFAULT NULL" },
+            ];
+
+            for (const column of backfillColumns) {
+                if (!existingColumnNames.has(column.name)) {
+                    await db.run(`ALTER TABLE Images ADD COLUMN ${column.ddl}`);
+                }
+            }
         },
         addImages: async function(
             projectPath,
             imageName,
             reviewImage,
             validateImage,
+            source = null,
+            sourceKey = null,
         ) {
             const db = getDbClient(projectPath);
             const query =
-                "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, ?, ?)";
+                "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage, Source, SourceKey) VALUES (?, ?, ?, ?, ?)";
             const results = await db.run(query, [
                 imageName,
                 reviewImage,
                 validateImage,
+                source,
+                sourceKey,
             ]);
 
             return results;

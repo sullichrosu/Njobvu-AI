@@ -1,6 +1,7 @@
 global.logger = require('./utils/logger');
 const app = require('./app');
 const { Client } = require("./queries/client");
+const queries = require("./queries/queries");
 
 global.configFile = require("./utils/config");
 
@@ -17,9 +18,9 @@ global.csv = require("csvtojson");
 global.rimraf = require("./public/libraries/rimraf");
 global.util = require("util");
 global.archiver = require("archiver");
-(global.sqlite3 = require("sqlite3").verbose()),
-    (global.readline = require("readline")),
-    (global.path = require("path"));
+global.sqlite3 = require("sqlite3").verbose();
+global.readline = require("readline");
+global.path = require("path");
 global.readdirAsync = util.promisify(fs.readdir);
 global.removeDir = util.promisify(fs.rmdir);
 
@@ -37,9 +38,14 @@ try {
     } else {
         global.logger.debug(`Directory '${allProjectsPath}' already exists.`);
     }
+
+    if (!fs.existsSync("./tmp")) {
+        fs.mkdirSync("./tmp");
+    }
 } catch (err) {
     global.logger.error(`Error creating directory: ${err.message}`);
 }
+
 
 for (const project of fs.readdirSync(allProjectsPath)) {
     const projectPath = path.join(allProjectsPath, project);
@@ -49,6 +55,26 @@ for (const project of fs.readdirSync(allProjectsPath)) {
             const dbFile = path.join(projectPath, file);
 
             global.projectDbClients[projectPath] = new Client(dbFile);
+
+            queries.project.migrateProjectDb(projectPath).catch((err) => {
+                // Every statement in migrateProjectDb is DDL (even a no-op
+                // CREATE TABLE IF NOT EXISTS), so SQLite opens the file for
+                // write regardless of whether a change is actually needed.
+                // A read-only project database - by design, or a permissions
+                // quirk of wherever it's deployed - can't be migrated, but
+                // that's expected and not a failure worth an error-level log
+                // on every server start.
+                if (err && err.error && err.error.code === "SQLITE_READONLY") {
+                    global.logger.warn(
+                        `Project database at ${projectPath} is read-only; skipping schema migration.`,
+                    );
+                    return;
+                }
+
+                global.logger.error(
+                    `Failed to migrate project database at ${projectPath}: ${err}`,
+                );
+            });
         }
     }
 }

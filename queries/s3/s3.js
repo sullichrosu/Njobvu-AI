@@ -8,16 +8,18 @@ module.exports = {
             prefix,
             accessKeyId,
             secretAccessKey,
-            endpoint
+            endpoint,
+            syncMode = "download",
         ) {
             const query =
-                "INSERT INTO S3Buckets (PName, Admin, BucketName, Region, Prefix, AccessKeyId, SecretAccessKey, Endpoint) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+                "INSERT INTO S3Buckets (PName, Admin, BucketName, Region, Prefix, AccessKeyId, SecretAccessKey, Endpoint, SyncMode) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                 "ON CONFLICT(PName, Admin) DO UPDATE SET " +
                 "BucketName = excluded.BucketName, Region = excluded.Region, Prefix = excluded.Prefix, " +
-                "AccessKeyId = excluded.AccessKeyId, SecretAccessKey = excluded.SecretAccessKey, Endpoint = excluded.Endpoint";
+                "AccessKeyId = excluded.AccessKeyId, SecretAccessKey = excluded.SecretAccessKey, Endpoint = excluded.Endpoint, " +
+                "SyncMode = excluded.SyncMode";
 
-            const result = await global.managedDbClient.run(query, [
+            return await global.managedDbClient.run(query, [
                 projectName,
                 admin,
                 bucketName,
@@ -26,9 +28,8 @@ module.exports = {
                 accessKeyId || null,
                 secretAccessKey || null,
                 endpoint || "",
+                syncMode,
             ]);
-
-            return result;
         },
         getBucket: async function(projectName, admin) {
             const query =

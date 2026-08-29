@@ -65,12 +65,14 @@ const removeAccess = require("./projects/removeAccess");
 const transferAdmin = require("./projects/transferAdmin");
 const script = require("./projects/script");
 const deleteImagesWithoutLabel = require("./projects/deleteImagesWithoutLabel");
+const toggleAllReview = require("./projects/toggleAllReview");
 const { getFilteredProjectsApi, getFilteredImagesApi } = require("./api/projectsFilter");
 const {
     attachS3Bucket,
     getS3Bucket,
     deleteS3Bucket,
     syncS3Bucket,
+    getProjectImage,
 } = require("./api/v2/s3Buckets");
 
 const updateLabels = require("./labelling/updateLabels");
@@ -178,6 +180,8 @@ api.post("/removeAccess", removeAccess);
 api.post("/transferAdmin", transferAdmin);
 api.post("/script", script);
 api.post("/deleteImagesWithoutLabel", deleteImagesWithoutLabel);
+api.post("/toggleAllReview", toggleAllReview);
+api.post("/api/projects/toggleAllReview", toggleAllReview);
 api.get("/api/v2/projects", getFilteredProjectsApi);
 api.get("/api/v2/projects/:IDX/images", getFilteredImagesApi);
 api.get("/api/projects/filter", getFilteredProjectsApi);
@@ -188,6 +192,7 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket", attachS3Bucket);
 api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
 api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
 api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
+api.get("/api/v2/projects/:admin/:projectName/images/:imageName", getProjectImage);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);
