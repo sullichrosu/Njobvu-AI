@@ -10,6 +10,7 @@ describe('POST /api/projects/map-kwcoco-csv', () => {
     let tmpDir;
     let projectDir;
     let originalProjectsPath;
+    let mockClient;
 
     beforeEach(() => {
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'map-kwcoco-test-'));
@@ -19,7 +20,7 @@ describe('POST /api/projects/map-kwcoco-csv', () => {
         fs.writeFileSync(path.join(projectDir, 'images', 'img1.jpg'), 'fake-image-data');
         fs.writeFileSync(path.join(projectDir, 'images', 'img2.jpg'), 'fake-image-data');
 
-        const mockClient = {
+        mockClient = {
             open: jest.fn(),
             all: jest.fn().mockImplementation((sql) => {
                 if (sql.includes('Classes')) return Promise.resolve({ success: true, rows: [] });
@@ -125,7 +126,7 @@ img2.jpg,shark,30,40,80,120`;
         expect(res.body.labelsInserted).toBe(2);
     });
 
-    test('skips annotations whose image file is not on disk instead of 404-ing later', async () => {
+    test('still records the label for an image not found on disk, but does not register a phantom Images row', async () => {
         const csvContent = `filename,class,xmin,ymin,xmax,ymax
 img1.jpg,dolphin,10,20,100,150
 missing.jpg,shark,30,40,80,120`;
@@ -140,9 +141,15 @@ missing.jpg,shark,30,40,80,120`;
 
         expect(res.statusCode).toBe(200);
         expect(res.body.success).toBe(true);
-        expect(res.body.labelsInserted).toBe(1);
-        expect(res.body.labelsSkipped).toBe(1);
-        expect(res.body.missingImages).toEqual(['missing.jpg']);
+        expect(res.body.labelsInserted).toBe(2);
+        expect(res.body.imagesRegistered).toBe(1);
+        expect(res.body.unresolvedImages).toEqual(['missing.jpg']);
+
+        const labelInserts = mockClient.run.mock.calls.filter(([sql]) => sql.includes('INSERT INTO Labels'));
+        expect(labelInserts.some(([, params]) => params.includes('missing.jpg'))).toBe(true);
+
+        const imageInserts = mockClient.run.mock.calls.filter(([sql]) => sql.includes('INSERT OR IGNORE INTO Images'));
+        expect(imageInserts.some(([, params]) => params.includes('missing.jpg'))).toBe(false);
     });
 
     test('maps annotations for images already registered via S3 streaming (no local file)', async () => {
@@ -165,7 +172,6 @@ missing.jpg,shark,30,40,80,120`;
         expect(res.statusCode).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.labelsInserted).toBe(1);
-        expect(res.body.labelsSkipped).toBe(0);
-        expect(res.body.missingImages).toEqual([]);
+        expect(res.body.unresolvedImages).toEqual([]);
     });
 });
