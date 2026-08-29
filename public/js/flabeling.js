@@ -972,7 +972,7 @@ function resetLabels() {
         });
     }
 }
-$("#reset-labeling").click(resetLabels);
+$("#reset-labeling, #reset-annotate").click(resetLabels);
 
 // undo label action
 function undoLabel() {
@@ -997,7 +997,7 @@ function undoLabel() {
         $('#labels-counter').val(counter);
     }
 }
-$("#undo-labeling").click(undoLabel);
+$("#undo-labeling, #undo-annotate").click(undoLabel);
 
 // Reset Zoom
 function resetZoom() {
