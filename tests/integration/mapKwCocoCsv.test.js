@@ -15,6 +15,9 @@ describe('POST /api/projects/map-kwcoco-csv', () => {
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'map-kwcoco-test-'));
         projectDir = path.join(__dirname, '..', '..', 'public', 'projects', 'admin-testproj');
         fs.mkdirSync(projectDir, { recursive: true });
+        fs.mkdirSync(path.join(projectDir, 'images'), { recursive: true });
+        fs.writeFileSync(path.join(projectDir, 'images', 'img1.jpg'), 'fake-image-data');
+        fs.writeFileSync(path.join(projectDir, 'images', 'img2.jpg'), 'fake-image-data');
 
         const mockClient = {
             open: jest.fn(),
@@ -119,5 +122,25 @@ img2.jpg,shark,30,40,80,120`;
         expect(res.statusCode).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.labelsInserted).toBe(2);
+    });
+
+    test('skips annotations whose image file is not on disk instead of 404-ing later', async () => {
+        const csvContent = `filename,class,xmin,ymin,xmax,ymax
+img1.jpg,dolphin,10,20,100,150
+missing.jpg,shark,30,40,80,120`;
+        const csvPath = path.join(tmpDir, 'test.csv');
+        fs.writeFileSync(csvPath, csvContent);
+
+        const res = await request(app)
+            .post('/api/projects/map-kwcoco-csv')
+            .field('PName', 'testproj')
+            .field('Admin', 'admin')
+            .attach('kwcoco_csv', csvPath);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.labelsInserted).toBe(1);
+        expect(res.body.labelsSkipped).toBe(1);
+        expect(res.body.missingImages).toEqual(['missing.jpg']);
     });
 });
