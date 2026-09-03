@@ -2,6 +2,65 @@ const path = require("path");
 const sharp = require("sharp");
 const fs = require("fs");
 const queries = require("../../queries/queries");
+const { buildS3Client, getObjectStream } = require("../../utils/s3Client");
+
+// Buffers a Readable fully into memory - only used for the S3-streamed image
+// case below, one image at a time, never for a whole batch (see readExportImage).
+function streamToBuffer(stream) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        stream.on("data", (chunk) => chunks.push(chunk));
+        stream.on("end", () => resolve(Buffer.concat(chunks)));
+        stream.on("error", reject);
+    });
+}
+
+// Resolves image bytes for export, mirroring how routes/api/v2/s3Buckets.js#getProjectImage
+// serves a single image: a locally-present file (local import, or "download"-mode S3
+// sync - the common case) is read straight from disk; an image registered from S3 but
+// never materialized locally ("stream" mode) is fetched from the bucket live, for this
+// export only, and buffered in memory just long enough to be probed/zipped. s3BucketCache
+// avoids re-fetching bucket credentials for every S3-streamed image in the dataset.
+async function readExportImage(imagesPath, PName, admin, image, s3BucketCache) {
+    const localPath = path.join(imagesPath, image.IName);
+
+    if (fs.existsSync(localPath)) {
+        return { buffer: fs.readFileSync(localPath), isLocal: true };
+    }
+
+    if (image.Source !== "s3" || !image.SourceKey) {
+        throw new Error(
+            `Image "${image.IName}" was not found locally and has no S3 source`,
+        );
+    }
+
+    if (s3BucketCache.bucket === undefined) {
+        const bucketResult = await queries.managed.getBucket(PName, admin);
+        s3BucketCache.bucket = (bucketResult && bucketResult.row) || null;
+        if (s3BucketCache.bucket) {
+            s3BucketCache.client = buildS3Client({
+                region: s3BucketCache.bucket.Region,
+                accessKeyId: s3BucketCache.bucket.AccessKeyId,
+                secretAccessKey: s3BucketCache.bucket.SecretAccessKey,
+                endpoint: s3BucketCache.bucket.Endpoint,
+            });
+        }
+    }
+
+    if (!s3BucketCache.bucket) {
+        throw new Error(
+            `Image "${image.IName}" has no local file and no S3 bucket is attached to this project`,
+        );
+    }
+
+    const { body } = await getObjectStream(
+        s3BucketCache.client,
+        s3BucketCache.bucket.BucketName,
+        image.SourceKey,
+    );
+
+    return { buffer: await streamToBuffer(body), isLocal: false };
+}
 
 async function downloadDataset(req, res) {
     var PName = req.body.PName,
@@ -215,13 +274,30 @@ async function downloadDataset(req, res) {
     // YOLO
     if (downloadFormat == 0) {
         var dictImagesLabels = {};
+        var skippedImages = [];
+        var s3ImageBuffers = {};
+        var s3BucketCache = {};
         for (var i = 0; i < existingImages.rows.length; i++) {
-            var img = fs.readFileSync(
-                    `${imagesPath}/${existingImages.rows[i].IName}`,
-                ),
-                imgData = probe.sync(img),
-                imgW = imgData.width,
+            let imgW, imgH;
+            try {
+                const { buffer, isLocal } = await readExportImage(
+                    imagesPath,
+                    PName,
+                    admin,
+                    existingImages.rows[i],
+                    s3BucketCache,
+                );
+                const imgData = probe.sync(buffer);
+                imgW = imgData.width;
                 imgH = imgData.height;
+                if (!isLocal) {
+                    s3ImageBuffers[existingImages.rows[i].IName] = buffer;
+                }
+            } catch (err) {
+                global.logger.error(err);
+                skippedImages.push(existingImages.rows[i].IName);
+                continue;
+            }
 
             const imageLabels = await queries.project.getLabelsForImageName(
                 projectPath,
@@ -300,7 +376,17 @@ async function downloadDataset(req, res) {
             name: PName + "_Classes.txt",
         });
 
+        if (skippedImages.length > 0) {
+            archive.append(
+                JSON.stringify({ skipped_images: skippedImages }, null, 2),
+                { name: "skipped_images.json" },
+            );
+        }
+
         archive.directory(imagesPath, false);
+        for (var imageName in s3ImageBuffers) {
+            archive.append(s3ImageBuffers[imageName], { name: imageName });
+        }
         archive.finalize();
     }
 
@@ -316,6 +402,12 @@ async function downloadDataset(req, res) {
 
         labels = labels.rows;
 
+        var imageByName = {};
+        for (var i = 0; i < existingImages.rows.length; i++) {
+            imageByName[existingImages.rows[i].IName] = existingImages.rows[i];
+        }
+        var s3BucketCache = {};
+
         var xmin = 0;
         var xmax = 0;
         var ymin = 0;
@@ -328,10 +420,22 @@ async function downloadDataset(req, res) {
             ymin = labels[i].Y;
             ymax = ymin + labels[i].H;
 
-            var img = fs.readFileSync(`${imagesPath}/${labels[i].IName}`);
-            var imgData = probe.sync(img);
-            var imgW = imgData.width;
-            var imgH = imgData.height;
+            var imgW, imgH;
+            try {
+                const { buffer } = await readExportImage(
+                    imagesPath,
+                    PName,
+                    admin,
+                    imageByName[labels[i].IName] || { IName: labels[i].IName },
+                    s3BucketCache,
+                );
+                var imgData = probe.sync(buffer);
+                imgW = imgData.width;
+                imgH = imgData.height;
+            } catch (err) {
+                global.logger.error(err);
+                continue;
+            }
 
             data =
                 data +
@@ -395,6 +499,9 @@ async function downloadDataset(req, res) {
         var ymax = 0;
         var rows = [];
         var imageNames = [];
+        var skippedImages = [];
+        var s3ImageBuffers = {};
+        var s3BucketCache = {};
 
         for (var i = 0; i < labels.length; i++) {
             data = [];
@@ -419,17 +526,12 @@ async function downloadDataset(req, res) {
         var categories = [];
         var annotations = [];
 
-        function im(pic, id) {
+        function im(pic, id, buffer) {
             var image = {};
-            var relImagePath = imagesPath + pic;
+            var imgData = probe.sync(buffer);
 
-            var img = fs.readFileSync(`${imagesPath}/${pic}`);
-            var imgData = probe.sync(img);
-            var imgW = imgData.width;
-            var imgH = imgData.height;
-
-            image["height"] = imgH;
-            image["width"] = imgW;
+            image["height"] = imgData.height;
+            image["width"] = imgData.width;
             image["id"] = id;
             image["file_name"] = pic;
             return image;
@@ -457,11 +559,28 @@ async function downloadDataset(req, res) {
             return anno;
         }
         for (var i = 0; i < existingImages.rows.length; i++) {
-            // console.log(existingImages.rows[i].IName);
-            imageNames.push(existingImages.rows[i].IName);
-            images.push(im(existingImages.rows[i].IName, i));
+            var imageRow = existingImages.rows[i];
+            try {
+                var { buffer, isLocal } = await readExportImage(
+                    imagesPath,
+                    PName,
+                    admin,
+                    imageRow,
+                    s3BucketCache,
+                );
+                var id = imageNames.length;
+                imageNames.push(imageRow.IName);
+                images.push(im(imageRow.IName, id, buffer));
+                if (!isLocal) {
+                    s3ImageBuffers[imageRow.IName] = buffer;
+                }
+            } catch (err) {
+                global.logger.error(err);
+                skippedImages.push(imageRow.IName);
+            }
         }
         for (var i = 0; i < rows.length; i++) {
+            if (skippedImages.includes(rows[i][0])) continue;
             annotations.push(annotation(rows[i]));
         }
         for (var i = 0; i < cnames.length; i++) {
@@ -471,6 +590,9 @@ async function downloadDataset(req, res) {
         coco["images"] = images;
         coco["categories"] = categories;
         coco["annotations"] = annotations;
+        if (skippedImages.length > 0) {
+            coco["skipped_images"] = skippedImages;
+        }
 
         var cocoData = JSON.stringify(coco);
 
@@ -493,26 +615,22 @@ async function downloadDataset(req, res) {
             name: PName + "_coco.json",
         });
 
-        try {
-            images = await queries.project.getAllImages(projectPath);
-        } catch (err) {
-            global.logger.error(err);
-            return res.status(500).send("Error fetching images.");
-        }
-
-        images = images.rows;
-
-        for (var i = 0; i < images.length; i++) {
-            archive.file(
-                publicPath +
-                    "/public/projects/" +
-                    admin +
-                    "-" +
-                    PName +
-                    "/images/" +
-                    images[i].IName,
-                { name: images[i].IName },
-            );
+        for (var i = 0; i < imageNames.length; i++) {
+            var imageName = imageNames[i];
+            if (s3ImageBuffers[imageName]) {
+                archive.append(s3ImageBuffers[imageName], { name: imageName });
+            } else {
+                archive.file(
+                    publicPath +
+                        "/public/projects/" +
+                        admin +
+                        "-" +
+                        PName +
+                        "/images/" +
+                        imageName,
+                    { name: imageName },
+                );
+            }
         }
 
         archive.finalize();
@@ -537,6 +655,9 @@ async function downloadDataset(req, res) {
         var ymax = 0;
         var rows = [];
         var imageNames = [];
+        var skippedImages = [];
+        var s3ImageBuffers = {};
+        var s3BucketCache = {};
 
         for (var i = 0; i < labels.length; i++) {
             data = [];
@@ -561,17 +682,12 @@ async function downloadDataset(req, res) {
         var categories = [];
         var annotations = [];
 
-        function im(pic, id) {
+        function im(pic, id, buffer) {
             var image = {};
-            var relImagePath = imagesPath + pic;
+            var imgData = probe.sync(buffer);
 
-            var img = fs.readFileSync(`${imagesPath}/${pic}`);
-            var imgData = probe.sync(img);
-            var imgW = imgData.width;
-            var imgH = imgData.height;
-
-            image["height"] = imgH;
-            image["width"] = imgW;
+            image["height"] = imgData.height;
+            image["width"] = imgData.width;
             image["id"] = id;
             image["file_name"] = pic;
             return image;
@@ -599,10 +715,28 @@ async function downloadDataset(req, res) {
             return anno;
         }
         for (var i = 0; i < existingImages.rows.length; i++) {
-            imageNames.push(existingImages.rows[i].IName);
-            images.push(im(existingImages.rows[i].IName, i));
+            var imageRow = existingImages.rows[i];
+            try {
+                var { buffer, isLocal } = await readExportImage(
+                    imagesPath,
+                    PName,
+                    admin,
+                    imageRow,
+                    s3BucketCache,
+                );
+                var id = imageNames.length;
+                imageNames.push(imageRow.IName);
+                images.push(im(imageRow.IName, id, buffer));
+                if (!isLocal) {
+                    s3ImageBuffers[imageRow.IName] = buffer;
+                }
+            } catch (err) {
+                global.logger.error(err);
+                skippedImages.push(imageRow.IName);
+            }
         }
         for (var i = 0; i < rows.length; i++) {
+            if (skippedImages.includes(rows[i][0])) continue;
             annotations.push(annotation(rows[i]));
         }
         for (var i = 0; i < cnames.length; i++) {
@@ -618,6 +752,9 @@ async function downloadDataset(req, res) {
         coco["images"] = images;
         coco["categories"] = categories;
         coco["annotations"] = annotations;
+        if (skippedImages.length > 0) {
+            coco["skipped_images"] = skippedImages;
+        }
 
         var cocoData = JSON.stringify(coco);
 
@@ -640,26 +777,22 @@ async function downloadDataset(req, res) {
             name: PName + "_kwcoco.json",
         });
 
-        try {
-            images = await queries.project.getAllImages(projectPath);
-        } catch (err) {
-            console.error(err);
-            return res.status(500).send("Error fetching images.");
-        }
-
-        images = images.rows;
-
-        for (var i = 0; i < images.length; i++) {
-            archive.file(
-                publicPath +
-                    "/public/projects/" +
-                    admin +
-                    "-" +
-                    PName +
-                    "/images/" +
-                    images[i].IName,
-                { name: images[i].IName },
-            );
+        for (var i = 0; i < imageNames.length; i++) {
+            var imageName = imageNames[i];
+            if (s3ImageBuffers[imageName]) {
+                archive.append(s3ImageBuffers[imageName], { name: imageName });
+            } else {
+                archive.file(
+                    publicPath +
+                        "/public/projects/" +
+                        admin +
+                        "-" +
+                        PName +
+                        "/images/" +
+                        imageName,
+                    { name: imageName },
+                );
+            }
         }
 
         archive.finalize();
@@ -679,14 +812,33 @@ async function downloadDataset(req, res) {
 
         archive.pipe(output);
 
+        var skippedImages = [];
+        var s3ImageBuffers = {};
+        var s3BucketCache = {};
+
         for (var i = 0; i < existingImages.rows.length; i++) {
             var imgName = existingImages.rows[i].IName;
             var imgPath = `${imagesPath}/${imgName}`;
-            var img = fs.readFileSync(`${imgPath}`);
-            var imgData = probe.sync(img);
-            var imgW = imgData.width;
-            var imgH = imgData.height;
-            var imgD = imgData.depth;
+            var imgW, imgH;
+            try {
+                var { buffer, isLocal } = await readExportImage(
+                    imagesPath,
+                    PName,
+                    admin,
+                    existingImages.rows[i],
+                    s3BucketCache,
+                );
+                var imgData = probe.sync(buffer);
+                imgW = imgData.width;
+                imgH = imgData.height;
+                if (!isLocal) {
+                    s3ImageBuffers[imgName] = buffer;
+                }
+            } catch (err) {
+                global.logger.error(err);
+                skippedImages.push(imgName);
+                continue;
+            }
 
             var data = "<annotation>\n";
             data += "\t<folder>images</folder>\n";
@@ -745,27 +897,32 @@ async function downloadDataset(req, res) {
             archive.file(downloadsPath + "/" + xmlname, { name: xmlname });
         }
 
-        let images;
-        try {
-            images = await queries.project.getAllImages(projectPath);
-        } catch (err) {
-            global.logger.error(err);
-            return res.status(500).send("Error fetching images");
+        if (skippedImages.length > 0) {
+            archive.append(
+                JSON.stringify({ skipped_images: skippedImages }, null, 2),
+                { name: "skipped_images.json" },
+            );
         }
 
-        images = images.rows;
-
-        for (var i = 0; i < images.length; i++) {
-            archive.file(
-                publicPath +
-                    "/public/projects/" +
-                    admin +
-                    "-" +
-                    PName +
-                    "/images/" +
-                    images[i].IName,
-                { name: images[i].IName },
-            );
+        for (var i = 0; i < existingImages.rows.length; i++) {
+            var imageName = existingImages.rows[i].IName;
+            if (skippedImages.includes(imageName)) {
+                continue;
+            }
+            if (s3ImageBuffers[imageName]) {
+                archive.append(s3ImageBuffers[imageName], { name: imageName });
+            } else {
+                archive.file(
+                    publicPath +
+                        "/public/projects/" +
+                        admin +
+                        "-" +
+                        PName +
+                        "/images/" +
+                        imageName,
+                    { name: imageName },
+                );
+            }
         }
 
         archive.finalize();
