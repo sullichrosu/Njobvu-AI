@@ -70,20 +70,34 @@ async function mapKwCocoCsv(req, res) {
             }
         }
 
-        // 2. Ensure referenced images exist in Images table
+        // 2. Only register an Images row for a filename here if it already has a real
+        // backing image — a local file, or a previously-synced S3-streamed row
+        // (Source = "s3") is already covered via existingImageSet. Registering a row
+        // with neither is what caused the annotate/validation pages to 404 (they gate
+        // on the Images row resolving to actual bytes). Labels are NOT gated on this —
+        // see step 4 — since they're independent data: an annotation for an image that
+        // hasn't been uploaded/synced yet still gets recorded, and starts showing up as
+        // soon as that image's Images row appears through the normal upload/sync path.
+        const imagesDir = path.join(projectPath, 'images');
         const existingImageResult = await queries.project.getAllImages(projectPath);
         const existingImageRows = existingImageResult?.rows || [];
         const existingImageSet = new Set(existingImageRows.map(i => i.IName));
 
         const uniqueImages = new Set(parsedAnnotations.map(a => a.filename));
         let imagesRegistered = 0;
+        const unresolvedImages = new Set();
 
         for (const iname of uniqueImages) {
-            if (!existingImageSet.has(iname)) {
-                await queries.project.sql(projectPath, "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", [iname]);
-                existingImageSet.add(iname);
-                imagesRegistered++;
+            if (existingImageSet.has(iname)) {
+                continue;
             }
+            if (!fs.existsSync(path.join(imagesDir, iname))) {
+                unresolvedImages.add(iname);
+                continue;
+            }
+            await queries.project.sql(projectPath, "INSERT OR IGNORE INTO Images (IName, reviewImage, validateImage) VALUES (?, 0, 0)", [iname]);
+            existingImageSet.add(iname);
+            imagesRegistered++;
         }
 
         // 3. Get current max LID in Labels table
@@ -94,7 +108,7 @@ async function mapKwCocoCsv(req, res) {
             nextLid = maxLidRows[0].LID + 1;
         }
 
-        // 4. Insert labels
+        // 4. Insert every label regardless of whether its image resolved above.
         let labelsInserted = 0;
         for (const ann of parsedAnnotations) {
             await queries.project.createLabel(
@@ -110,12 +124,17 @@ async function mapKwCocoCsv(req, res) {
             labelsInserted++;
         }
 
+        const message = unresolvedImages.size > 0
+            ? `Mapped ${labelsInserted} KW COCO annotations. ${unresolvedImages.size} image(s) not found locally or via a synced S3 source — their labels were recorded but won't appear until those images are uploaded or synced.`
+            : `Successfully mapped ${labelsInserted} KW COCO annotations.`;
+
         return res.json({
             success: true,
-            message: `Successfully mapped ${labelsInserted} KW COCO annotations.`,
+            message,
             labelsInserted,
             classesAdded,
-            imagesRegistered
+            imagesRegistered,
+            unresolvedImages: Array.from(unresolvedImages)
         });
 
     } catch (err) {
