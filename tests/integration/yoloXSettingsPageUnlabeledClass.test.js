@@ -1,12 +1,12 @@
-// Integration tests for GET /yolo/yolovXTrainingSettings's per-class image count wiring
-// (routes/pages/getYoloXTrainingSettingsPage.js). Invokes the route handler directly, bypassing
-// the Express/static stack, matching the convention already used for this route family in
-// tests/integration/trainingPage.test.js -- this codebase drives page routes entirely through
-// globals set by server.js rather than importable modules.
+// Regression test for routes/pages/getYoloXSettingsPage.js: views/training/yolovXTrainingSettings.ejs
+// is shared with getYoloXTrainingSettingsPage.js and unconditionally references the bare
+// `unlabeledClass` local (for the Unlabeled slider). getYoloXSettingsPage.js used to render that
+// template without ever setting `classes`' Unlabeled pseudo-entry or passing `unlabeledClass`,
+// causing "ReferenceError: unlabeledClass is not defined" on GET /yolo/yolovXSettings.
 
 jest.mock('../../queries/queries', () => ({
   project: {
-    getClassImageCounts: jest.fn(),
+    getClassLabelCounts: jest.fn(),
     getUnlabeledImages: jest.fn(),
   },
 }));
@@ -20,8 +20,8 @@ const PYTHON_PATH = `${PROJECT_PATH}/training/python`;
 const INFERENCE_PATH = `${PROJECT_PATH}/inference`;
 const INFERENCE_UPLOAD_PATH = `${PROJECT_PATH}/inference/uploads`;
 
-describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
-  let getYoloXTrainingSettingsPage;
+describe('GET /yolo/yolovXSettings - Unlabeled pseudo-class wiring', () => {
+  let getYoloXSettingsPage;
 
   beforeAll(() => {
     global.logger = { debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() };
@@ -50,7 +50,6 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
             cb2 && cb2(null, [
               { CName: 'person' },
               { CName: 'car' },
-              { CName: 'unlabeled_class' },
             ]),
           ),
           close: jest.fn((cb2) => cb2 && cb2()),
@@ -75,7 +74,7 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
       return Promise.resolve([]);
     });
 
-    getYoloXTrainingSettingsPage = require('../../routes/pages/getYoloXTrainingSettingsPage');
+    getYoloXSettingsPage = require('../../routes/pages/getYoloXSettingsPage');
   });
 
   afterEach(() => {
@@ -97,25 +96,21 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
     return { req, res };
   }
 
-  it('attaches imageCount to each class from queries.project.getClassImageCounts, keyed by CName, and appends an Unlabeled pseudo-class', async () => {
-    queries.project.getClassImageCounts.mockResolvedValue({
+  it('passes unlabeledClass and appends an Unlabeled pseudo-class so the shared template does not throw', async () => {
+    queries.project.getClassLabelCounts.mockResolvedValue({
       success: true,
       rows: [
-        { CName: 'person', imageCount: 42 },
-        { CName: 'car', imageCount: 7 },
-        // no row for 'unlabeled_class' -- must default to 0, not be dropped or crash
+        { CName: 'person', labelCount: 12 },
+        { CName: 'car', labelCount: 4 },
       ],
     });
     queries.project.getUnlabeledImages.mockResolvedValue({
-      rows: [{ IName: 'a.jpg' }, { IName: 'b.jpg' }, { IName: 'c.jpg' }],
+      rows: [{ IName: 'a.jpg' }, { IName: 'b.jpg' }],
     });
 
     const { req, res } = makeReqRes();
-    await expect(getYoloXTrainingSettingsPage(req, res)).resolves.not.toThrow();
+    await expect(getYoloXSettingsPage(req, res)).resolves.not.toThrow();
 
-    expect(queries.project.getClassImageCounts).toHaveBeenCalledWith(
-      expect.stringContaining('testuser-test-project'),
-    );
     expect(queries.project.getUnlabeledImages).toHaveBeenCalledWith(
       expect.stringContaining('testuser-test-project'),
     );
@@ -123,32 +118,29 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
       'training/yolovXTrainingSettings',
       expect.objectContaining({
         classes: [
-          expect.objectContaining({ CName: 'person', imageCount: 42 }),
-          expect.objectContaining({ CName: 'car', imageCount: 7 }),
-          expect.objectContaining({ CName: 'unlabeled_class', imageCount: 0 }),
-          expect.objectContaining({ CName: '__UNLABELED__', imageCount: 3 }),
+          expect.objectContaining({ CName: 'person', labelCount: 12 }),
+          expect.objectContaining({ CName: 'car', labelCount: 4 }),
+          expect.objectContaining({ CName: '__UNLABELED__', imageCount: 2 }),
         ],
         unlabeledClass: '__UNLABELED__',
       }),
     );
   });
 
-  it('defaults every class and the Unlabeled pseudo-class to imageCount 0 and still renders when the count queries fail', async () => {
-    queries.project.getClassImageCounts.mockRejectedValue(new Error('db unavailable'));
+  it('defaults the Unlabeled pseudo-class to imageCount 0 and still renders when getUnlabeledImages fails', async () => {
+    queries.project.getClassLabelCounts.mockResolvedValue({ success: true, rows: [] });
     queries.project.getUnlabeledImages.mockRejectedValue(new Error('db unavailable'));
 
     const { req, res } = makeReqRes();
-    await expect(getYoloXTrainingSettingsPage(req, res)).resolves.not.toThrow();
+    await expect(getYoloXSettingsPage(req, res)).resolves.not.toThrow();
 
     expect(res.render).toHaveBeenCalledWith(
       'training/yolovXTrainingSettings',
       expect.objectContaining({
-        classes: [
-          expect.objectContaining({ CName: 'person', imageCount: 0 }),
-          expect.objectContaining({ CName: 'car', imageCount: 0 }),
-          expect.objectContaining({ CName: 'unlabeled_class', imageCount: 0 }),
+        classes: expect.arrayContaining([
           expect.objectContaining({ CName: '__UNLABELED__', imageCount: 0 }),
-        ],
+        ]),
+        unlabeledClass: '__UNLABELED__',
       }),
     );
     expect(global.logger.error).toHaveBeenCalled();
