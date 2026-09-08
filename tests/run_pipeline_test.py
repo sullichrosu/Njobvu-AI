@@ -76,6 +76,24 @@ class TestRunPipeline(unittest.TestCase):
         self.assertLessEqual(result.shape[0], 40)
         self.assertLessEqual(result.shape[1], 40)
 
+    def test_hex_to_bgr_parses_the_color_input_as_bgr(self):
+        # The UI's <input type="color"> sends "#rrggbb"; cv2 images are BGR.
+        self.assertEqual(run_pipeline.hex_to_bgr("#ff0000"), (0, 0, 255))
+        self.assertEqual(run_pipeline.hex_to_bgr("#00ff00"), (0, 255, 0))
+        self.assertEqual(run_pipeline.hex_to_bgr([1, 2, 3]), (1, 2, 3))
+        self.assertEqual(run_pipeline.hex_to_bgr(None), (0, 0, 0))
+
+    def test_apply_pad_uses_the_hex_fill_color(self):
+        img = np.zeros((10, 10, 3), dtype=np.uint8)
+        result = run_pipeline.apply_pad(img, {"top": 2, "bottom": 0, "left": 0, "right": 0, "color": "#ff0000"})
+
+        np.testing.assert_array_equal(result[0, 0], [0, 0, 255])
+
+    def test_apply_noise_treats_explicit_zero_amount_as_no_noise(self):
+        result = run_pipeline.apply_noise(self.img.copy(), {"type": "gaussian", "amount": 0})
+
+        np.testing.assert_array_equal(result, self.img)
+
 
 if __name__ == "__main__":
     unittest.main()
