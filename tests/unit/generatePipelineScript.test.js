@@ -40,4 +40,33 @@ describe('generatePipelineScript', () => {
 
         expect(script).toContain('cv2.createCLAHE(clipLimit=3, tileGridSize=(4, 4))');
     });
+
+    it('parses the pad step\'s "#rrggbb" color field into a BGR tuple for cv2', () => {
+        // The UI's fill-color field is <input type="color">, so params.color is a
+        // hex string ("#3f51b5"), not an [r, g, b] array - and cv2 expects BGR.
+        const script = generatePipelineScript([
+            { type: 'pad', enabled: true, order: 0, params: { top: 1, bottom: 1, left: 1, right: 1, color: '#3f51b5' } },
+        ]);
+
+        // #3f51b5 -> r=0x3f=63, g=0x51=81, b=0xb5=181 -> BGR tuple (181, 81, 63)
+        expect(script).toContain('value=(181, 81, 63)');
+    });
+
+    it('falls back to black padding for a missing/malformed color instead of throwing', () => {
+        const script = generatePipelineScript([
+            { type: 'pad', enabled: true, order: 0, params: { top: 1, bottom: 1, left: 1, right: 1, color: 'not-a-color' } },
+        ]);
+
+        expect(script).toContain('value=(0, 0, 0)');
+    });
+
+    it('honors an explicit noise amount of 0 instead of falling back to the default', () => {
+        // `Number(params.amount) || 0.05` would silently replace an explicit
+        // 0 with the 0.05 default, since 0 is falsy in JS.
+        const script = generatePipelineScript([
+            { type: 'noise', enabled: true, order: 0, params: { type: 'gaussian', amount: 0 } },
+        ]);
+
+        expect(script).toContain('sigma = 0 * 255');
+    });
 });

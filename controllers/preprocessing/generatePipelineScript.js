@@ -1,3 +1,24 @@
+// Parses a "#rrggbb" (or "#rgb") string into a [b, g, r] triple for cv2,
+// which expects color tuples in BGR order. Returns null for anything else
+// (missing value, already-an-array from an older client, malformed hex).
+function hexToBgr(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const hex = value.trim().replace(/^#/, "");
+    const expanded = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+
+    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) {
+        return null;
+    }
+
+    const r = parseInt(expanded.slice(0, 2), 16);
+    const g = parseInt(expanded.slice(2, 4), 16);
+    const b = parseInt(expanded.slice(4, 6), 16);
+    return [b, g, r];
+}
+
 // OpenCV (cv2) code generators for each built-in step type. Each entry
 // receives the step's `params` and returns a snippet operating on `img`
 // (a numpy/cv2 BGR array) inside `process_image`.
@@ -86,12 +107,19 @@ const BUILTIN_STEP_TEMPLATES = {
             replicate: "cv2.BORDER_REPLICATE",
         };
         const mode = modeMap[params.mode] || modeMap.constant;
-        const color = Array.isArray(params.color) && params.color.length === 3 ? params.color : [0, 0, 0];
+        // The UI's fill-color field is an <input type="color">, so params.color
+        // arrives as a "#rrggbb" hex string, not an [r, g, b] array. cv2 also
+        // expects border fill values in BGR order (images are read via
+        // cv2.imread, which is BGR) - swap from the hex string's RGB order.
+        const bgr = hexToBgr(params.color) || [0, 0, 0];
 
-        return `img = cv2.copyMakeBorder(img, ${top}, ${bottom}, ${left}, ${right}, ${mode}, value=(${color.join(", ")}))`;
+        return `img = cv2.copyMakeBorder(img, ${top}, ${bottom}, ${left}, ${right}, ${mode}, value=(${bgr.join(", ")}))`;
     },
     noise: (params) => {
-        const amount = Number(params.amount) || 0.05;
+        // `Number(params.amount) || 0.05` would silently replace an explicit
+        // 0 (user wants no noise) with the 0.05 default, since 0 is falsy.
+        const parsedAmount = Number(params.amount);
+        const amount = Number.isFinite(parsedAmount) ? parsedAmount : 0.05;
 
         if (params.type === "salt_pepper") {
             return [
