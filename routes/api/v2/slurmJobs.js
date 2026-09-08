@@ -1,5 +1,10 @@
 const queries = require("../../../queries/queries");
 const { hasSlurmAccess, isSlurmConfigured } = require("../../../utils/slurmAccess");
+const { submitSbatchJob, getSlurmJobRuntimeStatus } = require("../../../utils/slurmSubmit");
+const { prepareTrainingSubmission } = require("../../../utils/slurmTrainingJob");
+const { prepareInferenceSubmission } = require("../../../utils/slurmInferenceJob");
+
+const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL", "OUT_OF_MEMORY"]);
 
 // GET /api/v2/slurm/access - lets the front end decide whether to offer an
 // "HPC" launch option at all, and why not when it can't.
@@ -46,10 +51,24 @@ async function getSlurmJobStatus(req, res) {
 
     try {
         const result = await queries.managed.getSlurmJob(slurmJobId);
-        const job = result && result.row;
+        let job = result && result.row;
 
         if (!job || job.Username !== username) {
             return res.status(404).json({ success: false, error: "Job not found" });
+        }
+
+        // Refresh from the scheduler while the job hasn't reached a terminal
+        // state yet. Nothing else in this app updates SlurmJobs.Status once
+        // sbatch has queued it, so a status read is also the point where we
+        // reconcile it against squeue/sacct.
+        if (isSlurmConfigured() && !TERMINAL_STATUSES.has(job.Status)) {
+            const runtimeStatus = await getSlurmJobRuntimeStatus(slurmJobId);
+
+            if (runtimeStatus && runtimeStatus !== job.Status) {
+                const updatedAt = new Date().toISOString();
+                await queries.managed.updateSlurmJobStatus(slurmJobId, runtimeStatus, updatedAt);
+                job = { ...job, Status: runtimeStatus, UpdatedAt: updatedAt };
+            }
         }
 
         return res.status(200).json({ success: true, job });
@@ -61,24 +80,97 @@ async function getSlurmJobStatus(req, res) {
 
 // POST /api/v2/slurm/training-jobs - submit a training run to the HPC via
 // `sbatch` instead of the local `exec` path in routes/training/run.js.
-//
-// TODO(njobvu-cv-pipeline): build the sbatch script/wrapper invocation for
-// controllers/training/train_data_from_project.py, submit it with
-// `${configFile.slurm_bin_path}/sbatch`, capture the returned Slurm job id,
-// and persist it with queries.managed.recordSlurmJob(...). Keep
-// routes/training/run.js (local launch) working unchanged - this is an
-// additive v2 endpoint, not a replacement.
+// Additive: routes/training/run.js is untouched and keeps working exactly
+// as before for users who don't opt into the HPC launch option.
 async function submitTrainingJob(req, res) {
-    return res.status(501).json({ success: false, error: "Not implemented" });
+    const username = req.cookies && req.cookies.Username;
+
+    if (!username) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+    }
+
+    if (!hasSlurmAccess(username)) {
+        return res.status(403).json({ success: false, error: "Slurm access is not enabled for this user" });
+    }
+
+    if (!isSlurmConfigured()) {
+        return res.status(400).json({ success: false, error: "Slurm is not configured on this server" });
+    }
+
+    let submission;
+    try {
+        submission = await prepareTrainingSubmission(req);
+    } catch (err) {
+        global.logger.error("Error preparing Slurm training job:", err);
+        return res.status(err.statusCode || 500).json({ success: false, error: err.message });
+    }
+
+    try {
+        const { slurmJobId } = await submitSbatchJob(submission);
+
+        await queries.managed.recordSlurmJob(
+            slurmJobId,
+            username,
+            submission.PName,
+            submission.Admin,
+            "training",
+            submission.runPath,
+            new Date().toISOString(),
+        );
+
+        return res.status(200).json({ success: true, slurmJobId, runPath: submission.runPath });
+    } catch (err) {
+        global.logger.error("Error submitting Slurm training job:", err);
+        return res.status(500).json({ success: false, error: "Error submitting Slurm job: " + err.message });
+    }
 }
 
 // POST /api/v2/slurm/inference-jobs - submit an inference run to the HPC.
-//
-// TODO(njobvu-cv-pipeline): mirror submitTrainingJob for the inference
-// scripts under controllers/inference/ (see routes/inference/*.js for the
-// existing local-exec equivalents), reusing the same SlurmJobs bookkeeping.
+// Mirrors routes/inference/*.js (selected via req.body.inference_type: one
+// of "yolo" | "megadetector" | "inception") but launches via `sbatch`
+// instead of `exec`. Additive: the local-exec inference routes are
+// untouched.
 async function submitInferenceJob(req, res) {
-    return res.status(501).json({ success: false, error: "Not implemented" });
+    const username = req.cookies && req.cookies.Username;
+
+    if (!username) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+    }
+
+    if (!hasSlurmAccess(username)) {
+        return res.status(403).json({ success: false, error: "Slurm access is not enabled for this user" });
+    }
+
+    if (!isSlurmConfigured()) {
+        return res.status(400).json({ success: false, error: "Slurm is not configured on this server" });
+    }
+
+    let submission;
+    try {
+        submission = await prepareInferenceSubmission(req);
+    } catch (err) {
+        global.logger.error("Error preparing Slurm inference job:", err);
+        return res.status(err.statusCode || 500).json({ success: false, error: err.message });
+    }
+
+    try {
+        const { slurmJobId } = await submitSbatchJob(submission);
+
+        await queries.managed.recordSlurmJob(
+            slurmJobId,
+            username,
+            submission.PName,
+            submission.Admin,
+            "inference",
+            submission.runPath,
+            new Date().toISOString(),
+        );
+
+        return res.status(200).json({ success: true, slurmJobId, runPath: submission.runPath });
+    } catch (err) {
+        global.logger.error("Error submitting Slurm inference job:", err);
+        return res.status(500).json({ success: false, error: "Error submitting Slurm job: " + err.message });
+    }
 }
 
 module.exports = {
