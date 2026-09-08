@@ -1,0 +1,434 @@
+<%- include('../includes/header') %>
+<%- include('../includes/configNav', { activePage }) %>
+
+<div class="container pb-5">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Pre-processing</h1>
+            <p>
+                Build a pre-processing pipeline that runs against project images. Add built-in steps or upload
+                your own custom script, drag to reorder, and toggle steps on or off without removing them.
+            </p>
+            <hr>
+        </div>
+    </div>
+
+    <div id="preprocessingLoadError" class="alert alert-danger d-none"></div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">Add a Step</div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="stepTypeSelect">Built-in options</label>
+                        <select id="stepTypeSelect" class="form-control">
+                            <option value="illumination_normalization">Illumination Normalization</option>
+                            <option value="resize">Resize</option>
+                            <option value="rotate">Rotate</option>
+                            <option value="crop">Crop</option>
+                            <option value="pad">Pad</option>
+                            <option value="noise">Noise</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block" id="addStepBtn" style="border-radius: 0">Add Step</button>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <label for="customScriptSelect">Custom scripts</label>
+                        <select id="customScriptSelect" class="form-control">
+                            <option value="" disabled selected>No custom scripts uploaded</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block mb-3" id="addCustomStepBtn" style="border-radius: 0" disabled>Add Custom Step</button>
+
+                    <div class="form-group">
+                        <label for="customScriptUpload">Upload custom pipeline script (.py)</label>
+                        <input type="file" id="customScriptUpload" class="form-control-file" accept=".py">
+                    </div>
+                    <button type="button" class="btn btn-outline-dark btn-block" id="uploadScriptBtn" style="border-radius: 0">Upload Script</button>
+                    <label id="uploadProgress" class="mt-2 text-info d-block" aria-live="polite" aria-atomic="true"></label>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span>Pipeline</span>
+                    <span class="text-muted" style="font-size: 0.8rem;">Drag <i class="fa fa-arrows"></i> to reorder</span>
+                </div>
+                <div class="card-body">
+                    <ul id="pipelineList" class="list-group mb-3"></ul>
+                    <p id="pipelineEmptyMsg" class="text-muted d-none">No steps in this pipeline yet. Add one from the left panel.</p>
+
+                    <div class="d-flex">
+                        <button type="button" class="btn btn-success mr-2" id="savePipelineBtn" style="border-radius: 0">Save Pipeline</button>
+                        <button type="button" class="btn btn-warning" id="applyAllBtn" style="border-radius: 0">Apply to All Images</button>
+                    </div>
+                    <label id="pipelineStatus" class="mt-2 d-block" aria-live="polite" aria-atomic="true"></label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const PREPROCESSING_API = "/api/v2/projects/<%= Admin %>/<%= PName %>/preprocessing";
+
+    // Param schema per built-in step type: drives the sliders/inputs rendered for each step.
+    const STEP_TYPES = {
+        illumination_normalization: {
+            label: "Illumination Normalization",
+            fields: [
+                { key: "method", label: "Method", type: "select", options: ["clahe", "histogram_equalization"], default: "clahe" },
+                { key: "clipLimit", label: "Clip Limit", type: "range", min: 1, max: 10, step: 0.1, default: 2.0 },
+                { key: "tileGridSize", label: "Tile Grid Size", type: "range", min: 2, max: 16, step: 1, default: 8 },
+            ],
+        },
+        resize: {
+            label: "Resize",
+            fields: [
+                { key: "width", label: "Width (px)", type: "number", min: 1, max: 8192, default: 640 },
+                { key: "height", label: "Height (px)", type: "number", min: 1, max: 8192, default: 640 },
+                { key: "keepAspectRatio", label: "Keep Aspect Ratio", type: "checkbox", default: true },
+                { key: "interpolation", label: "Interpolation", type: "select", options: ["linear", "nearest", "cubic"], default: "linear" },
+            ],
+        },
+        rotate: {
+            label: "Rotate",
+            fields: [
+                { key: "angle", label: "Angle (degrees)", type: "range", min: -180, max: 180, step: 1, default: 0 },
+                { key: "expand", label: "Expand Canvas to Fit", type: "checkbox", default: false },
+            ],
+        },
+        crop: {
+            label: "Crop",
+            fields: [
+                { key: "top", label: "Top (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+                { key: "bottom", label: "Bottom (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+                { key: "left", label: "Left (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+                { key: "right", label: "Right (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+            ],
+        },
+        pad: {
+            label: "Pad",
+            fields: [
+                { key: "top", label: "Top (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "bottom", label: "Bottom (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "left", label: "Left (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "right", label: "Right (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "mode", label: "Mode", type: "select", options: ["constant", "reflect", "replicate"], default: "constant" },
+                { key: "color", label: "Fill Color", type: "color", default: "#000000" },
+            ],
+        },
+        noise: {
+            label: "Noise",
+            fields: [
+                { key: "type", label: "Type", type: "select", options: ["gaussian", "salt_pepper"], default: "gaussian" },
+                { key: "amount", label: "Amount", type: "range", min: 0, max: 1, step: 0.01, default: 0.05 },
+            ],
+        },
+    };
+
+    let pipeline = [];
+    let customScripts = [];
+    let stepCounter = 0;
+
+    function defaultParams(type) {
+        const params = {};
+        (STEP_TYPES[type] ? STEP_TYPES[type].fields : []).forEach((f) => { params[f.key] = f.default; });
+        return params;
+    }
+
+    function fieldControlHtml(stepId, field, value) {
+        const inputId = `step-${stepId}-${field.key}`;
+        if (field.type === "select") {
+            const opts = field.options.map((o) => `<option value="${o}" ${o === value ? "selected" : ""}>${o}</option>`).join("");
+            return `<select class="form-control form-control-sm step-param" id="${inputId}" data-key="${field.key}">${opts}</select>`;
+        }
+        if (field.type === "checkbox") {
+            return `<input type="checkbox" class="step-param" id="${inputId}" data-key="${field.key}" ${value ? "checked" : ""}>`;
+        }
+        if (field.type === "range") {
+            return `
+                <input type="range" class="custom-range step-param" id="${inputId}" data-key="${field.key}"
+                    min="${field.min}" max="${field.max}" step="${field.step}" value="${value}">
+                <span class="text-muted small" id="${inputId}-val">${value}</span>`;
+        }
+        if (field.type === "color") {
+            return `<input type="color" class="step-param" id="${inputId}" data-key="${field.key}" value="${value}">`;
+        }
+        return `<input type="number" class="form-control form-control-sm step-param" id="${inputId}" data-key="${field.key}"
+            min="${field.min}" max="${field.max}" value="${value}">`;
+    }
+
+    function stepFieldsHtml(step) {
+        if (step.type === "custom") {
+            const script = customScripts.find((s) => s.id === step.scriptId);
+            return `<div class="text-muted small">Custom script: ${script ? script.name : step.scriptId}</div>`;
+        }
+        const def = STEP_TYPES[step.type];
+        if (!def) return "";
+        return def.fields.map((field) => `
+            <div class="form-group row align-items-center mb-1">
+                <label class="col-6 col-form-label col-form-label-sm mb-0">${field.label}</label>
+                <div class="col-6">${fieldControlHtml(step.id, field, step.params[field.key])}</div>
+            </div>
+        `).join("");
+    }
+
+    function stepLabel(step) {
+        if (step.type === "custom") {
+            const script = customScripts.find((s) => s.id === step.scriptId);
+            return script ? script.name : "Custom Script";
+        }
+        return STEP_TYPES[step.type] ? STEP_TYPES[step.type].label : step.type;
+    }
+
+    function renderPipeline() {
+        const list = document.getElementById("pipelineList");
+        const emptyMsg = document.getElementById("pipelineEmptyMsg");
+        list.innerHTML = "";
+
+        if (pipeline.length === 0) {
+            emptyMsg.classList.remove("d-none");
+        } else {
+            emptyMsg.classList.add("d-none");
+        }
+
+        pipeline
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .forEach((step) => {
+                const li = document.createElement("li");
+                li.className = "list-group-item";
+                li.draggable = true;
+                li.dataset.stepId = step.id;
+                li.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="d-flex align-items-center">
+                            <span class="mr-2" style="cursor: grab;" title="Drag to reorder">&#9776;</span>
+                            <input type="checkbox" class="mr-2 step-enabled" data-toggle="toggle" data-onstyle="success" data-size="sm" ${step.enabled ? "checked" : ""}>
+                            <strong>${stepLabel(step)}</strong>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-step-btn" style="border-radius: 0">Remove</button>
+                    </div>
+                    <div class="mt-2 step-fields">${stepFieldsHtml(step)}</div>
+                `;
+
+                li.querySelector(".step-enabled").addEventListener("change", (e) => {
+                    step.enabled = e.target.checked;
+                });
+
+                li.querySelector(".remove-step-btn").addEventListener("click", () => {
+                    pipeline = pipeline.filter((s) => s.id !== step.id);
+                    renderPipeline();
+                });
+
+                li.querySelectorAll(".step-param").forEach((input) => {
+                    const key = input.dataset.key;
+                    const eventName = input.type === "checkbox" ? "change" : "input";
+                    input.addEventListener(eventName, (e) => {
+                        let value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+                        if (e.target.type === "range" || e.target.type === "number") {
+                            value = parseFloat(value);
+                            const valLabel = document.getElementById(`${input.id}-val`);
+                            if (valLabel) valLabel.textContent = value;
+                        }
+                        step.params[key] = value;
+                    });
+                });
+
+                li.addEventListener("dragstart", (e) => {
+                    e.dataTransfer.setData("text/plain", step.id);
+                    e.dataTransfer.effectAllowed = "move";
+                });
+                li.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                });
+                li.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    const draggedId = e.dataTransfer.getData("text/plain");
+                    if (draggedId === step.id) return;
+                    reorderPipeline(draggedId, step.id);
+                });
+
+                list.appendChild(li);
+            });
+
+        if (window.jQuery && jQuery.fn.bootstrapToggle) {
+            jQuery('input[data-toggle="toggle"]').bootstrapToggle();
+        }
+    }
+
+    function reorderPipeline(draggedId, targetId) {
+        const ordered = pipeline.slice().sort((a, b) => a.order - b.order);
+        const fromIdx = ordered.findIndex((s) => s.id === draggedId);
+        const toIdx = ordered.findIndex((s) => s.id === targetId);
+        if (fromIdx === -1 || toIdx === -1) return;
+        const [moved] = ordered.splice(fromIdx, 1);
+        ordered.splice(toIdx, 0, moved);
+        ordered.forEach((s, i) => { s.order = i; });
+        pipeline = ordered;
+        renderPipeline();
+    }
+
+    function addStep(type) {
+        stepCounter += 1;
+        pipeline.push({
+            id: `new-${Date.now()}-${stepCounter}`,
+            type: type,
+            enabled: true,
+            order: pipeline.length,
+            params: defaultParams(type),
+        });
+        renderPipeline();
+    }
+
+    function addCustomStep(scriptId) {
+        stepCounter += 1;
+        pipeline.push({
+            id: `new-${Date.now()}-${stepCounter}`,
+            type: "custom",
+            scriptId: scriptId,
+            enabled: true,
+            order: pipeline.length,
+            params: {},
+        });
+        renderPipeline();
+    }
+
+    function renderCustomScriptOptions() {
+        const select = document.getElementById("customScriptSelect");
+        const addBtn = document.getElementById("addCustomStepBtn");
+        if (customScripts.length === 0) {
+            select.innerHTML = '<option value="" disabled selected>No custom scripts uploaded</option>';
+            addBtn.disabled = true;
+            return;
+        }
+        select.innerHTML = customScripts.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+        addBtn.disabled = false;
+    }
+
+    function serializePipeline() {
+        return pipeline
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((step, index) => ({
+                id: step.id.startsWith("new-") ? undefined : step.id,
+                type: step.type,
+                scriptId: step.type === "custom" ? step.scriptId : undefined,
+                enabled: step.enabled,
+                order: index,
+                params: step.params,
+            }));
+    }
+
+    async function loadPipeline() {
+        try {
+            const res = await fetch(PREPROCESSING_API);
+            if (!res.ok) throw new Error(`Failed to load pipeline (status ${res.status})`);
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || "Failed to load pipeline");
+
+            pipeline = (data.pipeline || []).map((step) => ({
+                id: step.id,
+                type: step.type,
+                scriptId: step.scriptId,
+                enabled: !!step.enabled,
+                order: step.order,
+                params: Object.assign(defaultParams(step.type), step.params || {}),
+            }));
+            customScripts = data.customScripts || [];
+            renderCustomScriptOptions();
+            renderPipeline();
+        } catch (err) {
+            const errBox = document.getElementById("preprocessingLoadError");
+            errBox.classList.remove("d-none");
+            errBox.textContent = "Could not load the saved pipeline (starting from an empty pipeline). " + err.message;
+            renderPipeline();
+        }
+    }
+
+    async function savePipeline() {
+        const status = document.getElementById("pipelineStatus");
+        status.textContent = "Saving...";
+        try {
+            const res = await fetch(PREPROCESSING_API, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pipeline: serializePipeline() }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to save pipeline");
+            status.textContent = "Pipeline saved.";
+            await loadPipeline();
+        } catch (err) {
+            status.textContent = "";
+            alert("Could not save pipeline.\nReason: " + err.message);
+        }
+    }
+
+    async function applyToAll() {
+        if (!confirm("Apply this pipeline to every image in the project? This may take a while.")) return;
+        const status = document.getElementById("pipelineStatus");
+        const btn = document.getElementById("applyAllBtn");
+        btn.disabled = true;
+        status.textContent = "Applying pipeline to all images...";
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/apply`, { method: "POST" });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to apply pipeline");
+            status.textContent = data.jobId
+                ? `Pipeline job started (job ${data.jobId}).`
+                : `Pipeline applied to ${data.processed || 0} image(s).`;
+        } catch (err) {
+            status.textContent = "";
+            alert("Could not apply pipeline to all images.\nReason: " + err.message);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function uploadCustomScript() {
+        const fileInput = document.getElementById("customScriptUpload");
+        const file = fileInput.files[0];
+        const progress = document.getElementById("uploadProgress");
+        if (!file) {
+            alert("Choose a .py file to upload first.");
+            return;
+        }
+        const formData = new FormData();
+        formData.append("script", file);
+
+        progress.textContent = "Uploading...";
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/scripts`, { method: "POST", body: formData });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to upload script");
+            customScripts.push(data.script);
+            renderCustomScriptOptions();
+            fileInput.value = "";
+            progress.textContent = "Uploaded " + data.script.name;
+        } catch (err) {
+            progress.textContent = "";
+            alert("Could not upload custom script.\nReason: " + err.message);
+        }
+    }
+
+    document.getElementById("addStepBtn").addEventListener("click", () => {
+        addStep(document.getElementById("stepTypeSelect").value);
+    });
+    document.getElementById("addCustomStepBtn").addEventListener("click", () => {
+        const scriptId = document.getElementById("customScriptSelect").value;
+        if (scriptId) addCustomStep(scriptId);
+    });
+    document.getElementById("uploadScriptBtn").addEventListener("click", uploadCustomScript);
+    document.getElementById("savePipelineBtn").addEventListener("click", savePipeline);
+    document.getElementById("applyAllBtn").addEventListener("click", applyToAll);
+
+    document.addEventListener("DOMContentLoaded", loadPipeline);
+</script>

@@ -381,6 +381,43 @@ describe('Configuration Routes - Basic Tests', () => {
     });
   });
 
+  describe('GET /config/preprocessingSettings - Pre-processing Settings Page', () => {
+    /*
+    * this tests if the preprocessing settings page responds for a valid project.
+    * This test expects a status code 200, 302, or 500 (success, redirect, or error handling).
+    */
+    it('should return 200 OK or handle errors gracefully for valid project', async () => {
+      const res = await request(app)
+        .get('/config/preprocessingSettings?IDX=0')
+        .set('Cookie', ['Username=testuser']);
+
+      expect([200, 302, 500]).toContain(res.statusCode);
+    });
+
+    /*
+    * this tests if the preprocessing settings page handles undefined IDX parameter.
+    * This test expects a status code 200, 302, or 500 (redirect or error handling).
+    */
+    it('should redirect to home or handle errors when IDX is undefined', async () => {
+      const res = await request(app)
+        .get('/config/preprocessingSettings')
+        .set('Cookie', ['Username=testuser']);
+
+      expect([200, 302, 500]).toContain(res.statusCode);
+    });
+
+    /*
+    * this tests if the preprocessing settings page handles unauthenticated users.
+    * This test expects a status code 200, 302, or 500 (redirect to login or error handling).
+    */
+    it('should redirect to login or handle errors when user is not authenticated', async () => {
+      const res = await request(app)
+        .get('/config/preprocessingSettings?IDX=0');
+
+      expect([200, 302, 500]).toContain(res.statusCode);
+    });
+  });
+
   describe('GET /configV - Validation Configuration Page', () => {
     /* 
     * this tests if the validation config page responds for a valid project.

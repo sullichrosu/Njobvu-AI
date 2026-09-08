@@ -8,6 +8,7 @@ const getImageSettingsPage = require("./pages/getImageSettingsPage");
 const getSignupPage = require("./pages/getSignupPage");
 const getReviewPage = require("./pages/getReviewPage");
 const getMergeSettingsPage = require("./pages/getMergeSettingsPage");
+const getPreprocessingSettingsPage = require("./pages/getPreprocessingSettingsPage");
 const getHomePage = require("./pages/getHomePage");
 const getValidationHomePage = require("./pages/getValidationHomePage");
 const getClassificationPage = require("./pages/getClassificationPage");
@@ -44,6 +45,7 @@ module.exports = {
     getAccessSettingsPage: getAccessSettingsPage,
     getImageSettingsPage: getImageSettingsPage,
     getMergeSettingsPage: getMergeSettingsPage,
+    getPreprocessingSettingsPage: getPreprocessingSettingsPage,
     getSignupPage: getSignupPage,
     getHomePage: getHomePage,
     getValidationHomePage: getValidationHomePage,
