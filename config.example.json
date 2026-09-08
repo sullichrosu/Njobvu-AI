@@ -10,5 +10,7 @@
     "default_7z_path": "/usr/bin/7z",
     "training_max_buffer_size": 5,
     "ssl_key_path": "",
-    "ssl_cert_path": ""
+    "ssl_cert_path": "",
+    "slurm_bin_path": "",
+    "slurm_allowed_users": []
 }

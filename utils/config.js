@@ -15,7 +15,9 @@ const defaultConfig = {
     training_max_buffer_size: 5,
     ssl_key_path: "",
     ssl_cert_path: "",
-    chat_required_role: "user"
+    chat_required_role: "user",
+    slurm_bin_path: "",
+    slurm_allowed_users: []
 };
 
 // Numeric fields that should be parsed as integers

@@ -74,6 +74,13 @@ const {
     syncS3Bucket,
     getProjectImage,
 } = require("./api/v2/s3Buckets");
+const {
+    getSlurmAccess,
+    listSlurmJobs,
+    getSlurmJobStatus,
+    submitTrainingJob,
+    submitInferenceJob,
+} = require("./api/v2/slurmJobs");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -193,6 +200,14 @@ api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
 api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
 api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
 api.get("/api/v2/projects/:admin/:projectName/images/:imageName", getProjectImage);
+
+// SLURM/HPC ROUTES (strangler-fig v2, additive alongside local /run and
+// /yolo-inf/etc. exec launches - see routes/api/v2/slurmJobs.js)
+api.get("/api/v2/slurm/access", getSlurmAccess);
+api.get("/api/v2/slurm/jobs", listSlurmJobs);
+api.get("/api/v2/slurm/jobs/:slurmJobId", getSlurmJobStatus);
+api.post("/api/v2/slurm/training-jobs", submitTrainingJob);
+api.post("/api/v2/slurm/inference-jobs", submitInferenceJob);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);
