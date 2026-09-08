@@ -75,6 +75,13 @@ const {
     getProjectImage,
 } = require("./api/v2/s3Buckets");
 const { mapAnnotationsCsv, getAnnotationsCsvTemplate } = require("./api/v2/mapAnnotationsCsv");
+const {
+    getPreprocessingPipeline,
+    savePreprocessingPipeline,
+    uploadCustomScript,
+    deleteCustomScript,
+    applyPreprocessingPipeline,
+} = require("./api/v2/preprocessing");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -197,6 +204,13 @@ api.get("/api/v2/projects/:admin/:projectName/s3-bucket", getS3Bucket);
 api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", deleteS3Bucket);
 api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
 api.get("/api/v2/projects/:admin/:projectName/images/:imageName", getProjectImage);
+
+// PRE-PROCESSING ROUTES (pipeline CRUD + custom scripts + apply-to-all-images job)
+api.get("/api/v2/projects/:admin/:projectName/preprocessing", getPreprocessingPipeline);
+api.put("/api/v2/projects/:admin/:projectName/preprocessing", savePreprocessingPipeline);
+api.post("/api/v2/projects/:admin/:projectName/preprocessing/scripts", uploadCustomScript);
+api.delete("/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId", deleteCustomScript);
+api.post("/api/v2/projects/:admin/:projectName/preprocessing/apply", applyPreprocessingPipeline);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);
