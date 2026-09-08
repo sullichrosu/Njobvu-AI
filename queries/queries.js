@@ -6,6 +6,7 @@ const images = require("./images/images");
 const labelling = require("./labelling/labelling");
 const validation = require("./validation/validation");
 const s3 = require("./s3/s3");
+const preprocessing = require("./preprocessing/preprocessing");
 const getDbClient = require("./getDbClient");
 
 module.exports = {
@@ -14,6 +15,7 @@ module.exports = {
         ...access.managed,
         ...projects.managed,
         ...s3.managed,
+        ...preprocessing.managed,
         sql: async function (sql, params) {
             try {
                 const result = await global.managedDbClient.run(sql, params);
