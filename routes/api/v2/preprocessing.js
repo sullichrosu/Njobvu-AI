@@ -1,9 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { exec } = require("child_process");
+const { execFile } = require("child_process");
 const queries = require("../../../queries/queries");
 const config = require("../../../utils/config");
+const { sanitizeCode } = require("../../../utils/sandboxedPythonRunner");
 
 const BUILTIN_STEP_TYPES = new Set([
     "illumination_normalization",
@@ -166,6 +167,16 @@ async function uploadCustomScript(req, res) {
         return res.status(400).json({ success: false, error: "Script file is too large (max 1MB)" });
     }
 
+    // Custom steps run in-process inside the generated pipeline (run_pipeline.py
+    // importlib-imports and calls them directly) - reject anything that trips the
+    // existing sandboxed-runner's static checks before it's ever written to disk,
+    // rather than after it can already execute.
+    try {
+        sanitizeCode(file.data.toString("utf8"));
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message });
+    }
+
     const scriptId = crypto.randomUUID();
     const fileName = `${scriptId}-${sanitizeFileName(file.name)}`;
     const scriptsDir = path.join(projectPath, "preprocessing", "scripts");
@@ -280,17 +291,23 @@ async function applyPreprocessingPipeline(req, res) {
         const pythonPath = config.default_python_path || "python3";
         const wrapperPath = path.join(currentPath, "controllers", "preprocessing", "run_pipeline.py");
         const imagesPath = path.join(projectPath, "images");
-        const cmd = `${pythonPath} "${wrapperPath}" --images "${imagesPath}" --manifest "${manifestPath}" --output "${outputPath}"`;
 
-        exec(cmd, (err, stdout, stderr) => {
-            const summary = err
-                ? `FAILED: ${err.message}\n${stderr || ""}`
-                : `SUCCEEDED\n${stdout || ""}`;
-            fs.writeFile(logPath, summary, () => {});
-            if (err) {
-                global.logger.error(`Pre-processing job ${jobId} failed:`, err);
-            }
-        });
+        // execFile (no shell) rather than exec(<interpolated string>): projectName/paths
+        // land in this argument list, and a shell would let a metacharacter in either
+        // break out of the command instead of being passed through as a literal arg.
+        execFile(
+            pythonPath,
+            [wrapperPath, "--images", imagesPath, "--manifest", manifestPath, "--output", outputPath],
+            (err, stdout, stderr) => {
+                const summary = err
+                    ? `FAILED: ${err.message}\n${stderr || ""}`
+                    : `SUCCEEDED\n${stdout || ""}`;
+                fs.writeFile(logPath, summary, () => {});
+                if (err) {
+                    global.logger.error(`Pre-processing job ${jobId} failed:`, err);
+                }
+            },
+        );
 
         return res.status(200).json({ success: true, jobId });
     } catch (err) {

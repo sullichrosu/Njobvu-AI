@@ -99,15 +99,31 @@ PAD_MODES = {
 }
 
 
+def hex_to_bgr(value):
+    """Parses the UI's `<input type="color">` value ("#rrggbb") into a
+    cv2-ordered (B, G, R) tuple. Falls back to black for anything else
+    (an [r, g, b] array, missing/malformed input, etc.)."""
+    if isinstance(value, str) and len(value) == 7 and value.startswith("#"):
+        r = int(value[1:3], 16)
+        g = int(value[3:5], 16)
+        b = int(value[5:7], 16)
+        return (b, g, r)
+
+    if isinstance(value, (list, tuple)) and len(value) == 3:
+        return tuple(value)
+
+    return (0, 0, 0)
+
+
 def apply_pad(img, params):
     top = max(0, int(params.get("top", 0)))
     bottom = max(0, int(params.get("bottom", 0)))
     left = max(0, int(params.get("left", 0)))
     right = max(0, int(params.get("right", 0)))
     mode = PAD_MODES.get(params.get("mode"), cv2.BORDER_CONSTANT)
-    color = params.get("color") or [0, 0, 0]
+    color = hex_to_bgr(params.get("color"))
 
-    return cv2.copyMakeBorder(img, top, bottom, left, right, mode, value=tuple(color))
+    return cv2.copyMakeBorder(img, top, bottom, left, right, mode, value=color)
 
 
 def apply_noise(img, params):

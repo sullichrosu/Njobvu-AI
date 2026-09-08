@@ -1,5 +1,5 @@
 jest.mock('child_process', () => ({
-    exec: jest.fn((cmd, cb) => cb && cb(null, 'ok', '')),
+    execFile: jest.fn((cmd, args, cb) => cb && cb(null, 'ok', '')),
 }));
 
 jest.mock('../../utils/config', () => ({
@@ -24,7 +24,7 @@ const request = require('supertest');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const fileUpload = require('express-fileupload');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const queries = require('../../queries/queries');
 const {
     getPreprocessingPipeline,
@@ -219,6 +219,21 @@ describe('Pre-processing Pipeline Routes', () => {
             expect(queries.project.addCustomScript).not.toHaveBeenCalled();
         });
 
+        it('rejects a script that fails the sandboxed-runner static safety check, without writing it to disk', async () => {
+            const scriptsDir = path.join(projectPath, 'preprocessing', 'scripts');
+            const before = fs.existsSync(scriptsDir) ? fs.readdirSync(scriptsDir) : [];
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/preprocessing/scripts')
+                .set('Cookie', ['Username=testuser'])
+                .attach('script', Buffer.from('import os\nos.system("rm -rf /")\n'), 'malicious.py');
+
+            expect(res.statusCode).toBe(400);
+            expect(queries.project.addCustomScript).not.toHaveBeenCalled();
+            const after = fs.existsSync(scriptsDir) ? fs.readdirSync(scriptsDir) : [];
+            expect(after).toEqual(before);
+        });
+
         it('rejects a request with no file attached', async () => {
             const res = await request(app)
                 .post('/api/v2/projects/testuser/test-project/preprocessing/scripts')
@@ -268,7 +283,11 @@ describe('Pre-processing Pipeline Routes', () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.jobId).toBeDefined();
-            expect(exec).toHaveBeenCalledWith(expect.stringContaining('/usr/bin/python3'), expect.any(Function));
+            expect(execFile).toHaveBeenCalledWith(
+                '/usr/bin/python3',
+                expect.arrayContaining(['--images', '--manifest', '--output']),
+                expect.any(Function),
+            );
         });
 
         it('rejects when the pipeline has no enabled steps', async () => {
@@ -282,7 +301,7 @@ describe('Pre-processing Pipeline Routes', () => {
                 .set('Cookie', ['Username=testuser']);
 
             expect(res.statusCode).toBe(400);
-            expect(exec).not.toHaveBeenCalled();
+            expect(execFile).not.toHaveBeenCalled();
         });
 
         it('rejects requests from a non-owner', async () => {
@@ -291,7 +310,7 @@ describe('Pre-processing Pipeline Routes', () => {
                 .set('Cookie', ['Username=someone-else']);
 
             expect(res.statusCode).toBe(403);
-            expect(exec).not.toHaveBeenCalled();
+            expect(execFile).not.toHaveBeenCalled();
         });
     });
 });
