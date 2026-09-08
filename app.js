@@ -33,6 +33,7 @@ const {
     getAccessSettingsPage,
     getImageSettingsPage,
     getMergeSettingsPage,
+    getPreprocessingSettingsPage,
     getServerStatsPage,
     get404Page,
     getValidationHomePage,
@@ -79,6 +80,7 @@ app.get("/config/classSettings", getClassSettingsPage);
 app.get("/config/accessSettings", getAccessSettingsPage);
 app.get("/config/imageSettings", getImageSettingsPage);
 app.get("/config/mergeSettings", getMergeSettingsPage);
+app.get("/config/preprocessingSettings", getPreprocessingSettingsPage);
 app.get("/download", getDownloadPage);
 app.get("/labeling", getLabelingPage);
 app.get("/stats", getStatsPage);
