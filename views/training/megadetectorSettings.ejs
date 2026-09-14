@@ -181,6 +181,34 @@
                         console.log(error);
                     });
                 });
+
+                // Additive "Launch on HPC" option (strangler-fig): submits the
+                // same fields as the local /megadetector-inf run above, but to
+                // the Slurm endpoint. Hidden entirely when the user has no
+                // Slurm access.
+                HpcLaunch.init({
+                    formId: "megadetector-inf",
+                    endpoint: "/api/v2/slurm/inference-jobs",
+                    redirectUrl: "/hpc/jobs?IDX=<%= IDX %>",
+                    collectFields: function () {
+                        var inferenceFile = document.getElementById("Inference_md").value;
+
+                        if (!inferenceFile) {
+                            alert("Must select an inference file");
+                            return false;
+                        }
+
+                        return {
+                            PName: "<%= PName %>",
+                            Admin: "<%= Admin %>",
+                            inference_type: "megadetector",
+                            model: document.getElementById("model").value,
+                            threshold: document.getElementById("threshold").value,
+                            fps: document.getElementById("fps").value,
+                            inference_file: inferenceFile,
+                        };
+                    },
+                });
             });
         </script>
         <%- include('../includes/footer') %>

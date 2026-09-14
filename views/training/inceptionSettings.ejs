@@ -299,6 +299,43 @@ document.getElementById("inception-inf").addEventListener('submit', (event) => {
         console.log(error);
     });
 });
+
+// Additive "Launch on HPC" option (strangler-fig): submits the same fields
+// as the local /inception-inf run above, but to the Slurm endpoint. Hidden
+// entirely when the user has no Slurm access.
+HpcLaunch.init({
+    formId: "inception-inf",
+    endpoint: "/api/v2/slurm/inference-jobs",
+    redirectUrl: "/hpc/jobs?IDX=<%= IDX %>",
+    collectFields: function () {
+        var weights_file = document.getElementById("Weights_inf").value;
+        var inference_file = document.getElementById("Inference").value;
+        var topK = document.getElementById("TopK").value;
+
+        if (weights_file == "") {
+            alert("Must select a weights file");
+            return false;
+        }
+        if (inference_file == "") {
+            alert("Must select an inference file");
+            return false;
+        }
+        if (!topK) {
+            alert("Must choose a Top K value");
+            return false;
+        }
+
+        return {
+            PName: "<%= PName %>",
+            Admin: "<%= Admin %>",
+            inference_type: "inception",
+            weights: weights_file,
+            inference_file: inference_file,
+            using_imagenet_classes: document.getElementById("ImageNet").checked,
+            topK: topK,
+        };
+    },
+});
 </script>
 
 <%- include('../includes/footer') %>

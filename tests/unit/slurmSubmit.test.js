@@ -53,6 +53,28 @@ describe('utils/slurmSubmit', () => {
             expect(scriptContent).toContain('python3 train.py');
         });
 
+        it('adds an #SBATCH --partition line when a partition is given', async () => {
+            execFile.mockImplementation((bin, args, cb) => cb(null, 'Submitted batch job 4242\n', ''));
+
+            await submitSbatchJob({
+                jobName: 'my_job', command: 'python3 train.py', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`, partition: 'gpu',
+            });
+
+            const scriptContent = fs.readFileSync(path.join(runPath, 'slurm_submit.sh'), 'utf8');
+            expect(scriptContent).toContain('#SBATCH --partition=gpu');
+        });
+
+        it('omits the partition line when no partition is given', async () => {
+            execFile.mockImplementation((bin, args, cb) => cb(null, 'Submitted batch job 4242\n', ''));
+
+            await submitSbatchJob({
+                jobName: 'my_job', command: 'python3 train.py', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`,
+            });
+
+            const scriptContent = fs.readFileSync(path.join(runPath, 'slurm_submit.sh'), 'utf8');
+            expect(scriptContent).not.toContain('--partition');
+        });
+
         it('rejects when sbatch exits with an error', async () => {
             execFile.mockImplementation((bin, args, cb) => cb(new Error('boom'), '', 'sbatch: error: bad partition'));
 

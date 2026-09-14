@@ -1,0 +1,135 @@
+<%- include('../includes/header', { activePage }) %>
+<%- include('../includes/processingNav', { activePage }) %>
+<script>
+    if ("<%= access.includes(user)%>" == "false") {
+        window.location.replace("/home");
+    }
+</script>
+<div id="hpc-jobs" style="width: 100%">
+    <div class="container">
+        <h3>HPC (Slurm) Jobs <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Training/inference jobs launched on the HPC via the 'Launch on HPC' option, across all your projects">?</span></h3>
+
+        <div id="hpc-jobs-disabled" style="display: none;" class="alert alert-secondary"></div>
+
+        <div id="hpc-jobs-table-wrap" style="display: none;">
+            <div class="col-12">
+                <table class="table table-striped">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th scope="col">Slurm Job ID</th>
+                            <th scope="col">Project</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Partition</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Submitted</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hpc-jobs-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="hpc-jobs-empty" style="display: none;">No HPC jobs submitted yet.</div>
+    </div>
+</div>
+<script>
+    var TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL", "OUT_OF_MEMORY"];
+    var POLL_INTERVAL_MS = 10000;
+
+    function statusBadgeClass(status) {
+        if (status === "COMPLETED") return "badge-success";
+        if (status === "RUNNING") return "badge-primary";
+        if (TERMINAL_STATUSES.indexOf(status) !== -1) return "badge-danger";
+        return "badge-secondary";
+    }
+
+    function renderRow(job) {
+        var row = document.createElement("tr");
+        row.id = "hpc-job-row-" + job.SlurmJobId;
+        row.innerHTML =
+            "<td>" + job.SlurmJobId + "</td>" +
+            "<td>" + (job.Admin || "") + "-" + (job.PName || "") + "</td>" +
+            "<td>" + (job.JobType || "") + "</td>" +
+            "<td>" + (job.Partition || "—") + "</td>" +
+            '<td><span class="badge ' + statusBadgeClass(job.Status) + '" id="hpc-job-status-' + job.SlurmJobId + '">' + job.Status + "</span></td>" +
+            "<td>" + (job.SubmittedAt ? new Date(job.SubmittedAt).toLocaleString() : "") + "</td>";
+        return row;
+    }
+
+    function updateRowStatus(job) {
+        var badge = document.getElementById("hpc-job-status-" + job.SlurmJobId);
+        if (badge) {
+            badge.textContent = job.Status;
+            badge.className = "badge " + statusBadgeClass(job.Status);
+        }
+    }
+
+    function pollJob(slurmJobId) {
+        fetch("/api/v2/slurm/jobs/" + slurmJobId)
+            .then(function (resp) { return resp.json(); })
+            .then(function (body) {
+                if (!body.success || !body.job) {
+                    return;
+                }
+
+                updateRowStatus(body.job);
+
+                if (TERMINAL_STATUSES.indexOf(body.job.Status) === -1) {
+                    setTimeout(function () { pollJob(slurmJobId); }, POLL_INTERVAL_MS);
+                }
+            })
+            .catch(function (error) {
+                console.log("Failed to refresh HPC job " + slurmJobId + ":", error);
+            });
+    }
+
+    function loadJobs() {
+        fetch("/api/v2/slurm/jobs")
+            .then(function (resp) { return resp.json(); })
+            .then(function (body) {
+                if (!body.success) {
+                    return;
+                }
+
+                var jobs = body.jobs || [];
+                var tbody = document.getElementById("hpc-jobs-body");
+
+                if (jobs.length === 0) {
+                    document.getElementById("hpc-jobs-empty").style.display = "block";
+                    return;
+                }
+
+                document.getElementById("hpc-jobs-table-wrap").style.display = "block";
+
+                jobs.forEach(function (job) {
+                    tbody.appendChild(renderRow(job));
+
+                    if (TERMINAL_STATUSES.indexOf(job.Status) === -1) {
+                        setTimeout(function () { pollJob(job.SlurmJobId); }, POLL_INTERVAL_MS);
+                    }
+                });
+            })
+            .catch(function (error) {
+                console.log("Failed to load HPC jobs:", error);
+            });
+    }
+
+    fetch("/api/v2/slurm/access")
+        .then(function (resp) { return resp.json(); })
+        .then(function (access) {
+            if (!access.success || !access.configured || !access.allowed) {
+                var el = document.getElementById("hpc-jobs-disabled");
+                el.textContent = !access.configured
+                    ? "HPC (Slurm) is not configured on this server."
+                    : "Your account does not have HPC access.";
+                el.style.display = "block";
+                return;
+            }
+
+            loadJobs();
+        })
+        .catch(function (error) {
+            console.log("HPC access check failed:", error);
+        });
+</script>
+<%- include('../includes/footer') %>

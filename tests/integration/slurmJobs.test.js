@@ -78,7 +78,7 @@ describe('Slurm job routes', () => {
                 .set('Cookie', ['Username=testuser']);
 
             expect(res.statusCode).toBe(200);
-            expect(res.body).toEqual({ success: true, configured: false, allowed: false });
+            expect(res.body).toEqual({ success: true, configured: false, allowed: false, partitions: [] });
         });
 
         it('allows any logged-in user once configured, when the allowlist is empty', async () => {
@@ -88,7 +88,7 @@ describe('Slurm job routes', () => {
                 .get('/api/v2/slurm/access')
                 .set('Cookie', ['Username=testuser']);
 
-            expect(res.body).toEqual({ success: true, configured: true, allowed: true });
+            expect(res.body).toEqual({ success: true, configured: true, allowed: true, partitions: [] });
         });
 
         it('restricts access to users on a non-empty allowlist', async () => {
@@ -103,6 +103,20 @@ describe('Slurm job routes', () => {
 
             expect(denied.body.allowed).toBe(false);
             expect(allowed.body.allowed).toBe(true);
+        });
+
+        it('surfaces the admin-curated partition list for the frontend <select>', async () => {
+            global.configFile = {
+                slurm_bin_path: '/opt/slurm/bin',
+                slurm_allowed_users: [],
+                slurm_partitions: ['gpu', 'cpu'],
+            };
+
+            const res = await request(app)
+                .get('/api/v2/slurm/access')
+                .set('Cookie', ['Username=testuser']);
+
+            expect(res.body.partitions).toEqual(['gpu', 'cpu']);
         });
     });
 
@@ -251,7 +265,7 @@ describe('Slurm job routes', () => {
         it('submits the prepared job via sbatch and records it', async () => {
             global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
             prepareTrainingSubmission.mockResolvedValue({
-                cmd: '/path/train_data_from_project.py -p python3 -s train.py -l log -o opts',
+                command: '/path/train_data_from_project.py -p python3 -s train.py -l log -o opts',
                 runPath: '/proj/training/logs/123',
                 jobName: 'train_proj_123',
                 logFile: '/proj/training/logs/123/sbatch.out',
@@ -276,13 +290,61 @@ describe('Slurm job routes', () => {
                 'training',
                 '/proj/training/logs/123',
                 expect.any(String),
+                undefined,
+            );
+        });
+
+        it('rejects a missing partition when slurm_partitions is configured', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ PName: 'proj', Admin: 'admin', python_path: 'python3', script: 'train.py' });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.success).toBe(false);
+            expect(prepareTrainingSubmission).not.toHaveBeenCalled();
+            expect(submitSbatchJob).not.toHaveBeenCalled();
+        });
+
+        it('rejects a partition that is not on the configured list', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ PName: 'proj', Admin: 'admin', python_path: 'python3', script: 'train.py', partition: 'not-a-real-partition' });
+
+            expect(res.statusCode).toBe(400);
+            expect(prepareTrainingSubmission).not.toHaveBeenCalled();
+        });
+
+        it('accepts and threads through a valid partition', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+            prepareTrainingSubmission.mockResolvedValue({
+                command: 'cmd', runPath: '/proj/training/logs/123', jobName: 'train_proj_123',
+                logFile: '/proj/training/logs/123/sbatch.out', errFile: '/proj/training/logs/123/123-error.log',
+                PName: 'proj', Admin: 'admin',
+            });
+            submitSbatchJob.mockResolvedValue({ slurmJobId: '999' });
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ PName: 'proj', Admin: 'admin', python_path: 'python3', script: 'train.py', partition: 'gpu' });
+
+            expect(res.statusCode).toBe(200);
+            expect(submitSbatchJob).toHaveBeenCalledWith(expect.objectContaining({ partition: 'gpu' }));
+            expect(queries.managed.recordSlurmJob).toHaveBeenCalledWith(
+                '999', 'testuser', 'proj', 'admin', 'training', '/proj/training/logs/123', expect.any(String), 'gpu',
             );
         });
 
         it('reports a 500 when sbatch submission itself fails', async () => {
             global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
             prepareTrainingSubmission.mockResolvedValue({
-                cmd: 'cmd', runPath: '/run', jobName: 'job', logFile: '/run/log', errFile: '/run/err', PName: 'proj', Admin: 'admin',
+                command: 'cmd', runPath: '/run', jobName: 'job', logFile: '/run/log', errFile: '/run/err', PName: 'proj', Admin: 'admin',
             });
             submitSbatchJob.mockRejectedValue(new Error('sbatch: command not found'));
 
@@ -347,7 +409,7 @@ describe('Slurm job routes', () => {
             async (inferenceType) => {
                 global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
                 prepareInferenceSubmission.mockResolvedValue({
-                    cmd: `python3 ${inferenceType}.py`,
+                    command: `python3 ${inferenceType}.py`,
                     runPath: `/proj/inference/logs/123`,
                     jobName: `inference_${inferenceType}_proj_123`,
                     logFile: `/proj/inference/logs/123/sbatch.out`,
@@ -372,6 +434,7 @@ describe('Slurm job routes', () => {
                     'inference',
                     '/proj/inference/logs/123',
                     expect.any(String),
+                    undefined,
                 );
             },
         );
@@ -379,7 +442,7 @@ describe('Slurm job routes', () => {
         it('reports a 500 when sbatch submission itself fails', async () => {
             global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
             prepareInferenceSubmission.mockResolvedValue({
-                cmd: 'cmd', runPath: '/run', jobName: 'job', logFile: '/run/log', errFile: '/run/err', PName: 'proj', Admin: 'admin',
+                command: 'cmd', runPath: '/run', jobName: 'job', logFile: '/run/log', errFile: '/run/err', PName: 'proj', Admin: 'admin',
             });
             submitSbatchJob.mockRejectedValue(new Error('sbatch: command not found'));
 

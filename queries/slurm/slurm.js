@@ -8,10 +8,11 @@ module.exports = {
             jobType,
             runPath,
             submittedAt,
+            partition,
         ) {
             const query =
-                "INSERT INTO SlurmJobs (SlurmJobId, Username, PName, Admin, JobType, RunPath, Status, SubmittedAt) " +
-                "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?)";
+                "INSERT INTO SlurmJobs (SlurmJobId, Username, PName, Admin, JobType, RunPath, Status, SubmittedAt, Partition) " +
+                "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)";
 
             return await global.managedDbClient.run(query, [
                 slurmJobId,
@@ -21,6 +22,7 @@ module.exports = {
                 jobType,
                 runPath,
                 submittedAt,
+                partition || null,
             ]);
         },
         updateSlurmJobStatus: async function (slurmJobId, status, updatedAt) {

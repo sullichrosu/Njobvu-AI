@@ -1,5 +1,5 @@
 const queries = require("../../../queries/queries");
-const { hasSlurmAccess, isSlurmConfigured } = require("../../../utils/slurmAccess");
+const { hasSlurmAccess, isSlurmConfigured, getSlurmPartitions, isValidSlurmPartition } = require("../../../utils/slurmAccess");
 const { submitSbatchJob, getSlurmJobRuntimeStatus } = require("../../../utils/slurmSubmit");
 const { prepareTrainingSubmission } = require("../../../utils/slurmTrainingJob");
 const { prepareInferenceSubmission } = require("../../../utils/slurmInferenceJob");
@@ -7,7 +7,9 @@ const { prepareInferenceSubmission } = require("../../../utils/slurmInferenceJob
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL", "OUT_OF_MEMORY"]);
 
 // GET /api/v2/slurm/access - lets the front end decide whether to offer an
-// "HPC" launch option at all, and why not when it can't.
+// "HPC" launch option at all, and why not when it can't. `partitions` drives
+// a plain <select> on the client - an empty list means the cluster has no
+// partition concept worth exposing, so the client skips the selector.
 async function getSlurmAccess(req, res) {
     const username = req.cookies && req.cookies.Username;
 
@@ -19,7 +21,32 @@ async function getSlurmAccess(req, res) {
         success: true,
         configured: isSlurmConfigured(),
         allowed: hasSlurmAccess(username),
+        partitions: getSlurmPartitions(),
     });
+}
+
+// Resolves and validates req.body.partition against the admin-curated
+// slurm_partitions list. When the list is empty, partition selection isn't
+// offered at all, so no partition is required or forwarded to sbatch. When
+// it's non-empty, a partition is required and must be on the list - this is
+// the server-side half of "foolproof": the frontend only ever offers a
+// <select> built from this same list, but the backend can't trust that.
+function resolvePartition(req) {
+    const partitions = getSlurmPartitions();
+
+    if (partitions.length === 0) {
+        return undefined;
+    }
+
+    const partition = req.body.partition;
+
+    if (!partition || !isValidSlurmPartition(partition)) {
+        const err = new Error(`Invalid or missing Slurm partition - expected one of: ${partitions.join(", ")}`);
+        err.statusCode = 400;
+        throw err;
+    }
+
+    return partition;
 }
 
 // GET /api/v2/slurm/jobs - job history for the requesting user, across projects.
@@ -97,6 +124,13 @@ async function submitTrainingJob(req, res) {
         return res.status(400).json({ success: false, error: "Slurm is not configured on this server" });
     }
 
+    let partition;
+    try {
+        partition = resolvePartition(req);
+    } catch (err) {
+        return res.status(err.statusCode || 500).json({ success: false, error: err.message });
+    }
+
     let submission;
     try {
         submission = await prepareTrainingSubmission(req);
@@ -106,7 +140,7 @@ async function submitTrainingJob(req, res) {
     }
 
     try {
-        const { slurmJobId } = await submitSbatchJob(submission);
+        const { slurmJobId } = await submitSbatchJob({ ...submission, partition });
 
         await queries.managed.recordSlurmJob(
             slurmJobId,
@@ -116,6 +150,7 @@ async function submitTrainingJob(req, res) {
             "training",
             submission.runPath,
             new Date().toISOString(),
+            partition,
         );
 
         return res.status(200).json({ success: true, slurmJobId, runPath: submission.runPath });
@@ -145,6 +180,13 @@ async function submitInferenceJob(req, res) {
         return res.status(400).json({ success: false, error: "Slurm is not configured on this server" });
     }
 
+    let partition;
+    try {
+        partition = resolvePartition(req);
+    } catch (err) {
+        return res.status(err.statusCode || 500).json({ success: false, error: err.message });
+    }
+
     let submission;
     try {
         submission = await prepareInferenceSubmission(req);
@@ -154,7 +196,7 @@ async function submitInferenceJob(req, res) {
     }
 
     try {
-        const { slurmJobId } = await submitSbatchJob(submission);
+        const { slurmJobId } = await submitSbatchJob({ ...submission, partition });
 
         await queries.managed.recordSlurmJob(
             slurmJobId,
@@ -164,6 +206,7 @@ async function submitInferenceJob(req, res) {
             "inference",
             submission.runPath,
             new Date().toISOString(),
+            partition,
         );
 
         return res.status(200).json({ success: true, slurmJobId, runPath: submission.runPath });

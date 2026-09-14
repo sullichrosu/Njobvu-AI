@@ -6,7 +6,7 @@ const { execFile } = require("child_process");
 // running it in-process with `exec`. Uses execFile (argv array, no shell)
 // so job names / paths built from user-influenced project data can't be
 // interpreted as shell metacharacters.
-function submitSbatchJob({ jobName, command, runPath, logFile, errFile }) {
+function submitSbatchJob({ jobName, command, runPath, logFile, errFile, partition }) {
     return new Promise((resolve, reject) => {
         const slurmBinPath = (global.configFile && global.configFile.slurm_bin_path) || "";
 
@@ -18,6 +18,7 @@ function submitSbatchJob({ jobName, command, runPath, logFile, errFile }) {
         const scriptContent = [
             "#!/bin/bash",
             `#SBATCH --job-name=${jobName}`,
+            ...(partition ? [`#SBATCH --partition=${partition}`] : []),
             `#SBATCH --output=${logFile}`,
             `#SBATCH --error=${errFile}`,
             "",

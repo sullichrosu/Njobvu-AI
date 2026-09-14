@@ -375,6 +375,38 @@
                         });
 
 
+                        // Additive "Launch on HPC" option (strangler-fig): submits the
+                        // same fields as the local /yolo-inf run above, but to the Slurm
+                        // endpoint. Hidden entirely when the user has no Slurm access.
+                        HpcLaunch.init({
+                            formId: "yolo-inf",
+                            endpoint: "/api/v2/slurm/inference-jobs",
+                            redirectUrl: "/hpc/jobs?IDX=<%= IDX %>",
+                            collectFields: function () {
+                                var weights_file = document.getElementById("Weights_inf").value;
+                                var inference_file = document.getElementById("Inference").value;
+
+                                if (weights_file == "") {
+                                    alert("Must select a weights file");
+                                    return false;
+                                }
+                                if (inference_file == "") {
+                                    alert("Must select an inference file");
+                                    return false;
+                                }
+
+                                return {
+                                    PName: "<%= PName %>",
+                                    Admin: "<%= Admin %>",
+                                    inference_type: "yolo",
+                                    yolovx_path: document.getElementById("Yolo").value,
+                                    weights: weights_file,
+                                    inference_file: inference_file,
+                                    yolo_task: document.getElementById("yolo_task").value,
+                                };
+                            },
+                        });
+
                         if (document.forms['yolo-run']) {
                             document.forms['yolo-run'].addEventListener('submit', (event) => {
                                 event.preventDefault();

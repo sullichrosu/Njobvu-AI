@@ -17,7 +17,8 @@ const defaultConfig = {
     ssl_cert_path: "",
     chat_required_role: "user",
     slurm_bin_path: "",
-    slurm_allowed_users: []
+    slurm_allowed_users: [],
+    slurm_partitions: []
 };
 
 // Numeric fields that should be parsed as integers

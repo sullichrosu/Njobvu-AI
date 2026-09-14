@@ -156,7 +156,7 @@ async function buildYoloSubmission(req) {
 
     fs.writeFileSync(`${ctx.runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
-    return { cmd, runPath: ctx.runPath, jobName: `inference_yolo_${ctx.PName}_${ctx.date}`, logFile: `${ctx.runPath}/sbatch.out`, errFile: `${ctx.runPath}/${errFile}`, PName: ctx.PName, Admin: ctx.Admin };
+    return { command: cmd, runPath: ctx.runPath, jobName: `inference_yolo_${ctx.PName}_${ctx.date}`, logFile: `${ctx.runPath}/sbatch.out`, errFile: `${ctx.runPath}/${errFile}`, PName: ctx.PName, Admin: ctx.Admin };
 }
 
 async function buildMegadetectorSubmission(req) {
@@ -193,7 +193,7 @@ async function buildMegadetectorSubmission(req) {
 
     fs.writeFileSync(`${ctx.runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
-    return { cmd, runPath: ctx.runPath, jobName: `inference_megadetector_${ctx.PName}_${ctx.date}`, logFile: `${ctx.runPath}/sbatch.out`, errFile: `${ctx.runPath}/${errFile}`, PName: ctx.PName, Admin: ctx.Admin };
+    return { command: cmd, runPath: ctx.runPath, jobName: `inference_megadetector_${ctx.PName}_${ctx.date}`, logFile: `${ctx.runPath}/sbatch.out`, errFile: `${ctx.runPath}/${errFile}`, PName: ctx.PName, Admin: ctx.Admin };
 }
 
 async function buildInceptionSubmission(req) {
@@ -242,7 +242,7 @@ async function buildInceptionSubmission(req) {
 
     fs.writeFileSync(`${ctx.runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
-    return { cmd, runPath: ctx.runPath, jobName: `inference_inception_${ctx.PName}_${ctx.date}`, logFile: `${ctx.runPath}/sbatch.out`, errFile: `${ctx.runPath}/${errFile}`, PName: ctx.PName, Admin: ctx.Admin };
+    return { command: cmd, runPath: ctx.runPath, jobName: `inference_inception_${ctx.PName}_${ctx.date}`, logFile: `${ctx.runPath}/sbatch.out`, errFile: `${ctx.runPath}/${errFile}`, PName: ctx.PName, Admin: ctx.Admin };
 }
 
 // Builds the same inference run (dataset prep, wrapper command) that the

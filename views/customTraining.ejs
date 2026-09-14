@@ -329,6 +329,32 @@
 			console.log(error);
 		});
 	});
-	
+
+	// Additive "Launch on HPC" option (strangler-fig): submits the same
+	// fields as the local run above, but to the Slurm endpoint instead of
+	// /run. Hidden entirely when the user has no Slurm access.
+	HpcLaunch.init({
+		formId: "start-run",
+		endpoint: "/api/v2/slurm/training-jobs",
+		redirectUrl: "/hpc/jobs?IDX=<%= IDX %>",
+		collectFields: function () {
+			var weights_file = document.getElementById("Weights").value;
+			if (weights_file == "") {
+				alert("Must select a weights file");
+				return false;
+			}
+
+			return {
+				PName: "<%= PName %>",
+				Admin: "<%= Admin %>",
+				python_path: document.getElementById("Python").value,
+				script: document.getElementById("Script").value,
+				options: document.getElementById("options").value,
+				weights: weights_file,
+				TrainingPercent: document.getElementById("TrainingRange").value,
+			};
+		},
+	});
+
 </script>
 <%- include('includes/footer') %>

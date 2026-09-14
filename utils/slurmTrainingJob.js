@@ -115,7 +115,7 @@ async function prepareTrainingSubmission(req) {
     const cmd = `"${wrapperPath}" -p "${pythonPath}" -s "${pythonScript}" -l "${runPath}/${log}" -o "${options}"`;
 
     return {
-        cmd,
+        command: cmd,
         runPath,
         jobName: `train_${PName}_${date}`,
         logFile: `${runPath}/sbatch.out`,
