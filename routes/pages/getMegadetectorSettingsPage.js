@@ -1,3 +1,4 @@
+const { getPageParams } = require("./pageContext");
 // MegaDetector ships these built-in model weights; the megadetector
 // package resolves/downloads them by name, so no local weight management
 // or admin configuration is needed.
@@ -7,8 +8,7 @@ const queries = require("../../queries/queries");
 
 async function getMegadetectorSettingsPage(req, res) {
     // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+    let { projectIndex: IDX, username: user } = getPageParams(req);
 
     if (IDX == undefined) {
         IDX = 0;

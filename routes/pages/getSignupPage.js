@@ -1,8 +1,8 @@
 async function getSignupPage(req, res) {
-    var results1 = await db.allAsync("SELECT * FROM `Users`");
+    var userRows = await db.allAsync("SELECT * FROM `Users`");
     var users = [];
-    for (var i = 0; i < results1.length; i++) {
-        users.push(results1[i].Username);
+    for (var i = 0; i < userRows.length; i++) {
+        users.push(userRows[i].Username);
     }
 
     res.render("signup", {

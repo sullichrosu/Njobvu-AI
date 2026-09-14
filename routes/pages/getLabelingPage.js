@@ -107,25 +107,25 @@ async function getLabelingPage(req, res) {
         });
     };
     var Classes = await pdb.allAsync("SELECT * FROM `Classes`");
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin = '" +
             admin +
             "'",
     );
-    var results2 = await sdb.allAsync("SELECT * FROM `Classes`");
+    var classRows = await sdb.allAsync("SELECT * FROM `Classes`");
 
     var classes = [];
     var counts = [];
     var icounts = [];
     var lcounts = {};
 
-    if (Classes && results2) {
+    if (Classes && classRows) {
         for (var i = 0; i < Classes.length; i++) {
             let countQuery = await sdb.getAsync(
                 "SELECT COUNT(*) FROM Labels WHERE CName = '" +
-                    results2[i].CName +
+                    classRows[i].CName +
                     "'",
             );
 
@@ -148,8 +148,8 @@ async function getLabelingPage(req, res) {
         }
     }
 
-    var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
-    var results6 = await sdb.allAsync("SELECT DISTINCT IName FROM Labels");
+    var imageCountRow = await sdb.getAsync("SELECT COUNT(*) FROM Images");
+    var labeledImageRows = await sdb.allAsync("SELECT DISTINCT IName FROM Labels");
 
     var unlabeledCountQuery = await sdb.getAsync(
         "SELECT COUNT(*) as count FROM Images WHERE IName NOT IN (SELECT IName FROM Labels)",

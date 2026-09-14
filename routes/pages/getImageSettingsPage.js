@@ -1,5 +1,7 @@
+const { getPageParams } = require("./pageContext");
+
 async function getImageSettingsPage(req, res) {
-    var user = req.cookies.Username;
+    const { projectIndex: IDX, username: user } = getPageParams(req);
     var projects = await db.allAsync(
         "SELECT * FROM Access WHERE Username = '" + user + "'",
     );
@@ -10,8 +12,6 @@ async function getImageSettingsPage(req, res) {
     if (user == undefined) {
         return res.redirect("/");
     }
-
-    var IDX = parseInt(req.query.IDX, 10);
 
     if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
         return res.redirect("/home?error=project_not_found");

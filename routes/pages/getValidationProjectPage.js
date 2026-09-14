@@ -87,10 +87,10 @@ async function getValidationProjectPage(req, res) {
     for (var i = 0; i < projectClasses.length; i++) {
         Classes.push(projectClasses[i].CName);
     }
-    var results1 = Array();
-    var results2 = { "COUNT(*)": 1 };
+    var imageRows = Array();
+    var imageCountRow = { "COUNT(*)": 1 };
 
-    // var results1 = await pdb.allAsync("SELECT * FROM `Images` LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
+    // var imageRows = await pdb.allAsync("SELECT * FROM `Images` LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
 
     if (
         ((imageClass == null ||
@@ -99,26 +99,26 @@ async function getValidationProjectPage(req, res) {
             (sortFilter == "null" || sortFilter == null)) ||
         (sortFilter == "Confidence" && imageClass == "null")
     ) {
-        results1 = await pdb.allAsync(
+        imageRows = await pdb.allAsync(
             "SELECT * FROM `Images` LIMIT " +
                 perPage +
                 " OFFSET " +
                 (page - 1) * perPage,
         );
-        results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
+        imageCountRow = await pdb.getAsync("SELECT COUNT(*) FROM Images");
     } else if (
         sortFilter == "needs_review" &&
         (imageClass == null ||
             imageClass == "null" ||
             !Classes.includes(imageClass))
     ) {
-        results1 = await pdb.allAsync(
+        imageRows = await pdb.allAsync(
             "SELECT * FROM `Images` WHERE reviewImage=1 LIMIT " +
                 perPage +
                 " OFFSET " +
                 (page - 1) * perPage,
         );
-        results2 = await pdb.getAsync(
+        imageCountRow = await pdb.getAsync(
             "SELECT COUNT(*) FROM Images WHERE reviewImage=1",
         );
     } else if (
@@ -156,9 +156,9 @@ async function getValidationProjectPage(req, res) {
                     images[d].IName +
                     "'",
             );
-            results1.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
-        results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
+        imageCountRow = await pdb.getAsync("SELECT COUNT(*) FROM Images");
     } else if (
         sortFilter == "confidence" &&
         imageClass != null &&
@@ -198,7 +198,7 @@ async function getValidationProjectPage(req, res) {
                     imagesWithClass[d].IName +
                     "'",
             );
-            results1.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     } else if (sortFilter == "has_class") {
         if (imageClass != "null") {
@@ -229,7 +229,7 @@ async function getValidationProjectPage(req, res) {
                     imagesWithClass[d].IName +
                     "'",
             );
-            results1.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     } else {
         var imagesWithClass = await pdb.allAsync(
@@ -253,18 +253,18 @@ async function getValidationProjectPage(req, res) {
                     imagesWithClass[d].IName +
                     "'",
             );
-            results1.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     }
 
     var imageLabels = [];
     var list_counter = [];
     var imageConf = [];
-    // console.log(results1);
-    for (var i = 0; i < results1.length; i++) {
+    // console.log(imageRows);
+    for (var i = 0; i < imageRows.length; i++) {
         labelList = await pdb.allAsync(
             "SELECT CName FROM `Labels` WHERE IName = '" +
-                results1[i].IName +
+                imageRows[i].IName +
                 "'",
         );
         var usedLabels = new Set();
@@ -272,18 +272,18 @@ async function getValidationProjectPage(req, res) {
             usedLabels.add(labelList[f].CName);
         }
 
-        var results3 = await pdb.getAsync(
+        var labelCountRow = await pdb.getAsync(
             "SELECT COUNT(*) FROM `Labels` WHERE IName = '" +
-                results1[i].IName +
+                imageRows[i].IName +
                 "'",
         );
-        list_counter.push(results3["COUNT(*)"]);
+        list_counter.push(labelCountRow["COUNT(*)"]);
 
         imageLabels.push(Array.from(usedLabels));
 
         var imageList = await pdb.allAsync(
             "SELECT Confidence FROM `Validation` WHERE IName = '" +
-                results1[i].IName +
+                imageRows[i].IName +
                 "'",
         );
         if (imageList.length == 0) {
@@ -304,7 +304,7 @@ async function getValidationProjectPage(req, res) {
             }
         }
 
-        // console.log(imageConf + ' ' + results1[i].IName);
+        // console.log(imageConf + ' ' + imageRows[i].IName);
     }
 
     // var acc = await db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "'");
@@ -333,11 +333,11 @@ async function getValidationProjectPage(req, res) {
         Admin: admin,
         IDX: IDX,
         access: access,
-        images: results1,
+        images: imageRows,
         classes: imageLabels,
         list_counter: list_counter,
         current: page,
-        pages: Math.ceil(results2["COUNT(*)"] / perPage),
+        pages: Math.ceil(imageCountRow["COUNT(*)"] / perPage),
         perPage: perPage,
         logged: req.query.logged,
         sortFilter: sortFilter,

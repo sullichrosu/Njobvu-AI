@@ -1,12 +1,11 @@
 const path = require("path");
 const UNLABELED_CLASS = require("../../utils/unlabeledClass");
+const { getPageParams } = require("./pageContext");
 
 async function getReviewPage(req, res) {
     var sqlite3 = global.sqlite3 || require("sqlite3").verbose();
-    var username = req.cookies.Username;
+    let { projectIndex: IDX, imageName: IName, username } = getPageParams(req);
     var CName = req.query.class;
-    var IName = req.query.IName;
-    var IDX = parseInt(req.query.IDX, 10);
 
     if (isNaN(IDX) || IDX === undefined) {
         IDX = 0;

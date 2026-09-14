@@ -1,5 +1,7 @@
+const { getPageParams } = require("./pageContext");
+
 async function getClassificationPage(req, res) {
-    username = req.cookies.Username;
+    const { username } = getPageParams(req);
     var projects = await db.allAsync(
         "SELECT * FROM Access WHERE Admin = '" + username + "'",
     );

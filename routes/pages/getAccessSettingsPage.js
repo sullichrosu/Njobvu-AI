@@ -27,7 +27,7 @@ async function getAccessSettingsPage(req, res) {
     var PName = projects[IDX].PName;
     var admin = projects[IDX].Admin;
 
-    var results3 = await db.allAsync(
+    var accessRows = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName= '" +
             PName +
             "' AND Admin = '" +
@@ -38,8 +38,8 @@ async function getAccessSettingsPage(req, res) {
     );
 
     var access = [];
-    for (var i = 0; i < results3.length; i++) {
-        access.push(results3[i].Username);
+    for (var i = 0; i < accessRows.length; i++) {
+        access.push(accessRows[i].Username);
     }
 
     try {

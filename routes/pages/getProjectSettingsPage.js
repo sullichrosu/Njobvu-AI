@@ -1,5 +1,7 @@
+const { getPageParams } = require("./pageContext");
+
 async function getProjectSettingsPage(req, res) {
-    var user = req.cookies.Username;
+    const { projectIndex: IDX, username: user } = getPageParams(req);
     var projects = await db.allAsync(
         "SELECT * FROM Access WHERE Username = '" + user + "'",
     );
@@ -11,8 +13,6 @@ async function getProjectSettingsPage(req, res) {
         return res.redirect("/");
     }
 
-    var IDX = parseInt(req.query.IDX, 10);
-
     if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
         return res.redirect("/home?error=project_not_found");
     }
@@ -20,7 +20,7 @@ async function getProjectSettingsPage(req, res) {
     var PName = projects[IDX].PName;
     var admin = projects[IDX].Admin;
 
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin = '" +
@@ -28,7 +28,7 @@ async function getProjectSettingsPage(req, res) {
             "'",
     );
 
-    if (!results1) {
+    if (!projectInfo) {
         return res.redirect("/home?error=project_not_found");
     }
 
@@ -40,7 +40,7 @@ async function getProjectSettingsPage(req, res) {
             user: user,
             PName: PName,
             Admin: admin,
-            PDescription: results1.PDescription,
+            PDescription: projectInfo.PDescription,
             IDX: IDX,
             activePage: "projSettings",
         });
