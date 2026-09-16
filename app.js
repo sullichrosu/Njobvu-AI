@@ -3,6 +3,7 @@ const path = require("path");
 const cookieParser = require("cookie-parser")
 const fileUpload = require("express-fileupload")
 global.logger = require("./utils/logger");
+global.currentPath = process.cwd();
 const app = express();
 
 const api = require("./routes/api");

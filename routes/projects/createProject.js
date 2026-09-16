@@ -5,6 +5,7 @@ const StreamZip = require("node-stream-zip");
 const queries = require("../../queries/queries");
 const rimraf = require("../../public/libraries/rimraf");
 const { Client } = require("../../queries/client");
+const flattenDirectory = require("../../utils/flattenDirectory");
 
 async function createProject(req, res) {
     const files = req.files || {};
@@ -113,38 +114,16 @@ async function createProject(req, res) {
             rimraf(zipPath, (err) => {
                 if (err) {
                     global.logger.error(err);
-                    res.status(500).send("Error removing zip file");
                 }
             });
 
-            const files = fs.readdirSync(imagesPath);
+            const imageFiles = await flattenDirectory(imagesPath);
 
-            for (var i = 0; i < files.length; i++) {
-                if (files[i] == "__MACOSX") {
-                    continue;
-                }
-
-                if (files[i].endsWith(".zip")) {
-                    fs.unlink(imagesPath + "/" + files[i], () => { });
-                    continue;
-                }
-
-                if (files[i].endsWith(".zip") || files[i] === "blob") {
-                    continue;
-                }
-
-                var temp = imagesPath + "/" + files[i];
-
-                files[i] = files[i].trim();
-                files[i] = files[i].split(" ").join("_");
-                files[i] = files[i].split("+").join("_");
-
-                fs.rename(temp, imagesPath + "/" + files[i], () => { });
-
+            for (var i = 0; i < imageFiles.length; i++) {
                 try {
                     await queries.project.addImages(
                         projectPath,
-                        files[i],
+                        imageFiles[i],
                         0,
                         0,
                     );

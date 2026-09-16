@@ -275,9 +275,12 @@ if __name__ == "__main__":
         err = "You need more options to run the tool"
         print(err)
 
-    if image_path == "":
-        err = "You need more options to run the tool"
-        print(err)
+    if image_path.lower().endswith(".zip") or image_path.lower().endswith(".7z") or (os.path.isfile(image_path) and zipfile.is_zipfile(image_path)):
+        import tempfile
+        temp_dir = tempfile.mkdtemp(prefix="yolo_zip_")
+        with zipfile.ZipFile(image_path, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+        image_path = temp_dir
 
     print("Ultralytics Version of YOLO Requested:")
 

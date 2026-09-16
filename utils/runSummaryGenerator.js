@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const sharp = require("sharp");
 
 /**
  * Training & Inference Run Output Analysis / Summary Generator
@@ -66,14 +67,105 @@ async function generateRunSummary(runDir, options = {}) {
 
     const topFiles = fs.readdirSync(targetPath);
     const hasDirectRunFiles = topFiles.some(f => 
-        f === "results.csv" || f === "args.yaml" || f === "labels.jpg" ||
-        (f === "config.json" && !topFiles.includes("projects"))
+        f === "results.csv" || f === "args.yaml" || f === "cfgTemplate.txt" || f === "labels.jpg" ||
+        f.endsWith(".log") || (f === "config.json" && !topFiles.includes("projects"))
     );
 
     if (options.allRuns || !hasDirectRunFiles) {
         return await generateAggregatedRunSummary(targetPath, { ...options, projectName });
     }
     return await generateSingleRunSummary(targetPath, options);
+}
+
+function inferProjectName(runDir, runName = "") {
+    if (!runDir) return null;
+    const match = runDir.match(/public\/projects\/([^\/]+)/i) || runDir.match(/projects\/([^\/]+)/i);
+    if (match && match[1] && !["training", "logs", "inference", "uploads", "bootstrap"].includes(match[1].toLowerCase())) {
+        return match[1];
+    }
+    const parts = runDir.split(path.sep).filter(Boolean);
+    const trainIdx = parts.indexOf("training");
+    if (trainIdx > 0 && !["public", "projects"].includes(parts[trainIdx - 1].toLowerCase())) {
+        return parts[trainIdx - 1];
+    }
+    const projIdx = parts.indexOf("projects");
+    if (projIdx >= 0 && projIdx < parts.length - 1) {
+        return parts[projIdx + 1];
+    }
+    if (runName) {
+        const stripped = runName.replace(/[-_]?\d{10,}$/, "");
+        if (stripped && stripped !== runName && !/^\d+$/.test(stripped)) {
+            return stripped;
+        }
+    }
+    return null;
+}
+
+function parseLogHeaderConfig(runDir, fileEntries) {
+    const config = {};
+    const logFiles = (fileEntries || getFilesRecursive(runDir)).filter(f => 
+        (f.name.endsWith(".log") || f.name.endsWith(".txt")) && f.name !== "cfgTemplate.txt"
+    );
+
+    for (const logFile of logFiles) {
+        if (logFile.sizeBytes > 10 * 1024 * 1024) continue;
+        let content;
+        try {
+            content = fs.readFileSync(logFile.fullPath, "utf8");
+        } catch (e) {
+            continue;
+        }
+
+        const lines = content.split("\n");
+        let inOptionsHeader = false;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.includes("Run Options")) {
+                inOptionsHeader = true;
+                continue;
+            }
+            if (inOptionsHeader && trimmed.startsWith("# ===")) {
+                inOptionsHeader = false;
+                continue;
+            }
+
+            if (trimmed.startsWith("#")) {
+                const kvMatch = trimmed.match(/^#\s*([^:]+)\s*:\s*(.*)$/);
+                if (kvMatch) {
+                    const key = kvMatch[1].trim().toLowerCase();
+                    const val = kvMatch[2].trim();
+
+                    if (val && val.toLowerCase() !== "(none)") {
+                        if (key === "project") {
+                            config.project = val;
+                        } else if (key === "epochs") {
+                            const parsedEpochs = parseInt(val, 10);
+                            if (!isNaN(parsedEpochs)) config.epochs = parsedEpochs;
+                        } else if (key === "batch") {
+                            const parsedBatch = parseInt(val, 10);
+                            if (!isNaN(parsedBatch)) config.batch = parsedBatch;
+                        } else if (key === "weights" || key === "model") {
+                            config.weights = val;
+                            if (!config.model) config.model = val;
+                        } else if (key === "task") {
+                            config.task = val;
+                        } else if (key === "classes") {
+                            const classList = val.split(",").map(c => c.trim()).filter(Boolean);
+                            if (classList.length > 0) {
+                                config.classes = classList;
+                            }
+                        } else if (key === "image size" || key === "imgsz") {
+                            const parsedImgSize = parseInt(val, 10);
+                            if (!isNaN(parsedImgSize)) config.imgsz = parsedImgSize;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return config;
 }
 
 /**
@@ -86,7 +178,8 @@ async function generateSingleRunSummary(runDir, options = {}) {
     let runType = options.runType || "auto";
     if (runType === "auto") {
         const hasTrainingFiles = allFileEntries.some(f => 
-            f.name === "results.csv" || f.name === "args.yaml" || f.name.includes("train") || f.relPath.includes("weights")
+            f.name === "results.csv" || f.name === "args.yaml" || f.name === "cfgTemplate.txt" ||
+            f.name.endsWith(".log") || f.name.includes("train") || f.relPath.includes("weights")
         );
         runType = hasTrainingFiles ? "training" : "inference";
     }
@@ -109,16 +202,27 @@ async function generateSingleRunSummary(runDir, options = {}) {
 
     let configData = {};
     const argsPath = path.join(runDir, "args.yaml");
+    const cfgTemplatePath = path.join(runDir, "cfgTemplate.txt");
     const hypPath = path.join(runDir, "hyp.yaml");
     const optPath = path.join(runDir, "opt.yaml");
     const configJsonPath = path.join(runDir, "config.json");
 
     if (fs.existsSync(argsPath)) {
         configData = parseYamlSimple(fs.readFileSync(argsPath, "utf8"));
+    } else if (fs.existsSync(cfgTemplatePath)) {
+        configData = parseYamlSimple(fs.readFileSync(cfgTemplatePath, "utf8"));
     } else if (fs.existsSync(configJsonPath)) {
         try {
             configData = JSON.parse(fs.readFileSync(configJsonPath, "utf8"));
         } catch (e) {}
+    }
+
+    const logHeaderConfig = parseLogHeaderConfig(runDir, allFileEntries);
+    configData = { ...logHeaderConfig, ...configData };
+
+    if (!configData.project) {
+        const inferred = inferProjectName(runDir, runName);
+        if (inferred) configData.project = inferred;
     }
 
     if (fs.existsSync(hypPath)) {
@@ -131,16 +235,13 @@ async function generateSingleRunSummary(runDir, options = {}) {
     let metrics = {};
     let performanceAnalysis = {};
     const resultsCsvPath = path.join(runDir, "results.csv");
-    const metricsJsonPath = path.join(runDir, "metrics.json");
 
     if (fs.existsSync(resultsCsvPath)) {
         const parsedCsv = await parseResultsCsvStream(resultsCsvPath);
         metrics = parsedCsv.metrics;
         performanceAnalysis = parsedCsv.analysis;
-    } else if (fs.existsSync(metricsJsonPath)) {
-        try {
-            metrics = JSON.parse(fs.readFileSync(metricsJsonPath, "utf8"));
-        } catch (e) {}
+    } else {
+        metrics = await parseFallbackMetrics(runDir, allFileEntries, configData);
     }
 
     const logDiagnostics = await parseLogFilesStream(runDir, allFileEntries);
@@ -333,6 +434,9 @@ async function parseResultsCsvStream(csvPath) {
         let bestMap50 = 0;
         let bestMap50Epoch = 0;
         let bestMap50_95 = 0;
+        let bestPrecision = 0;
+        let bestRecall = 0;
+        let bestAccuracy = 0;
         let epochLosses = [];
 
         rl.on("line", (line) => {
@@ -344,9 +448,21 @@ async function parseResultsCsvStream(csvPath) {
                 lastRow = row;
 
                 const epochIdx = headers.findIndex(h => h.toLowerCase().includes("epoch"));
-                const map50Idx = headers.findIndex(h => h.includes("mAP50") || h.includes("mAP_0.5"));
-                const map95Idx = headers.findIndex(h => h.includes("mAP50-95") || h.includes("mAP_0.5:0.95"));
-                const lossIdx = headers.findIndex(h => h.includes("val/box_loss") || h.includes("val/loss") || h.includes("train/box_loss") || h.includes("train/loss"));
+                const map50Idx = headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return (l.includes("map50") || l.includes("map_0.5")) && !l.includes("map50-95") && !l.includes("map_0.5:0.95");
+                });
+                const map95Idx = headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return l.includes("map50-95") || l.includes("map_0.5:0.95") || l.includes("map95");
+                });
+                const precisionIdx = headers.findIndex(h => h.toLowerCase().includes("precision"));
+                const recallIdx = headers.findIndex(h => h.toLowerCase().includes("recall"));
+                const accuracyIdx = headers.findIndex(h => h.toLowerCase().includes("accuracy"));
+                const lossIdx = headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return l.includes("val/box_loss") || l.includes("val/loss") || l.includes("train/box_loss") || l.includes("train/loss");
+                });
 
                 const currentEpoch = epochIdx !== -1 && !isNaN(parseInt(row[epochIdx])) ? parseInt(row[epochIdx]) : rowsCount;
 
@@ -363,6 +479,24 @@ async function parseResultsCsvStream(csvPath) {
                         bestMap50_95 = val;
                     }
                 }
+                if (precisionIdx !== -1 && row[precisionIdx]) {
+                    const val = parseFloat(row[precisionIdx]);
+                    if (!isNaN(val) && val > bestPrecision) {
+                        bestPrecision = val;
+                    }
+                }
+                if (recallIdx !== -1 && row[recallIdx]) {
+                    const val = parseFloat(row[recallIdx]);
+                    if (!isNaN(val) && val > bestRecall) {
+                        bestRecall = val;
+                    }
+                }
+                if (accuracyIdx !== -1 && row[accuracyIdx]) {
+                    const val = parseFloat(row[accuracyIdx]);
+                    if (!isNaN(val) && val > bestAccuracy) {
+                        bestAccuracy = val;
+                    }
+                }
                 if (lossIdx !== -1 && row[lossIdx]) {
                     const lVal = parseFloat(row[lossIdx]);
                     if (!isNaN(lVal)) epochLosses.push(lVal);
@@ -377,17 +511,48 @@ async function parseResultsCsvStream(csvPath) {
                 totalEpochs,
                 bestMap50,
                 bestMap50Epoch,
-                bestMap50_95
+                bestMap50_95,
+                bestPrecision,
+                bestRecall,
+                bestAccuracy
             };
 
             if (headers.length && lastRow) {
                 headers.forEach((h, idx) => {
                     if (lastRow[idx] !== undefined) {
                         const val = parseFloat(lastRow[idx]);
-                        metrics[h] = isNaN(val) ? lastRow[idx] : val;
+                        const numVal = isNaN(val) ? lastRow[idx] : val;
+                        const cleanHeader = h.trim();
+                        metrics[cleanHeader] = numVal;
+
+                        // Normalize common YOLO header names onto metrics object
+                        const lower = cleanHeader.toLowerCase();
+                        if ((lower.includes("map50") || lower.includes("map_0.5")) && !lower.includes("map50-95") && !lower.includes("map_0.5:0.95")) {
+                            if (!metrics.mAP50) metrics.mAP50 = numVal;
+                        } else if (lower.includes("map50-95") || lower.includes("map_0.5:0.95")) {
+                            if (!metrics["mAP50-95"]) metrics["mAP50-95"] = numVal;
+                        } else if (lower.includes("precision")) {
+                            if (!metrics.precision) metrics.precision = numVal;
+                        } else if (lower.includes("recall")) {
+                            if (!metrics.recall) metrics.recall = numVal;
+                        } else if (lower.includes("accuracy")) {
+                            if (!metrics.accuracy) metrics.accuracy = numVal;
+                        }
                     }
                 });
             }
+
+            if (bestMap50 > 0) {
+                metrics.bestMap50 = bestMap50;
+                if (!metrics.mAP50) metrics.mAP50 = bestMap50;
+            }
+            if (bestMap50_95 > 0) {
+                metrics.bestMap50_95 = bestMap50_95;
+                if (!metrics["mAP50-95"]) metrics["mAP50-95"] = bestMap50_95;
+            }
+            if (bestPrecision > 0 && !metrics.precision) metrics.precision = bestPrecision;
+            if (bestRecall > 0 && !metrics.recall) metrics.recall = bestRecall;
+            if (bestAccuracy > 0 && !metrics.accuracy) metrics.accuracy = bestAccuracy;
 
             let initialLoss = epochLosses.length > 0 ? epochLosses[0] : null;
             let finalLoss = epochLosses.length > 0 ? epochLosses[epochLosses.length - 1] : null;
@@ -414,6 +579,139 @@ async function parseResultsCsvStream(csvPath) {
             resolve({ metrics, analysis });
         });
     });
+}
+
+/**
+ * Fallback metric parser when results.csv is absent - inspects metrics.json, summary.json,
+ * and execution log files (*.log, *.txt) for training/evaluation metric values.
+ */
+async function parseFallbackMetrics(runDir, fileEntries, configData = {}) {
+    let metrics = {};
+
+    const metricsJsonPath = path.join(runDir, "metrics.json");
+    const summaryJsonPath = path.join(runDir, "summary.json");
+
+    if (fs.existsSync(metricsJsonPath)) {
+        try {
+            const m = JSON.parse(fs.readFileSync(metricsJsonPath, "utf8"));
+            if (m && typeof m === "object") metrics = { ...metrics, ...m };
+        } catch (e) {}
+    }
+    if (fs.existsSync(summaryJsonPath)) {
+        try {
+            const s = JSON.parse(fs.readFileSync(summaryJsonPath, "utf8"));
+            if (s && s.metrics && typeof s.metrics === "object") {
+                metrics = { ...metrics, ...s.metrics };
+            }
+        } catch (e) {}
+    }
+
+    const logFiles = fileEntries.filter(f => 
+        (f.name.endsWith(".log") || f.name.endsWith(".txt")) && f.name !== "cfgTemplate.txt"
+    );
+
+    let maxMap50 = metrics.bestMap50 !== undefined ? metrics.bestMap50 : (metrics.mAP50 !== undefined ? metrics.mAP50 : null);
+    let maxMap50_95 = metrics.bestMap50_95 !== undefined ? metrics.bestMap50_95 : (metrics["mAP50-95"] !== undefined ? metrics["mAP50-95"] : null);
+    let lastPrecision = metrics.precision !== undefined ? metrics.precision : (metrics.bestPrecision !== undefined ? metrics.bestPrecision : null);
+    let lastRecall = metrics.recall !== undefined ? metrics.recall : (metrics.bestRecall !== undefined ? metrics.bestRecall : null);
+    let lastAccuracy = metrics.accuracy !== undefined ? metrics.accuracy : (metrics.bestAccuracy !== undefined ? metrics.bestAccuracy : null);
+
+    for (const logFile of logFiles) {
+        if (logFile.sizeBytes > 10 * 1024 * 1024) continue;
+        let content;
+        try {
+            content = fs.readFileSync(logFile.fullPath, "utf8");
+        } catch (e) {
+            continue;
+        }
+
+        const lines = content.split("\n");
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            // Pattern 1: Standard YOLO evaluation row: 'all <images> <instances> <precision> <recall> <mAP50> <mAP50-95>'
+            const allMatch = trimmed.match(/^\s*all\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+            if (allMatch) {
+                const p = parseFloat(allMatch[1]);
+                const r = parseFloat(allMatch[2]);
+                const map50 = parseFloat(allMatch[3]);
+                const map5095 = parseFloat(allMatch[4]);
+
+                if (!isNaN(p)) lastPrecision = p;
+                if (!isNaN(r)) lastRecall = r;
+                if (!isNaN(map50)) {
+                    if (maxMap50 === null || map50 >= maxMap50) maxMap50 = map50;
+                }
+                if (!isNaN(map5095)) {
+                    if (maxMap50_95 === null || map5095 >= maxMap50_95) maxMap50_95 = map5095;
+                }
+                continue;
+            }
+
+            // Pattern 2: Key-value metric log entries
+            const map50Match = trimmed.match(/mAP(?:@|_)?50(?!\s*-\s*95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+|\d+)/i);
+            if (map50Match) {
+                const val = parseFloat(map50Match[1]);
+                if (!isNaN(val)) {
+                    if (maxMap50 === null || val >= maxMap50) maxMap50 = val;
+                }
+            }
+
+            const map95Match = trimmed.match(/mAP(?:@|_)?(?:50-95|0\.5:0\.95)\b(?:\s*[:=]\s*|\s+)(0\.\d+|\d+\.\d+|\d+)/i);
+            if (map95Match) {
+                const val = parseFloat(map95Match[1]);
+                if (!isNaN(val)) {
+                    if (maxMap50_95 === null || val >= maxMap50_95) maxMap50_95 = val;
+                }
+            }
+
+            const precMatch = trimmed.match(/\bprecision\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+|\d+)/i);
+            if (precMatch) {
+                const val = parseFloat(precMatch[1]);
+                if (!isNaN(val)) lastPrecision = val;
+            }
+
+            const recMatch = trimmed.match(/\brecall\b(?:\(B\))?\s*[:=]?\s*(0\.\d+|\d+\.\d+|\d+)/i);
+            if (recMatch) {
+                const val = parseFloat(recMatch[1]);
+                if (!isNaN(val)) lastRecall = val;
+            }
+
+            const accMatch = trimmed.match(/\b(?:accuracy|accuracy_top1|top1)\b\s*[:=]?\s*(0\.\d+|\d+\.\d+|\d+)/i);
+            if (accMatch) {
+                const val = parseFloat(accMatch[1]);
+                if (!isNaN(val)) lastAccuracy = val;
+            }
+        }
+    }
+
+    if (maxMap50 !== null && !isNaN(maxMap50)) {
+        metrics.bestMap50 = maxMap50;
+        metrics.mAP50 = maxMap50;
+    }
+    if (maxMap50_95 !== null && !isNaN(maxMap50_95)) {
+        metrics.bestMap50_95 = maxMap50_95;
+        metrics["mAP50-95"] = maxMap50_95;
+    }
+    if (lastPrecision !== null && !isNaN(lastPrecision)) {
+        metrics.bestPrecision = lastPrecision;
+        metrics.precision = lastPrecision;
+    }
+    if (lastRecall !== null && !isNaN(lastRecall)) {
+        metrics.bestRecall = lastRecall;
+        metrics.recall = lastRecall;
+    }
+    if (lastAccuracy !== null && !isNaN(lastAccuracy)) {
+        metrics.bestAccuracy = lastAccuracy;
+        metrics.accuracy = lastAccuracy;
+    }
+
+    if (configData && configData.epochs !== undefined && !metrics.totalEpochs) {
+        metrics.totalEpochs = configData.epochs;
+    }
+
+    return metrics;
 }
 
 async function parseLogFilesStream(runDir, fileEntries) {
@@ -1015,6 +1313,584 @@ function persistCustomSummary(runDir, customNarrative, options = {}) {
     return summaryData;
 }
 
+/**
+ * Model Card Generation (Hugging Face compatible)
+ *
+ * Builds a YAML-frontmatter README (MODEL_CARD.md) sourced entirely from a run's own
+ * artifacts - never from a Hugging Face Hub URL. Reuses generateSingleRunSummary for
+ * config/metrics/weights parsing rather than re-reading the run directory from scratch.
+ */
+
+const PIPELINE_TAG_BY_TASK = {
+    detect: "object-detection",
+    segment: "image-segmentation",
+    obb: "object-detection",
+    classify: "image-classification",
+    pose: "keypoint-detection"
+};
+
+/**
+ * Parses the "names:" class map out of a YOLO-style dataset yaml
+ * (e.g. coco_classes.yaml / data.yaml), supporting both the
+ * "  0: className" mapping form and a "  - className" list form.
+ */
+function parseClassNamesYaml(yamlStr) {
+    const lines = yamlStr.split("\n");
+    const byIndex = [];
+    const list = [];
+    let inNames = false;
+
+    for (const line of lines) {
+        if (/^names\s*:/.test(line.trim()) && !/^\s/.test(line)) {
+            inNames = true;
+            continue;
+        }
+        if (!inNames) continue;
+
+        if (line.trim() === "") continue;
+        if (!/^\s/.test(line)) break; // dedent back to top-level: names block ended
+
+        const mapMatch = line.match(/^\s+(\d+)\s*:\s*(.+)$/);
+        if (mapMatch) {
+            byIndex[parseInt(mapMatch[1], 10)] = mapMatch[2].trim();
+            continue;
+        }
+        const listMatch = line.match(/^\s+-\s*(.+)$/);
+        if (listMatch) {
+            list.push(listMatch[1].trim());
+        }
+    }
+
+    const fromMap = byIndex.filter((name) => name !== undefined);
+    return fromMap.length > 0 ? fromMap : list;
+}
+
+/**
+ * Looks for a dataset yaml directly inside the run directory and extracts its class list.
+ */
+function discoverClassNames(runDir) {
+    const candidates = ["coco_classes.yaml", "data.yaml", "dataset.yaml"];
+    for (const fileName of candidates) {
+        const filePath = path.join(runDir, fileName);
+        if (fs.existsSync(filePath)) {
+            try {
+                const names = parseClassNamesYaml(fs.readFileSync(filePath, "utf8"));
+                if (names.length > 0) {
+                    return { names, source: fileName };
+                }
+            } catch (e) {}
+        }
+    }
+    return { names: [], source: null };
+}
+
+function countImagesInDir(dir) {
+    const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".bmp"];
+    let count = 0;
+
+    function walk(currentDir) {
+        let entries;
+        try {
+            entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        } catch (e) {
+            return;
+        }
+        for (const entry of entries) {
+            const fullPath = path.join(currentDir, entry.name);
+            if (entry.isDirectory()) {
+                walk(fullPath);
+            } else if (imageExtensions.includes(path.extname(entry.name).toLowerCase())) {
+                count++;
+            }
+        }
+    }
+
+    walk(dir);
+    return count;
+}
+
+/**
+ * Counts images per train/val/test split by inspecting the run's own dataset
+ * layout (images/<split>/ for detect/segment/obb, <split>/<class>/ for classify).
+ */
+function discoverDatasetImageCounts(runDir) {
+    const splits = ["train", "val", "test"];
+    const counts = {};
+    let total = 0;
+    let found = false;
+
+    for (const split of splits) {
+        const detectSplitPath = path.join(runDir, "images", split);
+        const classifySplitPath = path.join(runDir, split);
+
+        let splitCount = 0;
+        if (fs.existsSync(detectSplitPath)) {
+            splitCount = countImagesInDir(detectSplitPath);
+            found = true;
+        } else if (fs.existsSync(classifySplitPath) && fs.statSync(classifySplitPath).isDirectory()) {
+            splitCount = countImagesInDir(classifySplitPath);
+            found = true;
+        }
+
+        counts[split] = splitCount;
+        total += splitCount;
+    }
+
+    return found ? { ...counts, total } : null;
+}
+
+function inferTask(config, datasetCounts, classifyPathHint) {
+    if (config && typeof config.task === "string" && config.task.trim()) {
+        return config.task.trim().toLowerCase();
+    }
+    if (classifyPathHint) return "classify";
+    return "detect";
+}
+
+function buildModelIndexMetrics(metrics) {
+    const results = [];
+    const seen = new Set();
+
+    const push = (type, value) => {
+        if (typeof value === "number" && Number.isFinite(value) && !seen.has(type)) {
+            seen.add(type);
+            results.push({ type, value });
+        }
+    };
+
+    push("mAP50", metrics.bestMap50);
+    push("mAP50-95", metrics.bestMap50_95);
+
+    Object.keys(metrics || {}).forEach((key) => {
+        const value = metrics[key];
+        if (typeof value !== "number" || !Number.isFinite(value)) return;
+        const lower = key.toLowerCase();
+
+        if (lower.includes("precision")) push("Precision", value);
+        else if (lower.includes("recall")) push("Recall", value);
+        else if (lower.includes("top1")) push("Top-1 Accuracy", value);
+        else if (lower.includes("top5")) push("Top-5 Accuracy", value);
+        else if (lower.includes("accuracy")) push("Accuracy", value);
+    });
+
+    return results;
+}
+
+function buildTags(config, task) {
+    const tags = new Set(["ultralytics", "yolo"]);
+    if (task) tags.add(task);
+
+    const modelRef = config && (config.model || config.weights);
+    if (typeof modelRef === "string" && modelRef.trim()) {
+        const base = path.basename(modelRef, path.extname(modelRef)).toLowerCase();
+        if (base) tags.add(base);
+    }
+
+    return Array.from(tags);
+}
+
+function yamlScalar(value) {
+    return JSON.stringify(String(value));
+}
+
+/**
+ * Hand-rolled YAML writer scoped to the fixed model-card frontmatter shape below -
+ * avoids pulling in a generic YAML dependency for a handful of known fields.
+ */
+function buildFrontmatterYaml({ pipelineTag, tags, modelIndex }) {
+    let yaml = "";
+    yaml += `library_name: ${yamlScalar("ultralytics")}\n`;
+    yaml += `pipeline_tag: ${yamlScalar(pipelineTag)}\n`;
+    yaml += `tags:\n`;
+    tags.forEach((tag) => {
+        yaml += `  - ${yamlScalar(tag)}\n`;
+    });
+
+    if (modelIndex && modelIndex.metrics.length > 0) {
+        yaml += `model-index:\n`;
+        yaml += `  - name: ${yamlScalar(modelIndex.name)}\n`;
+        yaml += `    results:\n`;
+        yaml += `      - task:\n`;
+        yaml += `          type: ${yamlScalar(modelIndex.taskType)}\n`;
+        yaml += `        dataset:\n`;
+        yaml += `          name: ${yamlScalar(modelIndex.datasetName)}\n`;
+        yaml += `          type: ${yamlScalar("custom")}\n`;
+        yaml += `        metrics:\n`;
+        modelIndex.metrics.forEach((metric) => {
+            yaml += `          - type: ${yamlScalar(metric.type)}\n`;
+            yaml += `            value: ${metric.value}\n`;
+        });
+    }
+
+    return yaml;
+}
+
+function formatMetricValue(value) {
+    return `${(value * 100).toFixed(2)}%`;
+}
+
+function buildModelCardBody({ runName, runDir, summary, classNames, classSource, datasetCounts, task, modelIndexMetrics }) {
+    const config = summary.config || {};
+    let md = `# ${runName}\n\n`;
+    md += `Auto-generated Hugging Face model card, sourced entirely from this run's own artifacts (config, results.csv, dataset files). Regenerate from the run directory rather than editing the config/metrics sections by hand.\n\n`;
+
+    md += `## Model Details\n\n`;
+    md += `- **Task**: ${task}\n`;
+    md += `- **Framework**: Ultralytics YOLO\n`;
+    md += `- **Base weights**: ${config.model || config.weights || "N/A"}\n`;
+    md += `- **Run name**: ${runName}\n`;
+    md += `- **Generated at**: ${summary.generatedAt || new Date().toISOString()}\n\n`;
+
+    md += `## Training Data\n\n`;
+    if (classNames.length > 0) {
+        md += `- **Classes (${classNames.length})**: ${classNames.map((c) => `\`${c}\``).join(", ")}\n`;
+        md += `- **Class source**: \`${classSource}\`\n`;
+    } else {
+        md += `- **Classes**: not found in run artifacts (no coco_classes.yaml/data.yaml present).\n`;
+    }
+    if (datasetCounts) {
+        md += `- **Images**: ${datasetCounts.total} total (train: ${datasetCounts.train}, val: ${datasetCounts.val}, test: ${datasetCounts.test})\n\n`;
+    } else {
+        md += `- **Images**: ${summary.imageCount || 0} image artifact(s) discovered in the run directory (train/val/test split not found).\n\n`;
+    }
+
+    if (Object.keys(config).length > 0) {
+        md += `## Training Configuration\n\n`;
+        md += `\`\`\`json\n${JSON.stringify(config, null, 2)}\n\`\`\`\n\n`;
+    }
+
+    md += `## Evaluation Results\n\n`;
+    if (modelIndexMetrics.length > 0) {
+        md += `| Metric | Value |\n| --- | --- |\n`;
+        modelIndexMetrics.forEach((metric) => {
+            md += `| ${metric.type} | ${formatMetricValue(metric.value)} |\n`;
+        });
+        md += `\n`;
+    } else {
+        md += `No evaluation metrics were found in this run's results.csv.\n\n`;
+    }
+
+    if (summary.weightsInfo && summary.weightsInfo.length > 0) {
+        md += `## Model Checkpoints\n\n`;
+        md += `| File | Size |\n| --- | --- |\n`;
+        summary.weightsInfo.forEach((weight) => {
+            md += `| \`${weight.relPath}\` | ${weight.sizeMB} |\n`;
+        });
+        md += `\n`;
+    }
+
+    md += `## Limitations\n\n`;
+    md += `- This card was generated automatically from run artifacts and has not been reviewed by a human.\n`;
+    md += `- Evaluation metrics reflect performance on this run's own validation split only; verify against held-out data before deployment.\n`;
+    if (summary.logDiagnostics && summary.logDiagnostics.errors && summary.logDiagnostics.errors.length > 0) {
+        md += `- The training log recorded errors during this run; review \`logDiagnostics\` in \`summary.json\` before use.\n`;
+    }
+    md += `\n`;
+
+    md += `## How to Use\n\n`;
+    const bestWeight = (summary.weightsInfo || []).find((w) => w.name.includes("best")) || (summary.weightsInfo || [])[0];
+    md += "```python\n";
+    md += `from ultralytics import YOLO\n\n`;
+    md += `model = YOLO("${bestWeight ? bestWeight.relPath : "best.pt"}")\n`;
+    md += `results = model.predict("path/to/image.jpg")\n`;
+    md += "```\n";
+
+    return md;
+}
+
+/**
+ * Renders an SVG template with model details, metrics, dataset counts, and framework info
+ * and converts it to a PNG image buffer using sharp.
+ */
+function formatClassList(classNames, maxChars = 32) {
+    if (!classNames || classNames.length === 0) return "N/A";
+
+    let resultItems = [];
+    for (let i = 0; i < classNames.length; i++) {
+        const name = classNames[i];
+        const remainingCount = classNames.length - i;
+        const countSuffix = i > 0 ? ` (+${remainingCount} more)` : `... (+${remainingCount})`;
+
+        const testStr = resultItems.length > 0 ? resultItems.join(", ") + `, ${name}` : name;
+        if (testStr.length + (remainingCount > 1 ? countSuffix.length : 0) > maxChars) {
+            if (resultItems.length === 0) {
+                return name.slice(0, Math.max(5, maxChars - 5)) + "...";
+            }
+            return resultItems.join(", ") + ` (+${remainingCount} more)`;
+        }
+        resultItems.push(name);
+    }
+    return resultItems.join(", ");
+}
+
+/**
+ * Renders an SVG template with model details, metrics, dataset counts, and framework info
+ * in Njobvu platform brand aesthetics and converts it to a PNG image buffer using sharp.
+ */
+async function generateModelCardImageBuffer({
+    runName,
+    summary,
+    classNames,
+    classSource,
+    datasetCounts,
+    task,
+    pipelineTag,
+    modelIndexMetrics,
+    runDir
+}) {
+    const config = (summary && summary.config) || {};
+    const metrics = (summary && summary.metrics) || {};
+
+    const formatMetric = (val) => {
+        if (typeof val === "number" && Number.isFinite(val)) {
+            return `${(val > 1 ? val : val * 100).toFixed(2)}%`;
+        }
+        if (val !== undefined && val !== null && val !== "") {
+            return String(val);
+        }
+        return "N/A";
+    };
+
+    const getMetricVal = (...patterns) => {
+        for (const pat of patterns) {
+            if (metrics[pat] !== undefined && typeof metrics[pat] === "number" && !isNaN(metrics[pat])) {
+                return metrics[pat];
+            }
+            for (const [k, v] of Object.entries(metrics)) {
+                if (typeof v !== "number" || isNaN(v)) continue;
+                const lowerK = k.toLowerCase().trim();
+                const lowerPat = pat.toLowerCase().trim();
+                if (lowerPat === "map50" && (lowerK.includes("map50-95") || lowerK.includes("map_0.5:0.95"))) {
+                    continue;
+                }
+                if (lowerK.includes(lowerPat)) {
+                    return v;
+                }
+            }
+            const item = modelIndexMetrics.find((m) => {
+                const t = m.type.toLowerCase();
+                if (pat.toLowerCase() === "map50" && t.includes("map50-95")) return false;
+                return t.includes(pat.toLowerCase());
+            });
+            if (item && typeof item.value === "number" && !isNaN(item.value)) {
+                return item.value;
+            }
+        }
+        return undefined;
+    };
+
+    const map50 = getMetricVal("bestMap50", "mAP50", "mAP_0.5", "metrics/mAP50(B)", "metrics/mAP50");
+    const map50_95 = getMetricVal("bestMap50_95", "mAP50-95", "mAP_0.5:0.95", "metrics/mAP50-95(B)", "metrics/mAP50-95");
+    const precision = getMetricVal("bestPrecision", "precision", "metrics/precision(B)", "metrics/precision");
+    const recall = getMetricVal("bestRecall", "recall", "metrics/recall(B)", "metrics/recall");
+    const accuracy = getMetricVal("bestAccuracy", "accuracy", "accuracy_top1", "metrics/accuracy_top1", "metrics/accuracy");
+
+    const map50Str = formatMetric(map50);
+    const map50_95Str = formatMetric(map50_95);
+    const precisionStr = formatMetric(precision);
+    const recallStr = formatMetric(recall);
+    const accuracyStr = formatMetric(accuracy);
+
+    const modelName = config.model || config.weights || "YOLOv8";
+    const epochs = config.epochs !== undefined ? String(config.epochs) : "N/A";
+    const batch = config.batch !== undefined ? String(config.batch) : "N/A";
+    const projectName = config.project || inferProjectName(runDir, runName) || "N/A";
+
+    const classCountStr = String(classNames ? classNames.length : 0);
+    const classListStr = formatClassList(classNames, 32);
+
+    let trainCount = "N/A", valCount = "N/A", testCount = "N/A", totalCount = "0";
+    if (datasetCounts) {
+        trainCount = String(datasetCounts.train);
+        valCount = String(datasetCounts.val);
+        testCount = String(datasetCounts.test);
+        totalCount = String(datasetCounts.total);
+    } else if (summary && summary.imageCount !== undefined) {
+        totalCount = String(summary.imageCount);
+    }
+
+    const esc = (s) => (s ? String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : "");
+
+    const svg = `<svg width="1000" height="720" viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg">
+  <!-- Flat Dark Background -->
+  <rect width="1000" height="720" rx="0" fill="#171717"/>
+  
+  <!-- Njobvu Brand Blue Top Bar -->
+  <rect width="1000" height="6" rx="0" fill="#1569AE"/>
+
+  <!-- Header Section -->
+  <rect x="40" y="36" width="38" height="38" rx="0" fill="#1569AE"/>
+  <text x="59" y="61" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="800" text-anchor="middle">N</text>
+
+  <text x="90" y="52" fill="#1569AE" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" letter-spacing="1.5">NJOBVU AI PLATFORM</text>
+  <text x="90" y="74" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700">${esc(runName)}</text>
+
+  <!-- Header Badges -->
+  <rect x="730" y="38" width="110" height="30" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <text x="785" y="58" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" text-anchor="middle">Ultralytics</text>
+
+  <rect x="850" y="38" width="110" height="30" rx="0" fill="#1569AE"/>
+  <text x="905" y="58" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" text-anchor="middle">${esc((task || "detect").toUpperCase())}</text>
+
+  <!-- Metric Stat Cards -->
+  <rect x="40" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <text x="60" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">mAP@50</text>
+  <text x="60" y="188" fill="#1569AE" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50Str)}</text>
+
+  <rect x="275" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <text x="295" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">mAP@50-95</text>
+  <text x="295" y="188" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(map50_95Str)}</text>
+
+  <rect x="510" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <text x="530" y="138" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Precision / Recall</text>
+  <text x="530" y="172" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700">P: ${esc(precisionStr)}</text>
+  <text x="530" y="200" fill="#a0c4df" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600">R: ${esc(recallStr)}</text>
+
+  <rect x="745" y="110" width="215" height="115" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <text x="765" y="140" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600">Accuracy</text>
+  <text x="765" y="188" fill="#0284c7" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="800">${esc(accuracyStr)}</text>
+
+  <!-- Left Panel: Model & Framework Details -->
+  <rect x="40" y="250" width="450" height="400" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <rect x="60" y="275" width="4" height="20" rx="0" fill="#1569AE"/>
+  <text x="74" y="291" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Model &amp; Framework Details</text>
+  <line x1="60" y1="308" x2="470" y2="308" stroke="#334155" stroke-width="1"/>
+
+  <text x="60" y="342" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Framework:</text>
+  <text x="210" y="342" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">Ultralytics YOLO</text>
+
+  <text x="60" y="382" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Base Weights / Model:</text>
+  <text x="210" y="382" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(modelName)}</text>
+
+  <text x="60" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Task Type:</text>
+  <text x="210" y="422" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(task)} (${esc(pipelineTag)})</text>
+
+  <text x="60" y="462" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Epochs / Batch Size:</text>
+  <text x="210" y="462" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(epochs)} / ${esc(batch)}</text>
+
+  <text x="60" y="502" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Run Name:</text>
+  <text x="210" y="502" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(runName)}</text>
+
+  <text x="60" y="542" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Project:</text>
+  <text x="210" y="542" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14">${esc(projectName)}</text>
+
+  <!-- Right Panel: Dataset & Class Statistics -->
+  <rect x="510" y="250" width="450" height="400" rx="0" fill="#252525" stroke="#334155" stroke-width="1"/>
+  <rect x="530" y="275" width="4" height="20" rx="0" fill="#1569AE"/>
+  <text x="544" y="291" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700">Dataset &amp; Class Statistics</text>
+  <line x1="530" y1="308" x2="940" y2="308" stroke="#334155" stroke-width="1"/>
+
+  <text x="530" y="342" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Class Count:</text>
+  <text x="670" y="342" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600">${esc(classCountStr)} classes</text>
+
+  <text x="530" y="382" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Classes List:</text>
+  <text x="670" y="382" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500">${esc(classListStr)}</text>
+
+  <text x="530" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14">Class Source:</text>
+  <text x="670" y="422" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13">${esc(classSource || "N/A")}</text>
+
+  <text x="530" y="470" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600">Dataset Image Split Counts</text>
+
+  <rect x="530" y="490" width="92" height="64" rx="0" fill="#171717" stroke="#334155"/>
+  <text x="576" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Train</text>
+  <text x="576" y="539" fill="#1569AE" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(trainCount)}</text>
+
+  <rect x="632" y="490" width="92" height="64" rx="0" fill="#171717" stroke="#334155"/>
+  <text x="678" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Val</text>
+  <text x="678" y="539" fill="#5085A5" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(valCount)}</text>
+
+  <rect x="734" y="490" width="92" height="64" rx="0" fill="#171717" stroke="#334155"/>
+  <text x="780" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Test</text>
+  <text x="780" y="539" fill="#0284c7" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle">${esc(testCount)}</text>
+
+  <rect x="836" y="490" width="104" height="64" rx="0" fill="#171717" stroke="#1569AE"/>
+  <text x="888" y="512" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Total</text>
+  <text x="888" y="539" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="800" text-anchor="middle">${esc(totalCount)}</text>
+
+  <!-- Footer Branding -->
+  <text x="500" y="692" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="12" text-anchor="middle">Njobvu AI Platform  •  Computer Vision Training &amp; Inference Pipeline</text>
+</svg>`;
+
+    return await sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+/**
+ * Generates a Hugging Face-compatible model card (YAML frontmatter + markdown body)
+ * as well as a rendered image model card (MODEL_CARD.png) for a single training run.
+ *
+ * @param {string} runDir - Run directory to source artifacts from
+ * @param {Object} [options]
+ * @param {Object} [options.summary] - Pre-computed summary object (skips re-parsing)
+ * @param {string} [options.runName] - Custom run name/label
+ * @param {string} [options.task] - Override task type (detect/segment/obb/classify/pose)
+ * @param {string} [options.projectName] - Project name used as the dataset label
+ * @returns {Promise<Object>} { modelCardPath, modelCardImagePath, frontmatter, markdown, summary }
+ */
+async function generateModelCard(runDir, options = {}) {
+    if (!runDir || !fs.existsSync(runDir)) {
+        throw new Error(`Run directory does not exist: ${runDir}`);
+    }
+
+    const summary = options.summary || await generateSingleRunSummary(runDir, options);
+    const runName = options.runName || summary.runName || path.basename(runDir);
+
+    const { names: classNames, source: classSource } = discoverClassNames(runDir, summary);
+    const datasetCounts = discoverDatasetImageCounts(runDir);
+    const task = (options.task || inferTask(summary.config, datasetCounts)).toLowerCase();
+    const pipelineTag = PIPELINE_TAG_BY_TASK[task] || "object-detection";
+
+    const modelIndexMetrics = buildModelIndexMetrics(summary.metrics || {});
+    const tags = buildTags(summary.config, task);
+
+    const frontmatterYaml = buildFrontmatterYaml({
+        pipelineTag,
+        tags,
+        modelIndex: {
+            name: runName,
+            taskType: pipelineTag,
+            datasetName: options.projectName || (summary.config && summary.config.project) || inferProjectName(runDir, runName) || runName,
+            metrics: modelIndexMetrics
+        }
+    });
+
+    const body = buildModelCardBody({
+        runName,
+        runDir,
+        summary,
+        classNames,
+        classSource,
+        datasetCounts,
+        task,
+        modelIndexMetrics
+    });
+
+    const markdown = `---\n${frontmatterYaml}---\n\n${body}`;
+    const modelCardPath = path.join(runDir, "MODEL_CARD.md");
+    fs.writeFileSync(modelCardPath, markdown, "utf8");
+
+    const imageBuffer = await generateModelCardImageBuffer({
+        runName,
+        summary,
+        classNames,
+        classSource,
+        datasetCounts,
+        task,
+        pipelineTag,
+        modelIndexMetrics,
+        runDir
+    });
+    const modelCardImagePath = path.join(runDir, "MODEL_CARD.png");
+    fs.writeFileSync(modelCardImagePath, imageBuffer);
+
+    return {
+        modelCardPath,
+        modelCardImagePath,
+        frontmatter: { library_name: "ultralytics", pipeline_tag: pipelineTag, tags },
+        markdown,
+        summary
+    };
+}
+
 module.exports = {
     generateRunSummary,
     generateSingleRunSummary,
@@ -1023,6 +1899,7 @@ module.exports = {
     listAvailableRuns,
     buildRunDocumentContext,
     persistCustomSummary,
+    generateModelCard,
     parseYamlSimple,
     parseResultsCsvStream
 };

@@ -89,7 +89,7 @@
 						<td class="text-center"><%= projects[i][4] %>%</td>
 
 						<td class="text-center">
-							<form class="download-project-form" action ="downloadProject" method="POST" enctype="multipart/form-data" id="downloadProjectForm<%=i%>">
+							<form class="download-project-form" action ="/downloadProject" method="POST" enctype="multipart/form-data" id="downloadProjectForm<%=i%>">
 								<input id = "PName<%=i%>" type="hidden" name="PName" value="<%= projects[i][0].PName %>">
 								<input id = "Admin<%=i%>" type="hidden" name="Admin" value="<%= projects[i][0].Admin %>">
 								<input id = "PDescription<%=i%>" type="hidden" name="PDescription" value="<%= projects[i][0].PDescription %>">

@@ -84,10 +84,10 @@
                                         <div class="form-row">
                                             <div class="form-group col-md-6">
                                                 <h5><label for="upload-inference" style="width: 200%;">Upload inference
-                                                        file (.jpg, .png, .gif, .tif, .mp4)</label></h5>
+                                                        file (.jpg, .png, .gif, .tif, .mp4, .mov, .zip)</label></h5>
                                                 <input id="upload-inference" name="upload-inference" type="file"
-                                                    class="form-control-file" required>
-                                                <p>This is for doing predict or track for the YOLO MODE.</p>
+                                                    class="form-control-file" accept=".jpg,.jpeg,.png,.gif,.tif,.tiff,.mp4,.mov,.zip" required>
+                                                <p>This is for doing predict or track for the YOLO MODE. You can also upload a .zip archive containing images or videos.</p>
                                             </div>
                                         </div>
                                         <div class="col text-left">
@@ -96,6 +96,7 @@
                                         </div>
                                     </form>
                                     <br>
+                                    <%- include('../includes/s3BucketForm') %>
                                     <br>
                                     <form class="Configure Project For YOLO" action="/yolo-inf"
                                         enctype="multipart/form-data" id="yolo-inf" method=post>
@@ -154,10 +155,10 @@
                                                 <h5><label for="upload-command">Inference Files:</label></h5>
                                                 <select name="Inference" id="Inference" style="width:100%">
                                                     <% for(var i=0; i<global_inference_upload.length; i++) {%>
-                                                        <option>
-                                                            <%= global_inference_upload[i]%>
+                                                        <option value="<%= global_inference_upload[i] %>">
+                                                            <%= global_inference_upload[i] === 's3' || global_inference_upload[i] === 's3_bucket' ? '[Attached S3 Bucket]' : global_inference_upload[i] %>
                                                         </option>
-                                                        <% } %>
+                                                    <% } %>
                                                 </select>
                                             </div>
                                         </div>
@@ -228,6 +229,8 @@
                                 formData.append("PName", "<%= PName %>");
                                 formData.append("Admin", "<%= Admin %>");
 
+                                const submitBtn = event.target.querySelector('button[type="submit"]');
+                                if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading file...");
 
                                 fetch(event.target.action, {
                                     method: 'POST',
@@ -240,6 +243,7 @@
                                     window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
 
                                 }).catch((error) => {
+                                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                     console.log(error);
                                 });
                             }
@@ -262,6 +266,8 @@
                                 formData.append("PName", "<%= PName %>");
                                 formData.append("Admin", "<%= Admin %>");
 
+                                const submitBtn = event.target.querySelector('button[type="submit"]');
+                                if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading weights...");
 
                                 fetch(event.target.action, {
                                     method: 'POST',
@@ -274,6 +280,7 @@
                                     window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
 
                                 }).catch((error) => {
+                                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                     console.log(error);
                                 });
                             }
@@ -289,6 +296,8 @@
                             formData.append("PName", "<%= PName %>");
                             formData.append("Admin", "<%= Admin %>");
 
+                            const submitBtn = event.target.querySelector('button[type="submit"]');
+                            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Adding path...");
 
                             fetch(event.target.action, {
                                 method: 'POST',
@@ -302,6 +311,7 @@
                                 window.location.replace("/yolo/yolovXInferenceSettings?IDX=<%= IDX %>");
 
                             }).catch((error) => {
+                                if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                 console.log(error);
                             });
                         });
@@ -343,59 +353,9 @@
                             formData.append("yolo_version", document.getElementById("yolo_version").value);
                             formData.append("yolo_task", document.getElementById("yolo_task").value);
                             formData.append("yolo_mode", document.getElementById("yolo_mode").value);
-                            // formData.append("options", document.getElementById("options").value);
-                            // formData.append("device", document.getElementById("device").value);
 
-                            console.log(formData);
-
-                            fetch(event.target.action, {
-                                method: 'POST',
-                                body: formData
-                            }).then((resp) => {
-                                return resp.json();
-                            }).then((body) => {
-                                console.log(body);
-
-                                alert(body.Success);
-                                window.location.replace("/inference?IDX=<%= IDX %>");
-
-                            }).catch((error) => {
-                                console.log(error);
-                            });
-                        });
-
-
-                        document.forms['yolo-run'].addEventListener('submit', (event) => {
-                            event.preventDefault();
-                            console.log('Form for yolo-run handler')
-
-                            var yolovx_path = document.getElementById("Yolo").value;
-                            var weights_file = document.getElementById("Weights").value;
-                            var inference_file = document.getElementById("Inference").value;
-
-                            console.log("weights_file: ", weights_file)
-                            if (weights_file == "") {
-                                alert("Must select a weights file")
-                                return;
-                            }
-
-                            var formData = new FormData();
-                            formData.append("PName", "<%= PName %>");
-                            formData.append("Admin", "<%= Admin %>");
-                            formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
-                            formData.append("batch", document.getElementById("batch").value);
-                            formData.append("subdiv", document.getElementById("subdiv").value);
-                            formData.append("yolovx_path", document.getElementById("Yolo").value);
-                            formData.append("weights", document.getElementById("Weights").value);
-                            formData.append("width", document.getElementById("width").value);
-                            formData.append("height", document.getElementById("height").value);
-                            formData.append("yolo_version", document.getElementById("yolo_version").value);
-                            formData.append("yolo_task", document.getElementById("yolo_task").value);
-                            formData.append("yolo_mode", document.getElementById("yolo_mode").value);
-                            formData.append("epochs", document.getElementById("epochs").value);
-                            formData.append("options", document.getElementById("options").value);
-                            formData.append("imgsz", document.getElementById("imgsz").value);
-                            formData.append("device", document.getElementById("device").value);
+                            const submitBtn = document.getElementById("Infbtn");
+                            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Running inference...");
 
                             fetch(event.target.action, {
                                 method: 'POST',
@@ -409,9 +369,65 @@
                                 window.location.replace("/inference?IDX=<%= IDX %>");
 
                             }).catch((error) => {
+                                if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                                 console.log(error);
                             });
                         });
+
+
+                        if (document.forms['yolo-run']) {
+                            document.forms['yolo-run'].addEventListener('submit', (event) => {
+                                event.preventDefault();
+                                console.log('Form for yolo-run handler')
+
+                                var yolovx_path = document.getElementById("Yolo").value;
+                                var weights_file = document.getElementById("Weights").value;
+                                var inference_file = document.getElementById("Inference").value;
+
+                                console.log("weights_file: ", weights_file)
+                                if (weights_file == "") {
+                                    alert("Must select a weights file")
+                                    return;
+                                }
+
+                                var formData = new FormData();
+                                formData.append("PName", "<%= PName %>");
+                                formData.append("Admin", "<%= Admin %>");
+                                formData.append("TrainingPercent", document.getElementById("TrainingRange").value);
+                                formData.append("batch", document.getElementById("batch").value);
+                                formData.append("subdiv", document.getElementById("subdiv").value);
+                                formData.append("yolovx_path", document.getElementById("Yolo").value);
+                                formData.append("weights", document.getElementById("Weights").value);
+                                formData.append("width", document.getElementById("width").value);
+                                formData.append("height", document.getElementById("height").value);
+                                formData.append("yolo_version", document.getElementById("yolo_version").value);
+                                formData.append("yolo_task", document.getElementById("yolo_task").value);
+                                formData.append("yolo_mode", document.getElementById("yolo_mode").value);
+                                formData.append("epochs", document.getElementById("epochs").value);
+                                formData.append("options", document.getElementById("options").value);
+                                formData.append("imgsz", document.getElementById("imgsz").value);
+                                formData.append("device", document.getElementById("device").value);
+
+                                const submitBtn = event.target.querySelector('button[type="submit"]');
+                                if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Starting...");
+
+                                fetch(event.target.action, {
+                                    method: 'POST',
+                                    body: formData
+                                }).then((resp) => {
+                                    return resp.json();
+                                }).then((body) => {
+                                    console.log(body);
+
+                                    alert(body.Success);
+                                    window.location.replace("/inference?IDX=<%= IDX %>");
+
+                                }).catch((error) => {
+                                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
+                                    console.log(error);
+                                });
+                            });
+                        }
                     });
 
                 </script>

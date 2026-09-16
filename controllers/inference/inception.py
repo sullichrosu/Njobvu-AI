@@ -112,10 +112,26 @@ def preprocess_image(img_path):
 # Inference
 # ---------------------------------------------------
 
-image_files = [
-    f for f in os.listdir(args.image_path)
-    if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp"))
-]
+target_dir = args.image_path
+temp_dir = None
+
+if target_dir.lower().endswith(".zip") or target_dir.lower().endswith(".7z") or zipfile.is_zipfile(target_dir):
+    import tempfile
+    import shutil
+    temp_dir = tempfile.mkdtemp(prefix="inception_zip_")
+    with zipfile.ZipFile(target_dir, 'r') as zip_ref:
+        zip_ref.extractall(temp_dir)
+    target_dir = temp_dir
+
+image_files = []
+if os.path.isdir(target_dir):
+    for root, dirs, files in os.walk(target_dir):
+        for f in files:
+            if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".gif", ".webp")):
+                image_files.append(os.path.relpath(os.path.join(root, f), target_dir))
+elif os.path.isfile(target_dir) and target_dir.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".gif", ".webp")):
+    image_files.append(os.path.basename(target_dir))
+    target_dir = os.path.dirname(target_dir)
 
 os.makedirs(args.output_path, exist_ok=True)
 

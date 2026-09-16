@@ -184,7 +184,7 @@
             </form>
 
             <form class="add-project-form flow-content s3-flow" id="s3Form" onsubmit="return false;">
-                <h3>Add Project From S3 Bucket <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create a project backed by an S3 bucket instead of an uploaded archive. Njobvu downloads a local working copy of the bucket's images, so existing labeling, training, and inference tools work unchanged">?</span></h3>
+                <h3>Add Project From S3 Bucket <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Create a project backed by an S3 bucket instead of an uploaded archive. Choose below whether Njobvu downloads a local working copy of the bucket's images (so existing labeling, training, and inference tools work unchanged) or streams them on demand instead">?</span></h3>
                 <div class="form-row">
                     <div class="form-group col-md-6">
                         <label for="s3_project_name">Project Name</label>
@@ -224,6 +224,15 @@
                     </div>
                 </div>
                 <p>Leave the Access Key fields blank to use the server's default AWS credentials/role.</p>
+                <div class="form-row">
+                    <div class="form-group col-md-12">
+                        <label for="s3_sync_mode">Image loading <span class="help-tooltip-icon help-tooltip-icon-light" data-toggle="tooltip" title="Download all: copies every image to local disk now, so labeling/training/inference work exactly as they do today. Stream on demand: skips the copy - images are fetched from the bucket only when actually viewed, which avoids downloading the whole bucket up front but adds a live fetch on first view of each image.">?</span></label>
+                        <select id="s3_sync_mode" name="sync_mode" aria-label="S3 image loading mode" class="form-control">
+                            <option value="download" selected>Download all images now</option>
+                            <option value="stream">Stream images on demand</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="col text-center">
                     <hr class="my-4">
                     <button type="button" id="s3SubmitBtn" aria-label="submit" class="btn btn-primary btn-lg" style="border-radius: 0" onclick="submitS3Form()">submit</button>
@@ -289,6 +298,7 @@
         const accessKeyId = document.getElementById('s3_access_key_id').value;
         const secretAccessKey = document.getElementById('s3_secret_access_key').value;
         const endpoint = document.getElementById("s3_endpoint").value;
+        const syncMode = document.getElementById("s3_sync_mode").value;
 
         if (!bucketName || !region) {
             alert("Bucket Name and Region are required.");
@@ -297,7 +307,7 @@
 
         const submitBtn = document.getElementById('s3SubmitBtn');
         const progress = document.getElementById('progress');
-        submitBtn.style.display = "none";
+        if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Creating project...");
 
         try {
             progress.textContent = "Creating project...";
@@ -316,6 +326,7 @@
             }
 
             progress.textContent = "Attaching S3 bucket...";
+            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Attaching S3 bucket...");
 
             const attachRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket`, {
                 method: 'POST',
@@ -327,6 +338,7 @@
                     AccessKeyId: accessKeyId,
                     SecretAccessKey: secretAccessKey,
                     Endpoint: endpoint,
+                    SyncMode: syncMode,
                 }),
             });
 
@@ -336,6 +348,7 @@
             }
 
             progress.textContent = "Syncing images from S3...";
+            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Syncing images from S3...");
 
             const syncRes = await fetch(`/api/v2/projects/${encodeURIComponent(currentUsername)}/${encodeURIComponent(projectName)}/s3-bucket/sync`, {
                 method: 'POST',
@@ -351,7 +364,7 @@
             window.location.replace('/home');
         } catch (err) {
             progress.textContent = "";
-            submitBtn.style.display = "inline-block";
+            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
             alert("Something went wrong setting up the S3-backed project.\nReason: " + err.message);
         }
     }
@@ -375,23 +388,26 @@
             const formData = new FormData(this);
             const xhr = new XMLHttpRequest();
             const progress = document.getElementById('progress');
+            const submitBtn = this.querySelector('input[type="submit"], button[type="submit"]');
 
             progress.textContent = "Percent Uploaded: 0%";
-            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "none");
+            if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Uploading 0%...");
 
             xhr.upload.addEventListener('progress', function(e) {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
                     progress.textContent = `Percent Uploaded: ${percent}%`;
+                    if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, `Uploading ${percent}%...`);
                     if (percent === 100) {
                         progress.textContent = "Upload Finished. Server processing upload. Please wait for the closing prompt.";
+                        if (window.LoadingSpinner) LoadingSpinner.show(submitBtn, "Processing...");
                     }
                 }
             });
 
             xhr.onreadystatechange = function() {
                 if (xhr.readyState === 4) {
-                    document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                    if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
 
                     if (xhr.status === 200) {
                         alert("Project creation successful");
@@ -427,7 +443,7 @@
                             formData.append('frame_rate', frameRate);
                         } else {
                             progress.textContent = "";
-                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                             return;
                         }
                     }
@@ -449,7 +465,7 @@
                             formData.append('frame_rate', frameRate);
                         } else {
                             progress.textContent = "";
-                            document.querySelectorAll('input[type="submit"]').forEach(btn => btn.style.display = "inline-block");
+                            if (window.LoadingSpinner) LoadingSpinner.hide(submitBtn);
                             return;
                         }
                     }

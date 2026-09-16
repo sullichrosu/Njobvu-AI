@@ -207,18 +207,22 @@ async function getFilteredImagesApi(req, res) {
             const pdb = new sqlite3.Database(db_path, (err) => {
                 if (err) return reject(err);
 
-                const query = `
-                    SELECT Images.IName, Images.reviewImage, Images.validateImage, COUNT(Labels.LID) AS numLabels
-                    FROM Images
-                    LEFT JOIN Labels ON Images.IName = Labels.IName
-                    GROUP BY Images.IName
-                `;
+                pdb.run("ALTER TABLE Images ADD COLUMN reviewImage INTEGER NOT NULL DEFAULT 0", () => {
+                    pdb.run("ALTER TABLE Images ADD COLUMN validateImage INTEGER NOT NULL DEFAULT 0", () => {
+                        const query = `
+                            SELECT Images.IName, Images.reviewImage, Images.validateImage, COUNT(Labels.LID) AS numLabels
+                            FROM Images
+                            LEFT JOIN Labels ON Images.IName = Labels.IName
+                            GROUP BY Images.IName
+                        `;
 
-                pdb.all(query, [], (err, rows) => {
-                    pdb.close();
-                    if (err) return reject(err);
-                    images = rows || [];
-                    resolve();
+                        pdb.all(query, [], (err, rows) => {
+                            pdb.close();
+                            if (err) return reject(err);
+                            images = rows || [];
+                            resolve();
+                        });
+                    });
                 });
             });
         });

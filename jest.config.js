@@ -3,4 +3,5 @@ module.exports = {
   testMatch: ['**/tests/**/*.test.js'],
   testPathIgnorePatterns: ['/node_modules/'],
   setupFiles: ['<rootDir>/tests/setup.js'],
+  testTimeout: 15000,
 };
