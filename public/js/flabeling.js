@@ -972,7 +972,7 @@ function resetLabels() {
         });
     }
 }
-$("#reset-labeling").click(resetLabels);
+$("#reset-labeling, #reset-annotate").click(resetLabels);
 
 // undo label action
 function undoLabel() {
@@ -997,7 +997,7 @@ function undoLabel() {
         $('#labels-counter').val(counter);
     }
 }
-$("#undo-labeling").click(undoLabel);
+$("#undo-labeling, #undo-annotate").click(undoLabel);
 
 // Reset Zoom
 function resetZoom() {
@@ -1034,6 +1034,15 @@ $(document).keydown(function(event) {
 
     if (event.keyCode === 27) {
         cancelInProgressPolygon();
+    }
+
+    // Ctrl+Z / Cmd+Z: undo, before the unmodified "z" -> resetZoom() branch below,
+    // and prevent the browser's native undo from also firing.
+    var rawKeyCode = event.keyCode ? event.keyCode : event.which;
+    if ((event.ctrlKey || event.metaKey) && rawKeyCode === 90) {
+        event.preventDefault();
+        undoLabel();
+        return;
     }
 
     var key = (event.keyCode ? event.keyCode : event.which) - 49;
