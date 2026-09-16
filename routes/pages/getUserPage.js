@@ -7,10 +7,10 @@ async function getUserPage(req, res) {
     var userInfo = await db.getAsync(
         "SELECT * FROM Users WHERE Username = '" + user + "'",
     );
-    var results1 = await db.allAsync("SELECT * FROM Users");
+    var userRows = await db.allAsync("SELECT * FROM Users");
     var users = [];
-    for (var i = 0; i < results1.length; i++) {
-        users.push(results1[i].Username);
+    for (var i = 0; i < userRows.length; i++) {
+        users.push(userRows[i].Username);
     }
     var Fname = userInfo.FirstName;
     var Lname = userInfo.LastName;

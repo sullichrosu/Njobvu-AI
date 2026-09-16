@@ -1,9 +1,6 @@
+const { getPageParams } = require("./pageContext");
 async function getServerInfoPage(req, res) {
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
-
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+    let { projectIndex: IDX, username: user } = getPageParams(req);
 
     if (IDX == undefined) {
         IDX = 0;

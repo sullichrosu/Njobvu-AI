@@ -87,13 +87,13 @@ async function getValidationLabelingPage(req, res) {
         });
     };
 
-    var results1 = await ldb.allAsync("SELECT * FROM `Classes`");
+    var classRows = await ldb.allAsync("SELECT * FROM `Classes`");
     var Classes = [];
-    for (var i = 0; i < results1.length; i++) {
-        Classes.push(results1[i].CName);
+    for (var i = 0; i < classRows.length; i++) {
+        Classes.push(classRows[i].CName);
     }
 
-    var results2 = Array();
+    var imageRows = Array();
     if (
         ((imageClass == null ||
             imageClass == "null" ||
@@ -101,14 +101,14 @@ async function getValidationLabelingPage(req, res) {
             (sortFilter == "null" || sortFilter == null)) ||
         (sortFilter == "Confidence" && imageClass == "null")
     ) {
-        results2 = await ldb.allAsync("SELECT * FROM `Images`");
+        imageRows = await ldb.allAsync("SELECT * FROM `Images`");
     } else if (
         sortFilter == "needs_review" &&
         (imageClass == null ||
             imageClass == "null" ||
             !Classes.includes(imageClass))
     ) {
-        results2 = await ldb.allAsync(
+        imageRows = await ldb.allAsync(
             "SELECT * FROM `Images` WHERE reviewImage=1",
         );
     } else if (
@@ -146,7 +146,7 @@ async function getValidationLabelingPage(req, res) {
                     images[d].IName +
                     "'",
             );
-            results2.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     } else if (
         sortFilter == "confidence" &&
@@ -187,7 +187,7 @@ async function getValidationLabelingPage(req, res) {
                     imagesWithClass[d].IName +
                     "'",
             );
-            results2.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     } else if (sortFilter == "has_class") {
         if (imageClass != "null") {
@@ -218,7 +218,7 @@ async function getValidationLabelingPage(req, res) {
                     imagesWithClass[d].IName +
                     "'",
             );
-            results2.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     } else {
         var imagesWithClass = await ldb.allAsync(
@@ -242,16 +242,16 @@ async function getValidationLabelingPage(req, res) {
                     imagesWithClass[d].IName +
                     "'",
             );
-            results2.push(imageData[0]);
+            imageRows.push(imageData[0]);
         }
     }
 
-    // curr_index must be the image's position within results2 (the active
+    // curr_index must be the image's position within imageRows (the active
     // filtered/sorted list), not its row position in the whole Images table —
-    // results2 can be a subset (e.g. sort=needs_review, or a single class), so
+    // imageRows can be a subset (e.g. sort=needs_review, or a single class), so
     // a global row number doesn't line up with it and prev/next below can index
     // out of bounds.
-    var displayIndex = results2.findIndex(
+    var displayIndex = imageRows.findIndex(
         (img) => img && String(img.IName) === String(IName),
     );
 
@@ -264,13 +264,13 @@ async function getValidationLabelingPage(req, res) {
             if (err) global.logger.error(err);
         });
 
-        if (results2 && results2.length > 0) {
-            var targetClass = (curr_class && curr_class !== "undefined") ? curr_class : ((results1 && results1.length > 0) ? results1[0].CName : "");
+        if (imageRows && imageRows.length > 0) {
+            var targetClass = (curr_class && curr_class !== "undefined") ? curr_class : ((classRows && classRows.length > 0) ? classRows[0].CName : "");
             return res.redirect(
                 "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
-                    results2[0].IName +
+                    imageRows[0].IName +
                     "&curr_class=" +
                     targetClass +
                     "&sort=" +
@@ -295,20 +295,20 @@ async function getValidationLabelingPage(req, res) {
     var rowid = { display_id: displayIndex >= 0 ? displayIndex + 1 : 1 };
 
 
-    var results3 = await ldb.allAsync(
+    var labelRows = await ldb.allAsync(
         "SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'",
     );
-    var results4 = await ldb.allAsync(
+    var imageRow = await ldb.allAsync(
         "SELECT * FROM `Images` WHERE IName = '" + String(IName) + "'",
     );
-    var results5 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT AutoSave FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin = '" +
             admin +
             "'",
     );
-    var results6 = await ldb.allAsync(
+    var labelConfidenceRows = await ldb.allAsync(
         "SELECT * FROM `Validation` WHERE IName = '" + String(IName) + "'",
     );
     var acc = await db.allAsync(
@@ -321,7 +321,7 @@ async function getValidationLabelingPage(req, res) {
     var access = [];
 
     if (curr_class == null) {
-        curr_class = (results1 && results1.length > 0) ? results1[0].CName : '';
+        curr_class = (classRows && classRows.length > 0) ? classRows[0].CName : '';
     }
 
     for (var i = 0; i < acc.length; i++) {
@@ -337,10 +337,10 @@ async function getValidationLabelingPage(req, res) {
         });
     } else {
         // var rel_image_path = abs_image_path;
-        var rel_image_path = rel_project_path + "/images/" + results4[0].IName;
+        var rel_image_path = rel_project_path + "/images/" + imageRow[0].IName;
         // get image information //there might be a race condition between rel_project_path and project_path which makes them different when bootstrapping is run
         var img = fs.readFileSync(
-                project_path + "/images/" + results4[0].IName,
+                project_path + "/images/" + imageRow[0].IName,
                 (err) => {
                     if (err) {
                         res.render("404", {
@@ -364,11 +364,11 @@ async function getValidationLabelingPage(req, res) {
         curr_index = Number(rowid.display_id);
 
         if (displayIndex !== -1) {
-            if (displayIndex > 0 && results2[displayIndex - 1]) {
-                prev_IName = results2[displayIndex - 1]["IName"];
+            if (displayIndex > 0 && imageRows[displayIndex - 1]) {
+                prev_IName = imageRows[displayIndex - 1]["IName"];
             }
-            if (displayIndex < results2.length - 1 && results2[displayIndex + 1]) {
-                next_IName = results2[displayIndex + 1]["IName"];
+            if (displayIndex < imageRows.length - 1 && imageRows[displayIndex + 1]) {
+                next_IName = imageRows[displayIndex + 1]["IName"];
             }
         }
         // close the database
@@ -391,9 +391,9 @@ async function getValidationLabelingPage(req, res) {
         }
 
         var stats = {};
-        for (var a = 0; a < results3.length; a++) {
-            className = results3[a].CName;
-            labelID = results3[a].LID;
+        for (var a = 0; a < labelRows.length; a++) {
+            className = labelRows[a].CName;
+            labelID = labelRows[a].LID;
             if (stats[className] == null) {
                 stats[className] = 1;
             } else {
@@ -412,12 +412,12 @@ async function getValidationLabelingPage(req, res) {
             image_width: image_width,
             image_height: image_height,
             image_path: rel_image_path,
-            image_name: results4[0].IName,
+            image_name: imageRow[0].IName,
             image_ratio: image_ratio,
             classes: Classes,
-            images: results2,
-            labels: results3,
-            labelConf: results6,
+            images: imageRows,
+            labels: labelRows,
+            labelConf: labelConfidenceRows,
             colors: colors,
             IName: IName,
             prev_IName: prev_IName,
@@ -425,12 +425,12 @@ async function getValidationLabelingPage(req, res) {
             PName: PName,
             Admin: admin,
             IDX: IDX,
-            images_length: results2.length,
+            images_length: imageRows.length,
             curr_index: curr_index,
             curr_class: curr_class,
-            rev_image: results4[0].reviewImage,
+            rev_image: imageRow[0].reviewImage,
             list_counter: list_counter,
-            AutoSave: results5["AutoSave"],
+            AutoSave: projectInfo["AutoSave"],
             logged: req.query.logged,
             stats: statsO,
             sortFilter: sortFilter || "null",

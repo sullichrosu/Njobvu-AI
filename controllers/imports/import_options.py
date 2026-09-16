@@ -78,7 +78,7 @@ def classification_plus_import(db_name, input_dir, output):
 
     # update command to use the new labels path
     command = [
-        'python3', 
+        sys.executable, 
         import_nj_script, 
         '-n', 'new', 
         '-i', dir_to_process, 
@@ -228,7 +228,7 @@ def inference_plus_import(input_dir, output, weights_file):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     import_nj_script = os.path.join(script_dir, "importNJ.py")
     command = [
-        'python3', 
+        sys.executable, 
         import_nj_script, 
         '-n', 'new', 
         '-i', input_dir, 

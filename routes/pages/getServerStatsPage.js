@@ -1,13 +1,16 @@
+const { getPageParams } = require("./pageContext");
 const { exec } = require("child_process");
 const { promisify } = require("util");
 const execAsync = promisify(exec);
 
 async function getServerStatsPage(req, res) {
     // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        user = req.cookies.Username;
+    const {
+        projectIndex: IDX,
+        imageName: IName,
+        currentClass: curr_class,
+        username: user,
+    } = getPageParams(req);
 
     if (IDX == undefined) {
         IDX = 0;
@@ -30,7 +33,7 @@ async function getServerStatsPage(req, res) {
     var PName = projects[num].PName;
     var admin = projects[num].Admin;
 
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
         PName +
         "' AND Admin = '" +

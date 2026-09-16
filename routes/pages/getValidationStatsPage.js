@@ -1,7 +1,7 @@
+const { getPageParams } = require("./pageContext");
 async function getValidationStatsPage(req, res) {
     // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+    let { projectIndex: IDX, username: user } = getPageParams(req);
 
     if (IDX == undefined) {
         IDX = 0;
@@ -63,33 +63,33 @@ async function getValidationStatsPage(req, res) {
             global.logger.error(err);
         });
     };
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin = '" +
             admin +
             "'",
     );
-    var results2 = await sdb.allAsync("SELECT * FROM `Classes`");
+    var classRows = await sdb.allAsync("SELECT * FROM `Classes`");
 
     var classes = [];
     var counts = [];
     var icounts = [];
     var lcounts = 0;
-    for (var i = 0; i < results2.length; i++) {
-        var results3 = await sdb.getAsync(
+    for (var i = 0; i < classRows.length; i++) {
+        var classLabelCountRow = await sdb.getAsync(
             "SELECT COUNT(*) FROM Labels Where CName = '" +
-                results2[i].CName +
+                classRows[i].CName +
                 "'",
         );
-        classes.push(results2[i].CName);
-        counts.push(results3["COUNT(*)"]);
-        var results4 = await sdb.allAsync(
+        classes.push(classRows[i].CName);
+        counts.push(classLabelCountRow["COUNT(*)"]);
+        var classImageRows = await sdb.allAsync(
             "SELECT DISTINCT IName FROM Labels WHERE CName = '" +
-                results2[i].CName +
+                classRows[i].CName +
                 "'",
         );
-        icounts.push(results4.length);
+        icounts.push(classImageRows.length);
     }
 
     var acc = await db.allAsync(
@@ -104,12 +104,12 @@ async function getValidationStatsPage(req, res) {
         access.push(acc[i].Username);
     }
 
-    var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
-    var results6 = await sdb.allAsync(
+    var imageCountRow = await sdb.getAsync("SELECT COUNT(*) FROM Images");
+    var labeledImageRows = await sdb.allAsync(
         "SELECT DISTINCT IName FROM Images WHERE reviewImage = 1",
     );
     var complete =
-        100 - Math.trunc(100 * (results6.length / results5["COUNT(*)"]));
+        100 - Math.trunc(100 * (labeledImageRows.length / imageCountRow["COUNT(*)"]));
 
     // close the database
     sdb.close(function (err) {
@@ -126,8 +126,8 @@ async function getValidationStatsPage(req, res) {
         PName: PName,
         Admin: admin,
         IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
+        PDescription: projectInfo.PDescription,
+        AutoSave: projectInfo.AutoSave,
         classes: classes,
         counts: counts,
         icounts: icounts,

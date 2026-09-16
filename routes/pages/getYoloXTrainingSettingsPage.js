@@ -1,3 +1,4 @@
+const { getPageParams } = require("./pageContext");
 const queries = require("../../queries/queries");
 
 async function getYoloXInferencePage(req, res) {
@@ -30,10 +31,12 @@ async function getYoloXInferencePage(req, res) {
     }
 
     // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        user = req.cookies.Username;
+    const {
+        projectIndex: IDX,
+        imageName: IName,
+        currentClass: curr_class,
+        username: user,
+    } = getPageParams(req);
 
     if (IDX == undefined) {
         IDX = 0;
@@ -134,14 +137,14 @@ async function getYoloXInferencePage(req, res) {
         });
     };
 
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
         PName +
         "' AND Admin = '" +
         admin +
         "'",
     );
-    var results2 = await tdb.allAsync("SELECT * FROM `Classes`");
+    var classRows = await tdb.allAsync("SELECT * FROM `Classes`");
 
     var classLabelCounts = {};
 
@@ -169,7 +172,7 @@ async function getYoloXInferencePage(req, res) {
         global.logger.error(err);
     }
 
-    results2 = results2.map(function(cls) {
+    classRows = classRows.map(function(cls) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
             imageCount: classImageCounts[cls.CName] || 0,
@@ -409,9 +412,9 @@ async function getYoloXInferencePage(req, res) {
         PName: PName,
         Admin: admin,
         IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
-        classes: results2,
+        PDescription: projectInfo.PDescription,
+        AutoSave: projectInfo.AutoSave,
+        classes: classRows,
         logs: log_files,
         err_file: err_file,
         err_contents: err,

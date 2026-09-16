@@ -31,7 +31,7 @@ async function getValidationHomePage(req, res) {
         projects = await global.db.allAsync("SELECT * FROM `Access` WHERE Username = '" + user + "'");
     }
 
-    var results1 = [];
+    var projectRows = [];
     var PNames = [];
 
     if (projects && projects.length > 0) {
@@ -54,23 +54,23 @@ async function getValidationHomePage(req, res) {
             }
 
             if (Proj != null) {
-                results1.push([Proj, i, 0, 0, 0, 0]);
+                projectRows.push([Proj, i, 0, 0, 0, 0]);
             }
         }
 
-        if (results1.length != 0) {
-            for (var i = 0; i < results1.length; i++) {
+        if (projectRows.length != 0) {
+            for (var i = 0; i < projectRows.length; i++) {
                 var dbpath = path.join(
                     project_path,
-                    results1[i][0].Admin + "-" + results1[i][0].PName,
-                    results1[i][0].PName + ".db"
+                    projectRows[i][0].Admin + "-" + projectRows[i][0].PName,
+                    projectRows[i][0].PName + ".db"
                 );
 
                 if (!fs.existsSync(dbpath)) {
-                    results1[i][2] = 0;
-                    results1[i][3] = 0;
-                    results1[i][4] = 0;
-                    results1[i][5] = 0;
+                    projectRows[i][2] = 0;
+                    projectRows[i][3] = 0;
+                    projectRows[i][4] = 0;
+                    projectRows[i][5] = 0;
                     continue;
                 }
 
@@ -129,13 +129,13 @@ async function getValidationHomePage(req, res) {
                 var counter = await hdb.getAsync("SELECT COUNT(*) FROM Labels");
 
                 if (!found_review || Number(found_review["COUNT(*)"]) == 0) {
-                    results1[i][2] = 0;
+                    projectRows[i][2] = 0;
                 } else {
-                    results1[i][2] = 1;
+                    projectRows[i][2] = 1;
                 }
-                results1[i][3] = numimg ? Number(numimg["COUNT(*)"]) : 0;
-                results1[i][4] = complete;
-                results1[i][5] = counter ? Number(counter["COUNT(*)"]) : 0;
+                projectRows[i][3] = numimg ? Number(numimg["COUNT(*)"]) : 0;
+                projectRows[i][4] = complete;
+                projectRows[i][5] = counter ? Number(counter["COUNT(*)"]) : 0;
 
                 hdb.close(function (err) {
                     if (err) {
@@ -146,26 +146,26 @@ async function getValidationHomePage(req, res) {
         }
     }
 
-    results1 = queries.managed.filterProjects(results1, {
+    projectRows = queries.managed.filterProjects(projectRows, {
         search: search,
         needsReview: needsReview,
         sortBy: sortBy,
         sortOrder: sortOrder,
     });
 
-    PNames = results1.map((item) => item[0].PName);
-    var list_counter = results1.map((item) => item[5] || 0);
-    var review_counter = results1.map((item) => item[2] || 0);
+    PNames = projectRows.map((item) => item[0].PName);
+    var list_counter = projectRows.map((item) => item[5] || 0);
+    var review_counter = projectRows.map((item) => item[2] || 0);
 
     res.render("homeV", {
         title: "homeV",
         user: user,
-        projects: results1,
+        projects: projectRows,
         PNames: PNames,
         list_counter: list_counter,
         page: page,
         current: page,
-        pages: Math.ceil(results1.length / perPage),
+        pages: Math.ceil(projectRows.length / perPage),
         perPage: perPage,
         logged: req.query.logged,
         needs_review: review_counter,

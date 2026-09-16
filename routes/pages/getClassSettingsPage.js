@@ -1,14 +1,14 @@
+const { getPageParams } = require("./pageContext");
+
 async function getClassSettingsPage(req, res) {
     if (req.query.IDX == undefined) {
         return res.redirect("/home");
     }
 
-    var user = req.cookies.Username;
+    const { projectIndex: IDX, username: user } = getPageParams(req);
     if (user == undefined) {
         return res.redirect("/");
     }
-
-    var IDX = parseInt(req.query.IDX, 10);
 
     var projects = await db.allAsync(
         "SELECT * FROM Access WHERE Username = '" + user + "'",
@@ -46,7 +46,7 @@ async function getClassSettingsPage(req, res) {
         });
     };
 
-    var results2 = await cfdb.allAsync("SELECT * FROM `Classes`");
+    var classRows = await cfdb.allAsync("SELECT * FROM `Classes`");
 
     cfdb.close(function (err) {
         if (err) {
@@ -57,7 +57,7 @@ async function getClassSettingsPage(req, res) {
 
     var colors = [];
     var i = 0;
-    while (colors.length < results2.length) {
+    while (colors.length < classRows.length) {
         if (i >= colorsJSON.length) {
             i = 0;
         }
@@ -73,7 +73,7 @@ async function getClassSettingsPage(req, res) {
             PName: PName,
             Admin: admin,
             IDX: IDX,
-            classes: results2,
+            classes: classRows,
             colors: colors,
             activePage: "classSettings",
         });

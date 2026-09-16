@@ -1,7 +1,7 @@
+const { getPageParams } = require("./pageContext");
 async function getValidationConfigPage(req, res) {
     // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+    let { projectIndex: IDX, username: user } = getPageParams(req);
 
     if (IDX == undefined) {
         IDX = 0;
@@ -113,15 +113,15 @@ async function getValidationConfigPage(req, res) {
         });
     };
 
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin = '" +
             admin +
             "'",
     );
-    var results2 = await cfdb.allAsync("SELECT * FROM `Classes`");
-    var results3 = await db.allAsync(
+    var classRows = await cfdb.allAsync("SELECT * FROM `Classes`");
+    var accessRows = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName= '" +
             PName +
             "' AND Admin = '" +
@@ -130,7 +130,7 @@ async function getValidationConfigPage(req, res) {
             user +
             "'",
     );
-    var results4 = await db.allAsync(
+    var adminRows = await db.allAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin != '" +
@@ -149,12 +149,12 @@ async function getValidationConfigPage(req, res) {
         acc.push(acc1[i].Username);
     }
     var access = [];
-    for (var i = 0; i < results3.length; i++) {
-        access.push(results3[i].Username);
+    for (var i = 0; i < accessRows.length; i++) {
+        access.push(accessRows[i].Username);
     }
     var DAdmin = [];
-    for (var i = 0; i < results4.length; i++) {
-        DAdmin.push(results4[i].Admin);
+    for (var i = 0; i < adminRows.length; i++) {
+        DAdmin.push(adminRows[i].Admin);
     }
     // close the database
     cfdb.close(function (err) {
@@ -166,7 +166,7 @@ async function getValidationConfigPage(req, res) {
 
     var colors = [];
     var i = 0;
-    while (colors.length < results2.length) {
+    while (colors.length < classRows.length) {
         if (i >= colorsJSON.length) {
             i = 0;
         }
@@ -193,19 +193,19 @@ async function getValidationConfigPage(req, res) {
     res.render("configV", {
         title: "config",
         user: user,
-        Admin: results1.Admin,
+        Admin: projectInfo.Admin,
         DAdmin: DAdmin,
         access: access,
         acc: acc,
         PName: PName,
         IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
+        PDescription: projectInfo.PDescription,
+        AutoSave: projectInfo.AutoSave,
         weights: weights,
         scripts: scripts,
         paths: paths,
         darknet_paths: darknet_paths,
-        classes: results2,
+        classes: classRows,
         colors: colors,
         logged: req.query.logged,
         mergeProjects: mergeProjects,

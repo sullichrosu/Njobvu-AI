@@ -1,11 +1,11 @@
 const path = require("path");
 const fs = require("fs");
 const sqlite3 = require("sqlite3").verbose();
+const { getPageParams } = require("./pageContext");
 
 async function getDownloadPage(req, res) {
     // get URL variables
-    var IDX = parseInt(req.query.IDX, 10),
-        user = req.cookies ? req.cookies.Username : undefined;
+    let { projectIndex: IDX, username: user } = getPageParams(req);
 
     if (isNaN(IDX) || IDX == undefined) {
         IDX = 0;
@@ -101,15 +101,15 @@ async function getDownloadPage(req, res) {
         });
     };
 
-    var results1 = await db.getAsync(
+    var projectInfo = await db.getAsync(
         "SELECT * FROM `Projects` WHERE PName = '" +
             PName +
             "' AND Admin = '" +
             admin +
             "'",
     );
-    var results2 = await ddb.allAsync("SELECT * FROM `Classes`");
-    var results3 = await db.allAsync(
+    var classRows = await ddb.allAsync("SELECT * FROM `Classes`");
+    var accessRows = await db.allAsync(
         "SELECT * FROM `Access` WHERE PName= '" +
             PName +
             "' AND Admin = '" +
@@ -130,8 +130,8 @@ async function getDownloadPage(req, res) {
         acc.push(acc1[i].Username);
     }
     var access = [];
-    for (var i = 0; i < results3.length; i++) {
-        access.push(results3[i].Username);
+    for (var i = 0; i < accessRows.length; i++) {
+        access.push(accessRows[i].Username);
     }
 
     // close the database
@@ -144,7 +144,7 @@ async function getDownloadPage(req, res) {
 
     var colors = [];
     var i = 0;
-    while (colors.length < results2.length) {
+    while (colors.length < classRows.length) {
         if (i >= colorsJSON.length) {
             i = 0;
         }
@@ -166,14 +166,14 @@ async function getDownloadPage(req, res) {
     res.render("download", {
         title: "download",
         user: user,
-        Admin: results1.Admin,
+        Admin: projectInfo.Admin,
         access: access,
         acc: acc,
         PName: PName,
         IDX: IDX,
-        PDescription: results1.PDescription,
-        AutoSave: results1.AutoSave,
-        classes: results2,
+        PDescription: projectInfo.PDescription,
+        AutoSave: projectInfo.AutoSave,
+        classes: classRows,
         colors: colors,
         scripts: scripts,
         weights: weights,

@@ -82,38 +82,38 @@ async function getAnnotatePage(req, res) {
         });
     };
 
-    var results1 = await ldb.allAsync("SELECT * FROM `Classes`");
+    var classRows = await ldb.allAsync("SELECT * FROM `Classes`");
     var Classes = [];
-    if (results1) {
-        for (var i = 0; i < results1.length; i++) {
-            Classes.push(results1[i].CName);
+    if (classRows) {
+        for (var i = 0; i < classRows.length; i++) {
+            Classes.push(classRows[i].CName);
         }
     }
 
-    var results2 = [];
+    var imageRows = [];
     if (reviewFilter === "true" || reviewFilter === "1" || reviewFilter === 1 || reviewFilter === "needs_review" || reviewFilter === "needsReview") {
-        results2 = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage != 0");
+        imageRows = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage != 0");
     } else if (reviewFilter === "false" || reviewFilter === "0" || reviewFilter === 0) {
-        results2 = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage = 0");
+        imageRows = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage = 0");
     } else {
-        results2 = await ldb.allAsync("SELECT * FROM `Images`");
+        imageRows = await ldb.allAsync("SELECT * FROM `Images`");
     }
 
-    var results3 = await ldb.allAsync(
+    var labelRows = await ldb.allAsync(
         "SELECT * FROM `Labels` WHERE IName = ?",
         [IName]
     );
-    var results4 = await ldb.allAsync(
+    var imageRow = await ldb.allAsync(
         "SELECT * FROM `Images` WHERE IName = ?",
         [IName]
     );
 
-    var results5 = null;
+    var autoSaveRow = null;
     if (global.managedDbClient && global.managedDbClient.get) {
         const dbRes = await global.managedDbClient.get("SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?", [PName, admin]);
-        results5 = (dbRes && dbRes.row) ? dbRes.row : null;
+        autoSaveRow = (dbRes && dbRes.row) ? dbRes.row : null;
     } else if (global.db && global.db.getAsync) {
-        results5 = await global.db.getAsync("SELECT AutoSave FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+        autoSaveRow = await global.db.getAsync("SELECT AutoSave FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
     }
 
     var acc = [];
@@ -125,8 +125,8 @@ async function getAnnotatePage(req, res) {
     }
     var access = [];
 
-    if (curr_class == null && results1 && results1.length > 0) {
-        curr_class = results1[0].CName;
+    if (curr_class == null && classRows && classRows.length > 0) {
+        curr_class = classRows[0].CName;
     }
 
     if (acc) {
@@ -137,7 +137,7 @@ async function getAnnotatePage(req, res) {
 
     var abs_image_path = project_path + "/images/" + IName;
     var imageExistsLocally = fs.existsSync(abs_image_path);
-    var imageRow = results4 && results4[0];
+    var imageRow = imageRow && imageRow[0];
 
     // A "download"-mode (or local-import) image is a real file at
     // abs_image_path, same as always. A "stream"-mode S3 image never has
@@ -197,15 +197,15 @@ async function getAnnotatePage(req, res) {
 
         var list_counter = [];
 
-        var imgIdx = (results2 || []).findIndex((item) => item.IName === IName);
+        var imgIdx = (imageRows || []).findIndex((item) => item.IName === IName);
         if (imgIdx !== -1) {
             curr_index = imgIdx + 1;
-            prev_IName = imgIdx > 0 ? results2[imgIdx - 1].IName : -1;
-            next_IName = imgIdx < results2.length - 1 ? results2[imgIdx + 1].IName : -1;
+            prev_IName = imgIdx > 0 ? imageRows[imgIdx - 1].IName : -1;
+            next_IName = imgIdx < imageRows.length - 1 ? imageRows[imgIdx + 1].IName : -1;
         } else {
             curr_index = 1;
             prev_IName = -1;
-            next_IName = (results2 && results2.length > 0) ? results2[0].IName : -1;
+            next_IName = (imageRows && imageRows.length > 0) ? imageRows[0].IName : -1;
         }
 
         ldb.close(function (err) {
@@ -231,11 +231,11 @@ async function getAnnotatePage(req, res) {
             image_width: image_width,
             image_height: image_height,
             image_path: rel_image_path,
-            image_name: results4[0].IName,
+            image_name: imageRow ? imageRow.IName : "",
             image_ratio: image_ratio,
             classes: Classes,
-            images: results2 || [],
-            labels: results3 || [],
+            images: imageRows || [],
+            labels: labelRows || [],
             colors: colors,
             IName: IName,
             prev_IName: prev_IName,
@@ -243,12 +243,12 @@ async function getAnnotatePage(req, res) {
             PName: PName,
             Admin: admin,
             IDX: IDX,
-            images_length: results2 ? results2.length : 0,
+            images_length: imageRows ? imageRows.length : 0,
             curr_index: curr_index,
             curr_class: curr_class,
-            rev_image: results4[0].reviewImage,
+            rev_image: imageRow ? imageRow.reviewImage : 0,
             list_counter: list_counter,
-            AutoSave: results5 ? (results5.AutoSave !== undefined ? results5.AutoSave : 0) : 0,
+            AutoSave: autoSaveRow ? (autoSaveRow.AutoSave !== undefined ? autoSaveRow.AutoSave : 0) : 0,
             logged: req.query.logged,
             reviewFilter: reviewFilter,
             activePage: "project",
