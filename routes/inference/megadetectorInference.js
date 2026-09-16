@@ -1,6 +1,7 @@
 const path = require("path");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 const config = require("../../utils/config");
+const { prepareInferenceDataset } = require("../../utils/inferenceDatasetPipeline");
 
 async function megadetectorInference(req, res) {
     try {
@@ -44,6 +45,18 @@ async function megadetectorInference(req, res) {
         if (!fs.existsSync(megadetectorScriptCopyPath)) {
             fs.copyFileSync(megadetectorScript, megadetectorScriptCopyPath);
         }
+
+        const datasetResult = await prepareInferenceDataset({
+            PName,
+            Admin,
+            inference_file: inferenceFile,
+            use_s3_bucket: req.body.use_s3_bucket || req.body.s3_bucket || req.body.inference_source === "s3",
+            max_images: req.body.max_images || req.body.maxImages || req.body.limit,
+            projectPath,
+            inferenceUploadPath,
+        });
+
+        inferenceFilePath = datasetResult.inferenceFilePath || inferenceFilePath;
 
         if (!fs.existsSync(inferenceFilePath)) {
             const fallbackInferenceFilePath = path.join(inferenceUploadPath, inferenceFilePath);

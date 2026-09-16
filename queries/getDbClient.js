@@ -1,5 +1,5 @@
-const fs = require("fs");
 const path = require("path");
+const fs = require("fs");
 const { Client } = require("./client");
 
 function getDbClient(projectPath) {
@@ -26,24 +26,16 @@ function getDbClient(projectPath) {
         }
     }
 
-    // determine actual .db file path
-    let dbFile = normalized;
-    if (!dbFile.endsWith(".db")) {
-        const folderName = path.basename(normalized);
-        const parts = folderName.split("-");
-        const pName = parts.length > 1 ? parts.slice(1).join("-") : folderName;
-
-        dbFile = path.join(normalized, `${pName}.db`);
-    }
-
-    if (fs.existsSync(dbFile)) {
-        const client = new Client(dbFile);
-
-        client.open();
-        global.projectDbClients[projectPath] = client;
-        global.projectDbClients[normalized] = client;
-
-        return client;
+    if (fs.existsSync(projectPath)) {
+        const files = fs.readdirSync(projectPath);
+        const dbFile = files.find((f) => f.endsWith(".db"));
+        if (dbFile) {
+            const dbPath = path.join(projectPath, dbFile);
+            const client = new Client(dbPath);
+            global.projectDbClients[projectPath] = client;
+            global.projectDbClients[normalized] = client;
+            return client;
+        }
     }
 
     throw new Error(`Project database client not found for project path: ${projectPath}`);

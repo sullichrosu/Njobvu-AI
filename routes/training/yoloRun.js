@@ -6,6 +6,12 @@ const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const {
+    ensureTrainingImagesLocal,
+    cleanupJitTrainingImages,
+} = require("../../utils/jitTrainingImages");
+const { generateModelCard } = require("../../utils/runSummaryGenerator");
+const config = require("../../config.json");
 
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
@@ -464,7 +470,7 @@ async function yoloRun(req, res) {
             try {
                 const parsed = JSON.parse(input);
                 if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
-            } catch (e) {}
+            } catch (e) { }
             return input.split(",").map((s) => String(s).trim()).filter(Boolean);
         }
         return null;
@@ -484,6 +490,14 @@ async function yoloRun(req, res) {
     let targetImages = existingImages.rows;
     if (Number.isFinite(maxImages) && maxImages > 0 && maxImages < targetImages.length) {
         targetImages = targetImages.slice(0, maxImages);
+    }
+
+    let jitDownloadedFiles = [];
+    try {
+        jitDownloadedFiles = await ensureTrainingImagesLocal(PName, Admin, projectPath, targetImages);
+    } catch (err) {
+        global.logger.error("Error ensuring local images for training JIT:", err);
+        return res.status(500).send("Error fetching streamed S3 images for training: " + err.message);
     }
 
     // Parse Train : Validate : Test split ratio
@@ -758,7 +772,7 @@ async function yoloRun(req, res) {
         for (let i = 0; i < shuffledImages.length; i++) {
             const image = shuffledImages[i];
             const sourceImagePath = path.join(imagesPath, image.IName);
-            
+
             let targetBaseDir;
             if (i < trainDataImageSplit) {
                 targetBaseDir = absDarknetClassificationTrainImagesDir;
@@ -868,9 +882,9 @@ async function yoloRun(req, res) {
     var cmd = "";
 
     if (yoloMode == "train") {
-        cmd = `python3 ${yoloScript} -d ${runPath} -t ${yoloTask} -m ${yoloMode} -i ${darknetImagesPath} -n ${classesPath} -p ${trainDataPer} -l ${absDarknetProjectRun}/${log} -f ${darknetPath} -w ${weightPath} -b ${batch} -s ${subdiv} -x ${width} -y ${height} -v ${yoloVersion} -e ${epochs} -I ${imgsz} -D ${device} -o "${options}"`;
+        cmd = `${config["default_python_path"] || "python3"} ${yoloScript} -d ${runPath} -t ${yoloTask} -m ${yoloMode} -i ${darknetImagesPath} -n ${classesPath} -p ${trainDataPer} -l ${absDarknetProjectRun}/${log} -f ${darknetPath} -w ${weightPath} -b ${batch} -s ${subdiv} -x ${width} -y ${height} -v ${yoloVersion} -e ${epochs} -I ${imgsz} -D ${device} -o "${options}"`;
     } else {
-        cmd = `python3 --version`;
+        cmd = `${config["default_python_path"] || "python3"} --version`;
     }
 
     global.logger.debug(cmd);
@@ -909,7 +923,7 @@ async function yoloRun(req, res) {
     fs.writeFileSync(`${absDarknetProjectRun}/${log}`, `${runOptionsHeader}${cmd}`);
 
     const bufferSizeMult = (global.configFile && global.configFile.training_max_buffer_size) || (typeof configFile !== "undefined" && configFile.training_max_buffer_size) || 1;
-    exec(cmd, { maxBuffer: 1024 * 1024 * 1024 * bufferSizeMult }, (err, stdout, stderr) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 * 1024 * bufferSizeMult }, async (err, stdout, stderr) => {
         if (stdout) {
             global.logger.debug("STDOUT:", stdout);
             fs.appendFile(`${absDarknetProjectRun}/${log}`, stdout, (err) => {
@@ -946,6 +960,22 @@ async function yoloRun(req, res) {
         }
 
         fs.writeFileSync(`${runPath}/done.log`, success);
+        await cleanupJitTrainingImages(jitDownloadedFiles);
+
+        if (!err) {
+            try {
+                await generateModelCard(runPath, {
+                    runType: "training",
+                    runName: `${PName}_${date}`,
+                    task: yoloTask,
+                    projectName: PName,
+                });
+            } catch (cardErr) {
+                global.logger.error("Error generating model card:", cardErr);
+            }
+        }
+
+        await cleanupJitTrainingImages(jitDownloadedFiles);
     });
 
 

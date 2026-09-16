@@ -73,6 +73,7 @@ const {
     getS3Bucket,
     deleteS3Bucket,
     syncS3Bucket,
+    getProjectImage,
 } = require("./api/v2/s3Buckets");
 
 const updateLabels = require("./labelling/updateLabels");
@@ -207,6 +208,7 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(attachS3
 api.get("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(getS3Bucket));
 api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(deleteS3Bucket));
 api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", asyncHandler(syncS3Bucket));
+api.get("/api/v2/projects/:admin/:projectName/images/:imageName", asyncHandler(getProjectImage));
 
 // LABELLING ROUTES
 api.post("/updateLabels", asyncHandler(updateLabels));

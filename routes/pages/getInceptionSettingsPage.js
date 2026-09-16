@@ -113,6 +113,15 @@ async function getInceptionSettingsPage(req, res) {
 
     globalInferenceUpload.push(path.join(projectDir, "images"));
 
+    try {
+        const attachedBucket = await queries.managed.getBucket(PName, admin);
+        if (attachedBucket && attachedBucket.row) {
+            globalInferenceUpload.push("s3");
+        }
+    } catch (err) {
+        global.logger.error("Error checking attached S3 bucket:", err);
+    }
+
     let runs = [];
     try {
         runs = fsObj.readdirSync(logPath);

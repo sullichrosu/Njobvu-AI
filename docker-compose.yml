@@ -6,6 +6,14 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY:-njobvu-ai}/app:latest
     container_name: njobvu-ai
     restart: unless-stopped
+    # The image has no USER directive, so without this the container writes
+    # to the bind-mounted host directories below as root. Anything it
+    # creates (e.g. project databases/images) then can't be written by a
+    # normal host user running the app outside Docker (`node .`), failing
+    # with SQLITE_READONLY. Export UID/GID before `docker compose up`
+    # (most shells: `export UID GID` - `UID` is a shell built-in that isn't
+    # exported by default) so files it creates are owned by you instead.
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "3000:3000"
     environment:

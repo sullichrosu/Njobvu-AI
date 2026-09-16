@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const probe = require("probe-image-size");
 const queries = require("../../queries/queries");
+const { buildS3Client, getObjectStream } = require("../../utils/s3Client");
 
 async function getAnnotatePage(req, res) {
     let idx = parseInt(req.query.IDX, 10);
@@ -121,31 +122,68 @@ async function getAnnotatePage(req, res) {
 
     const fsObj = global.fs || fs;
     const absImagePath = path.join(projectDir, "images", IName);
+    const imageExistsLocally = fsObj.existsSync(absImagePath);
 
-    if (!imageRecord || !fsObj.existsSync(absImagePath)) {
+    // A "download"-mode (or local-import) image is a real file at
+    // absImagePath, same as always. A "stream"-mode S3 image never has
+    // one - it's only ever fetched live, on view, via the on-demand proxy
+    // below - so only 404 here if neither a local file nor an S3-backed row
+    // exists for this name.
+    if (!imageRecord || (!imageExistsLocally && imageRecord.Source !== "s3")) {
         return res.render("404", {
             title: "404",
             user: req.cookies ? req.cookies.Username : undefined,
         });
     }
 
-    const relImagePath = `/${relProjectPath}/images/${imageRecord.IName}`;
+    let relImagePath;
+    let imgWidth = 0;
+    let imgHeight = 0;
 
-    let imgData;
-    try {
-        const imgBuffer = fsObj.readFileSync(absImagePath);
-        imgData = probe.sync(imgBuffer);
-    } catch (err) {
-        return res.render("404", {
-            title: "404",
-            user: req.cookies ? req.cookies.Username : undefined,
-        });
+    if (imageExistsLocally) {
+        relImagePath = `/${relProjectPath}/images/${imageRecord.IName}`;
+
+        try {
+            const imgBuffer = fsObj.readFileSync(absImagePath);
+            const imgData = probe.sync(imgBuffer);
+            imgWidth = imgData.width;
+            imgHeight = imgData.height;
+        } catch (err) {
+            return res.render("404", {
+                title: "404",
+                user: req.cookies ? req.cookies.Username : undefined,
+            });
+        }
+    } else {
+        // Point the browser at the on-demand proxy instead of a static
+        // path that doesn't exist. Probe just enough of the object's
+        // header (over that same live fetch, aborted by probe() once it
+        // has what it needs) to lay out the page, rather than pulling
+        // the whole image server-side just to measure it.
+        relImagePath = `/api/v2/projects/${admin}/${PName}/images/${imageRecord.IName}`;
+
+        try {
+            const bucketResult = await queries.managed.getBucket(PName, admin);
+            const bucket = bucketResult && bucketResult.row;
+            const s3Client = buildS3Client({
+                region: bucket.Region,
+                accessKeyId: bucket.AccessKeyId,
+                secretAccessKey: bucket.SecretAccessKey,
+                endpoint: bucket.Endpoint,
+            });
+            const objectStream = await getObjectStream(s3Client, bucket.BucketName, imageRecord.SourceKey);
+            const probed = await probe(objectStream.body);
+            imgWidth = probed.width;
+            imgHeight = probed.height;
+        } catch (err) {
+            global.logger.error("Error probing S3-backed image:", err);
+            imgWidth = 0;
+            imgHeight = 0;
+        }
     }
 
-    const imgWidth = imgData.width;
-    const imgHeight = imgData.height;
-    const imageRatio = imgHeight / imgWidth;
-    const imageDisplayWidth = imgWidth;
+    const imageRatio = imgWidth ? imgHeight / imgWidth : 1;
+    const imageDisplayWidth = imgWidth || 0;
     const imageDisplayHeight = imageRatio * imageDisplayWidth;
 
     let prevIName = -1;

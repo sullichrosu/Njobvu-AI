@@ -450,8 +450,12 @@ document.addEventListener("click", async function (e) {
     const runTimestamp = btn.dataset.timestamp;
     const minConfidence = confInput.value;
 
-    btn.disabled = true;
-    btn.textContent = "Adding...";
+    if (window.LoadingSpinner) {
+        LoadingSpinner.show(btn, "Adding...");
+    } else {
+        btn.disabled = true;
+        btn.textContent = "Adding...";
+    }
 
     try {
         const response = await fetch("/inference/add-inference-run-to-dataset", {
@@ -476,8 +480,12 @@ document.addEventListener("click", async function (e) {
     } catch (err) {
         alert(`Request failed: ${err.message}`);
     } finally {
-        btn.disabled = false;
-        btn.textContent = "Add to Training Set";
+        if (window.LoadingSpinner) {
+            LoadingSpinner.hide(btn);
+        } else {
+            btn.disabled = false;
+            btn.textContent = "Add to Training Set";
+        }
     }
 });
 </script>

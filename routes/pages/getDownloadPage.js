@@ -29,15 +29,25 @@ async function getDownloadPage(req, res) {
     const PName = projects[idx].PName;
     const admin = projects[idx].Admin;
 
-    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
-    const projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : (global.currentPath || process.cwd());
+    const mainPath = path.join(publicPath, "public", "projects");
+    let projectDir = path.join(mainPath, `${admin}-${PName}`);
+
+    const fsObj = global.fs || fs;
+
+    if (!fsObj.existsSync(projectDir) && fsObj.existsSync(mainPath)) {
+        const dirs = fsObj.readdirSync(mainPath);
+        const match = dirs.find((d) => d.endsWith(`-${PName}`) || d === PName);
+        if (match) {
+            projectDir = path.join(mainPath, match);
+        }
+    }
+
     const trainingPath = path.join(projectDir, "training");
     const logPath = path.join(trainingPath, "logs");
     const pythonPath = path.join(trainingPath, "python");
     const pythonPathFile = path.join(trainingPath, "Paths.txt");
     const weightsPath = path.join(trainingPath, "weights");
-
-    const fsObj = global.fs || fs;
 
     if (!fsObj.existsSync(trainingPath)) {
         try {
