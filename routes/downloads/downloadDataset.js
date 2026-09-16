@@ -63,25 +63,38 @@ async function readExportImage(imagesPath, PName, admin, image, s3BucketCache) {
 }
 
 async function downloadDataset(req, res) {
-    var PName = req.body.PName,
-        admin = req.body.Admin,
-        IDX = parseInt(req.body.IDX),
-        user = req.cookies.Username;
+    var PName = req.body ? req.body.PName : undefined,
+        admin = req.body ? req.body.Admin : undefined,
+        IDX = parseInt(req.body ? req.body.IDX : 0),
+        user = (req.cookies && req.cookies.Username) ? req.cookies.Username : (req.body ? (req.body.Username || admin || "user") : "user");
 
-    var publicPath = currentPath,
+    var publicPath = typeof currentPath !== "undefined" ? currentPath : (global.currentPath || process.cwd()),
         mainPath = path.join(publicPath, "public", "projects"), // $LABELING_TOOL_PATH/public/projects/
-        projectPath = path.join(mainPath, admin + "-" + PName), // $LABELING_TOOL_PATH/public/projects/project_name
-        mergePath = path.join(projectPath, "merge"),
+        projectPath = path.join(mainPath, (admin ? admin + "-" : "") + PName);
+
+    if (!fs.existsSync(projectPath) && fs.existsSync(mainPath)) {
+        const dirs = fs.readdirSync(mainPath);
+        const match = dirs.find((d) => d.endsWith("-" + PName) || d === PName);
+        if (match) {
+            projectPath = path.join(mainPath, match);
+        }
+    }
+
+    var mergePath = path.join(projectPath, "merge"),
         mergeImages = path.join(mergePath, "images"),
         imagesPath = path.join(projectPath, "images"), // $LABELING_TOOL_PATH/public/projects/project_name/images
         downloadsPath = path.join(mainPath, user + "_Downloads");
-    bootstrapPath = path.join(projectPath, "bootstrap");
+    var bootstrapPath = path.join(projectPath, "bootstrap");
 
     if (!fs.existsSync(downloadsPath)) {
-        fs.mkdirSync(downloadsPath);
+        try {
+            fs.mkdirSync(downloadsPath, { recursive: true });
+        } catch (err) {
+            if (global.logger) global.logger.error("Error creating download directory:", err);
+        }
     }
 
-    var downloadFormat = parseInt(req.body.download_format);
+    var downloadFormat = parseInt(req.body ? req.body.download_format : 0);
 
     var cnames = [];
 

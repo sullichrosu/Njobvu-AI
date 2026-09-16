@@ -1,8 +1,14 @@
 const path = require("path");
+const fs = require("fs");
+const { Client } = require("./client");
 
 function getDbClient(projectPath) {
-    if (!projectPath || !global.projectDbClients) {
-        throw new Error(`Project database clients not initialized or invalid project path: ${projectPath}`);
+    if (!projectPath) {
+        throw new Error(`Invalid project path: ${projectPath}`);
+    }
+
+    if (!global.projectDbClients) {
+        global.projectDbClients = {};
     }
 
     if (global.projectDbClients[projectPath]) {
@@ -20,7 +26,20 @@ function getDbClient(projectPath) {
         }
     }
 
+    if (fs.existsSync(projectPath)) {
+        const files = fs.readdirSync(projectPath);
+        const dbFile = files.find((f) => f.endsWith(".db"));
+        if (dbFile) {
+            const dbPath = path.join(projectPath, dbFile);
+            const client = new Client(dbPath);
+            global.projectDbClients[projectPath] = client;
+            global.projectDbClients[normalized] = client;
+            return client;
+        }
+    }
+
     throw new Error(`Project database client not found for project path: ${projectPath}`);
 }
 
 module.exports = getDbClient;
+

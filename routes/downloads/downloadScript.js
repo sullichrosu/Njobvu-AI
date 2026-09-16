@@ -1,39 +1,59 @@
+const fs = require("fs");
+const path = require("path");
+const archiver = require("archiver");
+
 async function downloadScript(req, res) {
-    var PName = req.body.PName,
-        admin = req.body.Admin,
-        IDX = parseInt(req.body.IDX),
-        user = req.cookies.Username;
+    var PName = req.body ? req.body.PName : undefined,
+        admin = req.body ? req.body.Admin : undefined,
+        IDX = parseInt(req.body ? req.body.IDX : 0),
+        user = (req.cookies && req.cookies.Username) ? req.cookies.Username : (req.body ? (req.body.Username || admin || "user") : "user");
 
     var scriptsArr = [];
-    scriptsArr.push(req.body["scripts[]"]);
+    if (req.body && req.body["scripts[]"]) {
+        scriptsArr.push(req.body["scripts[]"]);
+    }
 
     var scripts = [];
     scripts = scripts.concat.apply(scripts, scriptsArr).filter(Boolean);
 
-    var publicPath = currentPath,
-        mainPath = publicPath + "public/projects/", // $LABELING_TOOL_PATH/public/projects/
-        projectPath = mainPath + admin + "-" + PName, // $LABELING_TOOL_PATH/public/projects/project_name
-        imagesPath = projectPath + "/images", // $LABELING_TOOL_PATH/public/projects/project_name/images
-        downloadsPath = mainPath + user + "_Downloads",
-        trainingPath = projectPath + "/training",
-        pythonPath = trainingPath + "/python",
-        logsPath = trainingPath + "/logs";
+    var publicPath = typeof currentPath !== "undefined" ? currentPath : (global.currentPath || process.cwd()),
+        mainPath = path.join(publicPath, "public", "projects"),
+        projectPath = path.join(mainPath, (admin ? admin + "-" : "") + PName),
+        imagesPath = path.join(projectPath, "images"),
+        downloadsPath = path.join(mainPath, user + "_Downloads"),
+        trainingPath = path.join(projectPath, "training"),
+        pythonPath = path.join(trainingPath, "python"),
+        logsPath = path.join(trainingPath, "logs");
 
-    var output = fs.createWriteStream(downloadsPath + "/scripts.zip");
+    if (!fs.existsSync(downloadsPath)) {
+        try {
+            fs.mkdirSync(downloadsPath, { recursive: true });
+        } catch (err) {
+            if (global.logger) global.logger.error("Error creating download directory:", err);
+        }
+    }
+
+    var zipFilePath = path.join(downloadsPath, "scripts.zip");
+    var output = fs.createWriteStream(zipFilePath);
     var archive = archiver("zip");
 
     output.on("close", function () {
-        res.download(downloadsPath + "/scripts.zip");
+        res.download(zipFilePath);
     });
 
     archive.on("error", function (err) {
-        throw err;
+        if (global.logger) global.logger.error("Archive error:", err);
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, message: "Download failed" });
+        }
     });
 
     archive.pipe(output);
     for (var i = 0; i < scripts.length; i++) {
-        let script = `${pythonPath}/${scripts[i]}`;
-        archive.file(script, { name: scripts[i] });
+        let script = path.join(pythonPath, scripts[i]);
+        if (fs.existsSync(script)) {
+            archive.file(script, { name: scripts[i] });
+        }
     }
     archive.finalize();
 }

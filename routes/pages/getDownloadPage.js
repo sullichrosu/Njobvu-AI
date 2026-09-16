@@ -1,56 +1,76 @@
+const path = require("path");
+const fs = require("fs");
+const sqlite3 = require("sqlite3").verbose();
+
 async function getDownloadPage(req, res) {
     // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        user = req.cookies.Username;
+    var IDX = parseInt(req.query.IDX, 10),
+        user = req.cookies ? req.cookies.Username : undefined;
 
-    if (IDX == undefined) {
+    if (isNaN(IDX) || IDX == undefined) {
         IDX = 0;
-        valid = 1;
         return res.redirect("/home");
     }
     if (user == undefined) {
         return res.redirect("/");
     }
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
+
+    var projects = [];
+    if (global.managedDbClient && global.managedDbClient.all) {
+        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
+        projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
+    } else if (global.db && global.db.allAsync) {
+        projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
+    }
 
     var num = IDX;
 
-    if (num >= projects.length) {
-        valid = 1;
+    if (!projects || num >= projects.length) {
         return res.redirect("/home");
     }
     var PName = projects[num].PName;
     var admin = projects[num].Admin;
 
-    var public_path = currentPath;
-    (main_path = public_path + "public/projects/"),
-        (path = main_path + admin + "-" + PName + "/" + PName + ".db"),
-        (training_path = main_path + admin + "-" + PName + "/training"),
-        (log_path = training_path + "/logs/"),
-        (python_path = training_path + "/python"),
-        (weights_path = training_path + "/weights");
+    var public_path = typeof currentPath !== "undefined" ? currentPath : (global.currentPath || process.cwd());
+    var main_path = path.join(public_path, "public", "projects");
+    var project_dir = path.join(main_path, (admin ? admin + "-" : "") + PName);
 
-    if (!fs.existsSync(training_path)) {
-        fs.mkdirSync(training_path);
-        fs.mkdirSync(log_path);
-        fs.mkdirSync(python_path);
-        fs.mkdirSync(weights_path);
-        fs.writeFile(python_path_file, "", function (err) {
-            if (err) {
-                global.logger.error(err);
-            }
-        });
-    } else if (!fs.existsSync(weights_path)) {
-        fs.mkdirSync(weights_path);
+    if (!fs.existsSync(project_dir) && fs.existsSync(main_path)) {
+        const dirs = fs.readdirSync(main_path);
+        const match = dirs.find((d) => d.endsWith("-" + PName) || d === PName);
+        if (match) {
+            project_dir = path.join(main_path, match);
+        }
     }
 
-    var ddb = new sqlite3.Database(path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
+    var db_file_path = path.join(project_dir, PName + ".db");
+    var training_path = path.join(project_dir, "training");
+    var log_path = path.join(training_path, "logs");
+    var python_path = path.join(training_path, "python");
+    var weights_path = path.join(training_path, "weights");
+
+    if (!fs.existsSync(training_path)) {
+        try {
+            fs.mkdirSync(training_path, { recursive: true });
+            fs.mkdirSync(log_path, { recursive: true });
+            fs.mkdirSync(python_path, { recursive: true });
+            fs.mkdirSync(weights_path, { recursive: true });
+        } catch (err) {
+            if (global.logger) global.logger.error("Error creating training dirs:", err);
         }
-        global.logger.info("Connected to ddb.")
+    } else if (!fs.existsSync(weights_path)) {
+        try {
+            fs.mkdirSync(weights_path, { recursive: true });
+        } catch (err) {
+            if (global.logger) global.logger.error("Error creating weights dir:", err);
+        }
+    }
+
+    var ddb = new sqlite3.Database(db_file_path, (err) => {
+        if (err) {
+            return global.logger ? global.logger.error(err.message) : console.error(err.message);
+        }
+        if (global.logger) global.logger.info("Connected to ddb.");
     });
 
     // create async database object functions

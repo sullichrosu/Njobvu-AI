@@ -320,3 +320,56 @@ describe('Download Classes Route', () => {
     });
   });
 });
+
+describe('Download Project Route', () => {
+  beforeAll(() => {
+    global.db = {
+      runAsync: jest.fn().mockResolvedValue(undefined),
+      allAsync: jest.fn().mockResolvedValue([]),
+      getAsync: jest.fn().mockResolvedValue({ row: { THING: 0 } }),
+    };
+    global.currentPath = '/test/path/';
+    global.projectDbClients = {};
+    global.logger = { error: jest.fn(), debug: jest.fn(), info: jest.fn() };
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should successfully trigger project zip download', async () => {
+    const queries = require('../../queries/queries');
+    queries.project.checkTableExists = jest.fn().mockResolvedValue({ rows: [{ count: 1 }] });
+
+    const res = await request(app)
+      .post('/downloadProject')
+      .send({
+        PName: 'test-project',
+        Admin: 'testuser',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain('downloaded:');
+  });
+
+  it('should return error when Labels table does not exist', async () => {
+    const queries = require('../../queries/queries');
+    queries.project.checkTableExists = jest.fn().mockResolvedValue({ rows: [{ count: 0 }] });
+
+    const res = await request(app)
+      .post('/downloadProject')
+      .send({
+        PName: 'empty-project',
+        Admin: 'testuser',
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'No Labels table found',
+    });
+  });
+});
+
