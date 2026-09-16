@@ -266,8 +266,36 @@ input_path = args.image_path
 temp_dir = None
 image_dir = input_path
 
-if os.path.isdir(input_path):
+def process_directory_for_videos_and_subdirs(target_dir, fps):
+    for root, dirs, files in os.walk(target_dir):
+        for f in files:
+            full_f = os.path.join(root, f)
+            if is_video(f):
+                vid_name = os.path.splitext(f)[0]
+                frame_out = os.path.join(target_dir, f"{vid_name}_frames")
+                extract_frames(full_f, frame_out, fps)
+                for frame_f in os.listdir(frame_out):
+                    if is_image(frame_f):
+                        shutil.copy2(os.path.join(frame_out, frame_f), os.path.join(target_dir, f"{vid_name}_{frame_f}"))
+                shutil.rmtree(frame_out, ignore_errors=True)
+            elif is_image(f) and root != target_dir:
+                shutil.copy2(full_f, os.path.join(target_dir, f))
+
+if input_path.lower().endswith(".zip") or input_path.lower().endswith(".7z") or zipfile.is_zipfile(input_path):
+    if not os.path.exists(input_path):
+        print(f"Error: input archive not found: {input_path}")
+        sys.exit(1)
+    temp_dir = tempfile.mkdtemp(prefix="megadetector_zip_")
+    image_dir = os.path.join(temp_dir, "extracted")
+    os.makedirs(image_dir, exist_ok=True)
+    with zipfile.ZipFile(input_path, 'r') as zip_ref:
+        zip_ref.extractall(image_dir)
+    process_directory_for_videos_and_subdirs(image_dir, args.fps)
+
+elif os.path.isdir(input_path):
     image_dir = input_path
+    process_directory_for_videos_and_subdirs(image_dir, args.fps)
+
 elif is_video(input_path):
     if not os.path.exists(input_path):
         print(f"Error: input video not found: {input_path}")
@@ -277,6 +305,7 @@ elif is_video(input_path):
     print(f"Extracting frames from video at {args.fps} fps...")
     extract_frames(input_path, image_dir, args.fps)
     print(f"Frames extracted to {image_dir}")
+
 elif is_image(input_path):
     if not os.path.exists(input_path):
         print(f"Error: input image not found: {input_path}")
@@ -285,6 +314,7 @@ elif is_image(input_path):
     image_dir = os.path.join(temp_dir, "single")
     os.makedirs(image_dir, exist_ok=True)
     shutil.copy2(input_path, os.path.join(image_dir, os.path.basename(input_path)))
+
 else:
     print(f"Error: unsupported input type: {input_path}")
     sys.exit(1)

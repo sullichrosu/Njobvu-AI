@@ -6,6 +6,10 @@ const probe = require("probe-image-size");
 const os = require("os");
 const sharp = require("sharp");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
+const {
+    ensureTrainingImagesLocal,
+    cleanupJitTrainingImages,
+} = require("../../utils/jitTrainingImages");
 const { generateModelCard } = require("../../utils/runSummaryGenerator");
 
 // draws a uniform random sample of `count` images (without replacement) from `images`
@@ -544,6 +548,14 @@ async function yoloRun(req, res) {
         targetImages = targetImages.slice(0, maxImages);
     }
 
+    let jitDownloadedFiles = [];
+    try {
+        jitDownloadedFiles = await ensureTrainingImagesLocal(PName, Admin, projectPath, targetImages);
+    } catch (err) {
+        global.logger.error("Error ensuring local images for training JIT:", err);
+        return res.status(500).send("Error fetching streamed S3 images for training: " + err.message);
+    }
+
     // Parse Train : Validate : Test split ratio
     let trainPct = parseFloat(req.body.TrainingPercent || req.body.train_percent || 70);
     let valPct = parseFloat(req.body.ValPercent || req.body.val_percent);
@@ -999,6 +1011,7 @@ async function yoloRun(req, res) {
         }
 
         fs.writeFileSync(`${runPath}/done.log`, success);
+        await cleanupJitTrainingImages(jitDownloadedFiles);
 
         if (!err) {
             try {
@@ -1012,6 +1025,8 @@ async function yoloRun(req, res) {
                 global.logger.error("Error generating model card:", cardErr);
             }
         }
+
+        await cleanupJitTrainingImages(jitDownloadedFiles);
     });
 
 

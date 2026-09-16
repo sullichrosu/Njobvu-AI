@@ -51,12 +51,12 @@ async function getYoloXSettingsPage(req, res) {
         fs.mkdirSync(log_path);
         fs.mkdirSync(python_path);
         fs.mkdirSync(weights_path);
-        fs.writeFile(python_path_file, "", function (err) {
+        fs.writeFile(python_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
         });
-        fs.writeFile(yolovx_path_file, "", function (err) {
+        fs.writeFile(yolovx_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
@@ -64,7 +64,7 @@ async function getYoloXSettingsPage(req, res) {
     } else if (!fs.existsSync(weights_path)) {
         fs.mkdirSync(weights_path);
     } else if (!fs.existsSync(yolovx_path_file)) {
-        fs.writeFile(yolovx_path_file, "", function (err) {
+        fs.writeFile(yolovx_path_file, "", function(err) {
             if (err) {
                 global.logger.error(err);
             }
@@ -80,10 +80,10 @@ async function getYoloXSettingsPage(req, res) {
     });
 
     // create async database object functions
-    tdb.getAsync = function (sql) {
+    tdb.getAsync = function(sql) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.get(sql, function(err, row) {
                 if (err) {
                     global.logger.error("runAsync ERROR!", err)
                     reject(err);
@@ -93,10 +93,10 @@ async function getYoloXSettingsPage(req, res) {
             global.logger.error(err);
         });
     };
-    tdb.allAsync = function (sql) {
+    tdb.allAsync = function(sql) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.all(sql, function(err, row) {
                 if (err) {
                     global.logger.error("runAsync ERROR!", err)
                     reject(err);
@@ -122,7 +122,7 @@ async function getYoloXSettingsPage(req, res) {
         var countsResult = await queries.project.getClassLabelCounts(project_path);
 
         if (countsResult && countsResult.rows) {
-            countsResult.rows.forEach(function (row) {
+            countsResult.rows.forEach(function(row) {
                 classLabelCounts[row.CName] = row.labelCount;
             });
         }
@@ -130,7 +130,7 @@ async function getYoloXSettingsPage(req, res) {
         global.logger.error(err);
     }
 
-    results2 = results2.map(function (cls) {
+    results2 = results2.map(function(cls) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
         });
@@ -254,7 +254,7 @@ async function getYoloXSettingsPage(req, res) {
     }
 
     // close the database
-    tdb.close(function (err) {
+    tdb.close(function(err) {
         if (err) {
             global.logger.error(err);
         } else {

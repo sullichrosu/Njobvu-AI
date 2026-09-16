@@ -2,6 +2,7 @@ const queries = require("../../queries/queries");
 const path = require("path");
 const formatRunOptionsHeader = require("../../utils/formatRunOptionsHeader");
 const config = require("../../utils/config");
+const { prepareInferenceDataset } = require("../../utils/inferenceDatasetPipeline");
 
 async function yoloInference(req, res) {
     try {
@@ -78,9 +79,12 @@ async function yoloInference(req, res) {
         var dictImagesLabels = {};
 
         for (var i = 0; i < existingImages.rows.length; i++) {
-            var img = fs.readFileSync(
-                `${imagesPath}/${existingImages.rows[i].IName}`,
-            ),
+            const imgPath = path.join(imagesPath, existingImages.rows[i].IName);
+            if (!fs.existsSync(imgPath)) {
+                continue;
+            }
+
+            var img = fs.readFileSync(imgPath),
                 imgData = probe.sync(img),
                 imgW = imgData.width,
                 imgH = imgData.height;
@@ -148,6 +152,18 @@ async function yoloInference(req, res) {
         }
 
         ultralyticsProjectRun = runPath;
+
+        const datasetResult = await prepareInferenceDataset({
+            PName,
+            Admin,
+            inference_file: inferenceFile,
+            use_s3_bucket: req.body.use_s3_bucket || req.body.s3_bucket || req.body.inference_source === "s3",
+            max_images: req.body.max_images || req.body.maxImages || req.body.limit,
+            projectPath,
+            inferenceUploadPath,
+        });
+
+        inferenceFilePath = datasetResult.inferenceFilePath || inferenceFilePath;
 
         if (!fs.existsSync(inferenceFilePath)) {
             const fallbackInferenceFilePath = path.join(inferenceUploadPath, inferenceFilePath);
