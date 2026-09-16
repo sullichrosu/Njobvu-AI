@@ -66,6 +66,9 @@ const request = require('supertest');
 const app = require('../../app');
 
 jest.mock('../../queries/queries', () => ({
+  managed: {
+    getBucket: jest.fn().mockResolvedValue({ row: null }),
+  },
   project: {
     getAllClasses: jest.fn().mockResolvedValue({ rows: [{ CName: 'class1' }, { CName: 'class2' }] }),
     getAllImages: jest.fn().mockResolvedValue({ rows: [{ IName: 'image1.jpg' }, { IName: 'image2.jpg' }] }),
@@ -76,6 +79,14 @@ jest.mock('../../queries/queries', () => ({
       ]
     }),
   },
+}));
+
+jest.mock('../../utils/s3Client', () => ({
+  buildS3Client: jest.fn().mockReturnValue({}),
+  getObjectStream: jest.fn().mockResolvedValue({
+    body: require('stream').Readable.from([Buffer.from('s3_image_bytes')]),
+    contentType: 'image/jpeg',
+  }),
 }));
 
 jest.mock('fs', () => {
@@ -105,6 +116,7 @@ jest.mock('archiver', () => {
   const mArchiver = jest.fn(() => ({
     pipe: jest.fn(),
     file: jest.fn(),
+    append: jest.fn(),
     directory: jest.fn(),
     finalize: jest.fn(),
     on: jest.fn(),
@@ -121,10 +133,12 @@ describe('Download Dataset Route', () => {
     };
     global.currentPath = '/test/path/';
     global.projectDbClients = {};
+    global.logger = { error: jest.fn(), debug: jest.fn(), info: jest.fn() };
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    require('fs').existsSync.mockReturnValue(true);
   });
 
   it('should successfully download standard COCO dataset (format 2)', async () => {
@@ -155,6 +169,70 @@ describe('Download Dataset Route', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.text).toContain('downloaded:');
+  });
+
+  it('should download a mixed local + S3-streamed dataset by fetching the S3 image live (format 2)', async () => {
+    const queries = require('../../queries/queries');
+    const fs = require('fs');
+    const s3Client = require('../../utils/s3Client');
+
+    queries.project.getAllImages.mockResolvedValueOnce({
+      rows: [
+        { IName: 'local.jpg', Source: null, SourceKey: null },
+        { IName: 'streamed.jpg', Source: 's3', SourceKey: 'prefix/streamed.jpg' },
+      ],
+    });
+    queries.managed.getBucket.mockResolvedValueOnce({
+      row: { BucketName: 'my-bucket', Region: 'us-east-1' },
+    });
+    fs.existsSync.mockImplementation((p) => !String(p).includes('streamed.jpg'));
+
+    const res = await request(app)
+      .post('/downloadDataset')
+      .send({
+        PName: 'test-project',
+        Admin: 'testuser',
+        IDX: 1,
+        download_format: 2,
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain('downloaded:');
+    expect(s3Client.getObjectStream).toHaveBeenCalledWith(
+      expect.anything(),
+      'my-bucket',
+      'prefix/streamed.jpg',
+    );
+    expect(global.logger.error).not.toHaveBeenCalled();
+  });
+
+  it('should skip an S3-streamed image with no bucket attached instead of crashing the download (format 7)', async () => {
+    const queries = require('../../queries/queries');
+    const fs = require('fs');
+
+    queries.project.getAllImages.mockResolvedValueOnce({
+      rows: [
+        { IName: 'local.jpg', Source: null, SourceKey: null },
+        { IName: 'orphaned.jpg', Source: 's3', SourceKey: 'prefix/orphaned.jpg' },
+      ],
+    });
+    queries.managed.getBucket.mockResolvedValueOnce({ row: null });
+    fs.existsSync.mockImplementation((p) => !String(p).includes('orphaned.jpg'));
+
+    const res = await request(app)
+      .post('/downloadDataset')
+      .send({
+        PName: 'test-project',
+        Admin: 'testuser',
+        IDX: 1,
+        download_format: 7,
+      })
+      .set('Cookie', ['Username=testuser']);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain('downloaded:');
+    expect(global.logger.error).toHaveBeenCalled();
   });
 });
 
