@@ -12,6 +12,10 @@ const sqlite3 = require('sqlite3');
 const IMPORT_SCRIPT = path.join(__dirname, '..', '..', 'controllers', 'imports', 'import_options.py');
 
 function findPython() {
+  const venvPython = path.join(__dirname, '..', '..', '.venv', 'bin', 'python');
+  if (fs.existsSync(venvPython)) return venvPython;
+  const venvWin = path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe');
+  if (fs.existsSync(venvWin)) return venvWin;
   for (const candidate of ['python3', 'python']) {
     const result = spawnSync(candidate, ['--version']);
     if (result.status === 0) return candidate;
