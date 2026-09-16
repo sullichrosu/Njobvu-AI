@@ -1,6 +1,8 @@
 const path = require("path");
 const fs = require("fs");
+const probe = require("probe-image-size");
 const queries = require("../../queries/queries");
+const { buildS3Client, getObjectStream } = require("../../utils/s3Client");
 
 async function getAnnotatePage(req, res) {
     let idx = parseInt(req.query.IDX, 10);
@@ -111,21 +113,68 @@ async function getAnnotatePage(req, res) {
     }
 
     const fsObj = global.fs || fs;
+    const probeObj = global.probe || probe;
     const absImagePath = path.join(projectDir, "images", IName);
 
-    if (!imageRecord || !fsObj.existsSync(absImagePath)) {
+    if (!imageRecord) {
         return res.render("404", {
             title: "404",
             user: req.cookies ? req.cookies.Username : undefined,
         });
     }
 
-    const relImagePath = `/${relProjectPath}/images/${imageRecord.IName}`;
-
+    let relImagePath;
     let imgData;
     try {
-        const imgBuffer = fsObj.readFileSync(absImagePath);
-        imgData = probe.sync(imgBuffer);
+        if (fsObj.existsSync(absImagePath)) {
+            const imgBuffer = fsObj.readFileSync(absImagePath);
+            imgData = probeObj.sync(imgBuffer);
+            relImagePath = `${relProjectPath}/images/${imageRecord.IName}`;
+        } else if (imageRecord.Source === "s3" && imageRecord.SourceKey) {
+            const bucketRes = await queries.managed.getBucket(PName, admin);
+            const bucket = bucketRes && bucketRes.row;
+
+            if (!bucket) {
+                throw new Error("No bucket attached");
+            }
+
+            const s3Client = buildS3Client({
+                region: bucket.Region,
+                accessKeyId: bucket.AccessKeyId,
+                secretAccessKey: bucket.SecretAccessKey,
+                endpoint: bucket.Endpoint,
+            });
+            const { body } = await getObjectStream(
+                s3Client,
+                bucket.BucketName,
+                imageRecord.SourceKey,
+            );
+
+            const imageBytes = await new Promise((resolve, reject) => {
+                if (!body) {
+                    return reject(new Error("Empty S3 response"));
+                }
+                if (Buffer.isBuffer(body)) {
+                    return resolve(body);
+                }
+                if (typeof body === "string") {
+                    return resolve(Buffer.from(body));
+                }
+                if (typeof body[Symbol.asyncIterator] !== "function" && typeof body.on !== "function") {
+                    return resolve(Buffer.from(body));
+                }
+
+                const chunks = [];
+                body.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+                body.on("end", () => resolve(Buffer.concat(chunks)));
+                body.on("error", reject);
+            });
+
+            imgData = await probeObj(imageBytes);
+            relImagePath = `api/v2/projects/${admin}/${PName}/images/${imageRecord.IName}`;
+        } else {
+            throw new Error("Image not found");
+        }
     } catch (err) {
         return res.render("404", {
             title: "404",

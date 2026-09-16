@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const archiver = require("archiver");
 const queries = require("../../queries/queries");
 
 async function downloadProject(req, res) {
@@ -48,17 +47,11 @@ async function downloadProject(req, res) {
     } else {
         var zipFilePath = path.join(downloadPath, PName + ".zip");
         var output = fs.createWriteStream(zipFilePath);
+        const archiver = require("archiver");
         var archive = archiver("zip");
 
         output.on("close", function() {
-            return res.download(zipFilePath, (err) => {
-                if (err) {
-                    if (global.logger) global.logger.debug("Download error:", err);
-                    if (!res.headersSent) {
-                        return res.json({ success: false, message: "Download failed" });
-                    }
-                }
-            });
+            return res.download(zipFilePath);
         });
 
         output.on("error", function(err) {

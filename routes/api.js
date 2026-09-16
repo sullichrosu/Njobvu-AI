@@ -71,7 +71,9 @@ const {
     getS3Bucket,
     deleteS3Bucket,
     syncS3Bucket,
+    getProjectImage,
 } = require("./api/v2/s3Buckets");
+const mapKwCocoCsv = require("./projects/mapKwCocoCsv");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -186,6 +188,7 @@ api.post("/api/projects/import-dataset", asyncHandler(importDataset));
 api.post("/api/projects/import-yolo", asyncHandler(importYolo));
 api.post("/api/projects/import-kwcoco", asyncHandler(importKwCoco));
 api.post("/api/projects/import-ifcb", asyncHandler(importIfcb));
+api.post("/api/projects/map-kwcoco-csv", asyncHandler(mapKwCocoCsv));
 api.post("/mergeLocal", asyncHandler(mergeLocal));
 api.post("/removeAccess", asyncHandler(removeAccess));
 api.post("/transferAdmin", asyncHandler(transferAdmin));
@@ -201,6 +204,7 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(attachS3
 api.get("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(getS3Bucket));
 api.delete("/api/v2/projects/:admin/:projectName/s3-bucket", asyncHandler(deleteS3Bucket));
 api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", asyncHandler(syncS3Bucket));
+api.get("/api/v2/projects/:admin/:projectName/images/:imageName", asyncHandler(getProjectImage));
 
 // LABELLING ROUTES
 api.post("/updateLabels", asyncHandler(updateLabels));
