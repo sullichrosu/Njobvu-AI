@@ -11,12 +11,19 @@ const sqlite3 = require('sqlite3');
 
 const IMPORT_SCRIPT = path.join(__dirname, '..', '..', 'controllers', 'imports', 'import_options.py');
 
+// import_options.py needs PIL and yaml. A bare `python3`/`python` on PATH
+// isn't guaranteed to have them (e.g. it may resolve to an unrelated
+// virtualenv), so prefer this repo's own .venv when it has the deps, and
+// otherwise fall back to whatever interpreter on PATH actually has them.
 function findPython() {
-  for (const candidate of ['python3', 'python']) {
-    const result = spawnSync(candidate, ['--version']);
+  const venvPython = path.join(__dirname, '..', '..', '.venv', 'bin', 'python3');
+  const candidates = [venvPython, 'python3', 'python'];
+
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate, ['-c', 'import PIL, yaml']);
     if (result.status === 0) return candidate;
   }
-  throw new Error('No python interpreter found on PATH');
+  throw new Error('No python interpreter with PIL and yaml installed was found (checked .venv and PATH)');
 }
 
 // Builds a fixture that mirrors exactly what routes/downloads/downloadDataset.js

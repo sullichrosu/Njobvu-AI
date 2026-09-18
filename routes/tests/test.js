@@ -3,11 +3,16 @@ async function test(req, res) {
 
     var username = req.cookies.Username;
 
-    var Numprojects = await db.getAsync(
-        "SELECT COUNT(*) AS THING FROM Access WHERE Username = '" +
-            username +
-            "'",
-    );
+    try {
+        await db.getAsync(
+            "SELECT COUNT(*) AS THING FROM Access WHERE Username = '" +
+                username +
+                "'",
+        );
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).send("Error running test");
+    }
 
     res.send({ Success: "Test was successful" });
 }

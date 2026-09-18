@@ -41,15 +41,34 @@ const request = require('supertest');
 const app = require('../../app');
 const queries = require('../../queries/queries');
 
+// Mimics the real managedDbClient wrapper: .all() always resolves { success, rows },
+// .get() resolves { success, row } where row is undefined on no match (queries.managed.sql
+// tries .get() first for a SELECT, falling back to .all() when no row comes back).
+function mockManagedDbClient({ accessRows = [], projectRow = undefined } = {}) {
+  return {
+    run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
+    all: jest.fn((sql) => {
+      if (sql.includes('Access')) {
+        return Promise.resolve({ success: true, rows: accessRows });
+      }
+      return Promise.resolve({ success: true, rows: projectRow ? [projectRow] : [] });
+    }),
+    get: jest.fn((sql) => {
+      if (sql.includes('Projects')) {
+        return Promise.resolve({ success: true, row: projectRow });
+      }
+      return Promise.resolve({ success: true, row: undefined });
+    }),
+  };
+}
+
 describe('GET /config/projSettings after a project rename (CEO-31)', () => {
   beforeEach(() => {
     global.currentPath = '/test/path/';
     global.projectDbClients = {};
     global.colorsJSON = ['#FF0000', '#00FF00', '#0000FF'];
     global.readdirAsync = jest.fn().mockResolvedValue([]);
-    global.managedDbClient = {
-      run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
-    };
+    global.managedDbClient = mockManagedDbClient();
   });
 
   afterEach(() => {
@@ -67,16 +86,14 @@ describe('GET /config/projSettings after a project rename (CEO-31)', () => {
     );
 
     // Access now reports the renamed project for this user's IDX=0 entry.
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'renamed-project', Admin: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue({
+    global.managedDbClient = mockManagedDbClient({
+      accessRows: [{ PName: 'renamed-project', Admin: 'testuser' }],
+      projectRow: {
         PName: 'renamed-project',
         Admin: 'testuser',
         PDescription: 'a test project',
-      }),
-    };
+      },
+    });
 
     const res = await request(app)
       .get('/config/projSettings?IDX=0')
@@ -87,10 +104,7 @@ describe('GET /config/projSettings after a project rename (CEO-31)', () => {
   });
 
   it('redirects home with an error instead of crashing when IDX is out of range', async () => {
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([]),
-      getAsync: jest.fn().mockResolvedValue(undefined),
-    };
+    global.managedDbClient = mockManagedDbClient({ accessRows: [] });
 
     const res = await request(app)
       .get('/config/projSettings?IDX=1')
@@ -101,16 +115,10 @@ describe('GET /config/projSettings after a project rename (CEO-31)', () => {
   });
 
   it('redirects home with an error instead of crashing when IDX is not a number', async () => {
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'some-project', Admin: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue({
-        PName: 'some-project',
-        Admin: 'testuser',
-        PDescription: 'desc',
-      }),
-    };
+    global.managedDbClient = mockManagedDbClient({
+      accessRows: [{ PName: 'some-project', Admin: 'testuser' }],
+      projectRow: { PName: 'some-project', Admin: 'testuser', PDescription: 'desc' },
+    });
 
     const res = await request(app)
       .get('/config/projSettings?IDX=not-a-number')
@@ -122,12 +130,10 @@ describe('GET /config/projSettings after a project rename (CEO-31)', () => {
 
   it('redirects home with an error instead of crashing when the joined Projects row is missing', async () => {
     // Access still has a row (stale PName), but no Projects row joins on it.
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'stale-name', Admin: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue(undefined),
-    };
+    global.managedDbClient = mockManagedDbClient({
+      accessRows: [{ PName: 'stale-name', Admin: 'testuser' }],
+      projectRow: undefined,
+    });
 
     const res = await request(app)
       .get('/config/projSettings?IDX=0')

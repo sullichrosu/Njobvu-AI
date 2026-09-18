@@ -21,6 +21,21 @@ jest.mock('fs', () => ({
 }));
 
 const { isReservedInferenceFile } = require('../../utils/isRunArtifactFile');
+
+jest.mock('../../queries/queries', () => ({
+  managed: {
+    getUserProjects: jest.fn().mockResolvedValue({
+      rows: [{ PName: 'test-project', Admin: 'testuser', Username: 'testuser' }],
+    }),
+    sql: jest.fn().mockResolvedValue({
+      rows: [{ PDescription: 'Test project description', AutoSave: 1 }],
+    }),
+  },
+  project: {
+    getAllClasses: jest.fn().mockResolvedValue({ rows: [] }),
+  },
+}));
+
 const getInferencePage = require('../../routes/pages/getInferencePage');
 
 describe('GET /inference page handler - coco-classes filtering', () => {
@@ -29,27 +44,6 @@ describe('GET /inference page handler - coco-classes filtering', () => {
     global.util = require('util');
     global.logger = { info: jest.fn(), debug: jest.fn(), error: jest.fn(), warn: jest.fn() };
     global.configFile = {};
-
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'test-project', Admin: 'testuser', Username: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue({
-        PDescription: 'Test project description',
-        AutoSave: 1,
-      }),
-    };
-
-    global.sqlite3 = {
-      Database: jest.fn((dbPath, cb) => {
-        if (typeof cb === 'function') cb(null);
-        return {
-          get: jest.fn((sql, cb2) => cb2(null, {})),
-          all: jest.fn((sql, cb2) => cb2(null, [])),
-          close: jest.fn((cb2) => cb2 && cb2(null)),
-        };
-      }),
-    };
 
     // One inference run whose artifact directory contains both a coco_classes.yaml
     // (must be filtered out of the weights listing) and a real weight file (must stay).
