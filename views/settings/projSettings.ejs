@@ -98,7 +98,16 @@
             Pre-Processing: Map KW COCO Annotations
         </h3>
         <p>
-            Upload a `.csv` or `.json` annotation file (KW COCO format) to map bounding box labels directly to project images.
+            Upload a `.csv` or `.json` annotation file (KW COCO format) to map labels directly to project images.
+        </p>
+        <p class="small text-muted">
+            CSV files need a header row. Detection files use <code>file_name,class_name,x,y,w,h</code>
+            (or <code>xmin,ymin,xmax,ymax</code>). Classification files only need <code>file_name,class_name</code>;
+            each image is labelled as a whole.
+            Download an example:
+            <a href="/api/v2/projects/map-annotations-csv/template?type=detection">detection</a>,
+            <a href="/api/v2/projects/map-annotations-csv/template?type=detection-corners">detection (corners)</a>,
+            <a href="/api/v2/projects/map-annotations-csv/template?type=classification">classification</a>.
         </p>
         <form action="/api/projects/map-kwcoco-csv" method="POST" enctype="multipart/form-data" id="mapKwCocoCsvForm">
             <input type="hidden" name="PName" value="<%= PName %>">
@@ -277,8 +286,13 @@
 			formData.append("Admin", "<%= Admin %>");
 			formData.append("IDX", "<%= IDX %>");
 
+			// CSV files use the v2 endpoint (header-based CSV, classification support);
+			// JSON files keep using the legacy KW COCO endpoint.
+			var isCsv = /\.csv$/i.test(csvFileInput.files[0].name);
+			var url = isCsv ? "/api/v2/projects/map-annotations-csv" : event.target.action;
+
 			var request = new XMLHttpRequest();
-			request.open("post", event.target.action, true);
+			request.open("post", url, true);
 			request.onreadystatechange = function receiveResponse() {
 				if (this.readyState == 4) {
 					if (this.status == 200) {
@@ -290,7 +304,17 @@
 						}
 						window.location.reload();
 					} else {
-						alert("Failed to map annotations: " + this.response);
+						var failure = this.response;
+						try {
+							var body = JSON.parse(this.response);
+							failure = body.message || failure;
+							if (body.errors && body.errors.length) {
+								failure += "\n" + body.errors.slice(0, 5).map(function (e) {
+									return "Line " + e.line + ": " + e.message;
+								}).join("\n");
+							}
+						} catch (e) {}
+						alert("Failed to map annotations: " + failure);
 					}
 				}
 			}
