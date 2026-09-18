@@ -15,10 +15,14 @@ jest.mock('../../utils/s3Client', () => ({
     buildS3Client: jest.fn(() => ({ fakeClient: true })),
     getObjectStream: jest.fn(),
 }));
-jest.mock('fs', () => ({
-    existsSync: jest.fn(),
-    readFileSync: jest.fn(),
-}));
+jest.mock('fs', () => {
+    const actualFs = jest.requireActual('fs');
+    return {
+        ...actualFs,
+        existsSync: jest.fn(),
+        readFileSync: jest.fn(),
+    };
+});
 jest.mock('sqlite3', () => {
     const Database = jest.fn();
     return {
