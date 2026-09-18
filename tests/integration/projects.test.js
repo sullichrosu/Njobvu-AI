@@ -87,6 +87,7 @@ jest.mock('../../queries/queries', () => ({
 
 // Mock fs module
 jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
   existsSync: jest.fn().mockReturnValue(false),
   mkdirSync: jest.fn(),
   rmSync: jest.fn(),

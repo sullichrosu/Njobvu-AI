@@ -68,6 +68,7 @@ jest.mock('../../queries/queries', () => ({
 }));
 
 jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
   existsSync: jest.fn().mockReturnValue(true),
   mkdirSync: jest.fn(),
   writeFile: jest.fn((path, data, callback) => callback(null)),
