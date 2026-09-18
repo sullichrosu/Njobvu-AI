@@ -4,9 +4,9 @@ const queries = require("../../queries/queries");
 
 async function getReviewPage(req, res) {
     const username = req.cookies ? req.cookies.Username : undefined;
-    const CName = req.query.class;
+    const IName = req.query.IName;
+    let CName = req.query.class;
     const idx = parseInt(req.query.IDX, 10);
-    const isUnlabeledMode = CName === UNLABELED_CLASS;
 
     const page = parseInt(req.query.page, 10) || 1;
     const pageSize = 100;
@@ -34,6 +34,32 @@ async function getReviewPage(req, res) {
         global.logger.error("Error loading review page:", err);
         return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
+
+    // No class was specified in the URL: derive one so a "Review" link that
+    // only knows an image name (not its class) still lands somewhere
+    // sensible - the image's own class if it has labels, otherwise the
+    // unlabeled bucket.
+    if (!CName && IName) {
+        try {
+            const labelRes = await queries.project.getClassNameForLabel(projectDir, IName);
+            const rows = (labelRes && labelRes.rows) ? labelRes.rows : [];
+            CName = rows.length > 0 ? rows[0].CName : UNLABELED_CLASS;
+        } catch (err) {
+            global.logger.error("Error resolving class for image:", err);
+            CName = UNLABELED_CLASS;
+        }
+    } else if (!CName) {
+        try {
+            const classRes = await queries.project.getAllClasses(projectDir);
+            const rows = (classRes && classRes.rows) ? classRes.rows : [];
+            CName = rows.length > 0 ? rows[0].CName : UNLABELED_CLASS;
+        } catch (err) {
+            global.logger.error("Error resolving default class:", err);
+            CName = UNLABELED_CLASS;
+        }
+    }
+
+    const isUnlabeledMode = CName === UNLABELED_CLASS;
 
     let totalCount = 0;
     let images = [];
@@ -122,7 +148,7 @@ async function getReviewPage(req, res) {
         classes,
         currentPage: page,
         totalPageCount,
-        selectedClass: req.query.class,
+        selectedClass: CName,
         IDX: idx,
         admin,
         activePage: "Label",

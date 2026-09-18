@@ -140,19 +140,28 @@ async function getValidationLabelingPage(req, res) {
         }
     }
 
-    let rowidRecord = null;
-    try {
-        const rowidRes = await queries.project.sql(
-            projectDir,
-            "SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = ?",
-            [IName]
-        );
-        rowidRecord = (rowidRes && rowidRes.rows && rowidRes.rows.length > 0) ? rowidRes.rows[0] : null;
-    } catch (err) {}
+    if (!currClass && classNames.length > 0) {
+        currClass = classNames[0];
+    }
 
-    try {
-        await queries.project.updateReviewImage(projectDir, 0, IName);
-    } catch (err) {}
+    // curr_index/prev/next must be positions within `images` (the
+    // filtered/sorted navigation set for the active sort/class filter), not
+    // a ROW_NUMBER() over the entire unfiltered Images table - otherwise a
+    // filter that shrinks the set below the image's global row number sends
+    // prev/next out of bounds. If the requested image isn't in the active
+    // filtered set at all (e.g. it was just marked reviewed and no longer
+    // matches sort=needs_review), redirect to the first image still in the
+    // set, or back to the project list if the filter is now empty.
+    const requestedIndex = images.findIndex((img) => img.IName === IName);
+    if (requestedIndex === -1) {
+        const sortParam = sortFilter || "";
+        if (images.length === 0) {
+            return res.redirect(`/projectV?IDX=${idx}&page=1&perPage=10&sort=${sortParam}`);
+        }
+        return res.redirect(
+            `/labelingV?IDX=${idx}&IName=${encodeURIComponent(images[0].IName)}&curr_class=${encodeURIComponent(currClass || "")}&sort=${sortParam}`
+        );
+    }
 
     let labels = [];
     try {
@@ -194,10 +203,6 @@ async function getValidationLabelingPage(req, res) {
         global.logger.error("Error querying project access list:", err);
     }
 
-    if (!currClass && classNames.length > 0) {
-        currClass = classNames[0];
-    }
-
     const fsObj = global.fs || fs;
     const absImagePath = path.join(projectDir, "images", IName);
     if (!imageRecord || !fsObj.existsSync(absImagePath)) {
@@ -225,20 +230,9 @@ async function getValidationLabelingPage(req, res) {
     const imageDisplayWidth = imgWidth;
     const imageDisplayHeight = imageRatio * imageDisplayWidth;
 
-    let prevIName = -1;
-    let nextIName = -1;
-    let currIndex = 1;
-
-    if (rowidRecord && rowidRecord.display_id) {
-        currIndex = Number(rowidRecord.display_id);
-    }
-
-    if (currIndex !== 1 && images[currIndex - 2]) {
-        prevIName = images[currIndex - 2].IName;
-    }
-    if (currIndex !== images.length && images[currIndex]) {
-        nextIName = images[currIndex].IName;
-    }
+    const currIndex = requestedIndex + 1;
+    const prevIName = requestedIndex > 0 ? images[requestedIndex - 1].IName : -1;
+    const nextIName = requestedIndex < images.length - 1 ? images[requestedIndex + 1].IName : -1;
 
     const colors = [];
     let colorIdx = 0;
@@ -259,7 +253,7 @@ async function getValidationLabelingPage(req, res) {
     const statsO = Object.entries(statsMap);
 
     res.render("labelingV", {
-        title: "labeling",
+        title: "labelingV",
         user,
         access: accessUsers,
         image_width: imageDisplayWidth,

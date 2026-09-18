@@ -8,6 +8,7 @@ async function getAnnotatePage(req, res) {
     let idx = parseInt(req.query.IDX, 10);
     const IName = String(req.query.IName || "");
     let currClass = req.query.curr_class;
+    const reviewFilter = req.query.reviewFilter || req.query.review || "all";
     const user = req.cookies ? req.cookies.Username : undefined;
 
     if (isNaN(idx) || idx === undefined) {
@@ -53,17 +54,15 @@ async function getAnnotatePage(req, res) {
         global.logger.error("Error fetching images for annotate page:", err);
     }
 
-    let rowidRecord = null;
-    try {
-        const rowidRes = await queries.project.sql(
-            projectDir,
-            "SELECT IName, display_id FROM (SELECT IName, ROW_NUMBER() OVER (ORDER BY rowid) AS display_id FROM Images) AS numbered WHERE IName = ?",
-            [IName]
-        );
-
-        rowidRecord = (rowidRes && rowidRes.rows && rowidRes.rows.length > 0) ? rowidRes.rows[0] : null;
-    } catch (err) {
-        global.logger.error("Error querying image rowid:", err);
+    // Nav (prev/next scrolling + the "x/y" counter) walks navImages, which is
+    // allImages filtered by reviewFilter - not the full unfiltered project.
+    // Positions come from this array directly rather than a global rowid, so
+    // a filter that shrinks the set can never index past its own bounds.
+    let navImages = allImages;
+    if (reviewFilter === "true" || reviewFilter === "1") {
+        navImages = allImages.filter((img) => Number(img.reviewImage) !== 0);
+    } else if (reviewFilter === "false" || reviewFilter === "0") {
+        navImages = allImages.filter((img) => Number(img.reviewImage) === 0);
     }
 
     let labels = [];
@@ -188,21 +187,12 @@ async function getAnnotatePage(req, res) {
     const imageDisplayWidth = imgWidth;
     const imageDisplayHeight = imageRatio * imageDisplayWidth;
 
-    let prevIName = -1;
-    let nextIName = -1;
-    let currIndex = 1;
-
-    if (rowidRecord && rowidRecord.display_id) {
-        currIndex = Number(rowidRecord.display_id);
-    }
-
-    if (allImages && currIndex > 1 && allImages[currIndex - 2]) {
-        prevIName = allImages[currIndex - 2].IName;
-    }
-
-    if (allImages && currIndex < allImages.length && allImages[currIndex]) {
-        nextIName = allImages[currIndex].IName;
-    }
+    const requestedIndex = navImages.findIndex((img) => img.IName === IName);
+    const currIndex = requestedIndex === -1 ? 1 : requestedIndex + 1;
+    const prevIName = requestedIndex > 0 ? navImages[requestedIndex - 1].IName : -1;
+    const nextIName = requestedIndex !== -1 && requestedIndex < navImages.length - 1
+        ? navImages[requestedIndex + 1].IName
+        : -1;
 
     const colors = [];
     let colorIdx = 0;
@@ -227,7 +217,7 @@ async function getAnnotatePage(req, res) {
         image_name: imageRecord.IName,
         image_ratio: imageRatio,
         classes: classNames,
-        images: allImages || [],
+        images: navImages,
         labels: labels || [],
         colors,
         IName,
@@ -236,13 +226,14 @@ async function getAnnotatePage(req, res) {
         PName,
         Admin: admin,
         IDX: idx,
-        images_length: allImages ? allImages.length : 0,
+        images_length: navImages.length,
         curr_index: currIndex,
         curr_class: currClass,
         rev_image: imageRecord.reviewImage,
         list_counter: [],
         AutoSave: projRecord ? projRecord.AutoSave : 0,
         logged: req.query.logged,
+        reviewFilter,
         activePage: "project",
     });
 }

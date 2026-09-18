@@ -65,6 +65,7 @@ const removeAccess = require("./projects/removeAccess");
 const transferAdmin = require("./projects/transferAdmin");
 const script = require("./projects/script");
 const deleteImagesWithoutLabel = require("./projects/deleteImagesWithoutLabel");
+const toggleAllReview = require("./projects/toggleAllReview");
 const { getFilteredProjectsApi, getFilteredImagesApi } = require("./api/projectsFilter");
 const {
     attachS3Bucket,
@@ -194,6 +195,8 @@ api.post("/removeAccess", asyncHandler(removeAccess));
 api.post("/transferAdmin", asyncHandler(transferAdmin));
 api.post("/script", asyncHandler(script));
 api.post("/deleteImagesWithoutLabel", asyncHandler(deleteImagesWithoutLabel));
+api.post("/toggleAllReview", asyncHandler(toggleAllReview));
+api.post("/api/projects/toggleAllReview", asyncHandler(toggleAllReview));
 api.get("/api/v2/projects", asyncHandler(getFilteredProjectsApi));
 api.get("/api/v2/projects/:IDX/images", asyncHandler(getFilteredImagesApi));
 api.get("/api/projects/filter", asyncHandler(getFilteredProjectsApi));

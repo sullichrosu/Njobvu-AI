@@ -82,7 +82,52 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    delete global.projectDbClients;
+    // jest.clearAllMocks() only clears call history, not a spy's
+    // mockResolvedValue implementation - so a jest.spyOn(queries.*, "sql")
+    // in one test would otherwise leak its fixed resolved value into every
+    // later test's real queries.*.sql calls. Restore the originals here so
+    // each test starts from the real implementation unless it opts into its
+    // own spy.
+    if (queries.managed.sql.mockRestore) queries.managed.sql.mockRestore();
+    if (queries.project.sql.mockRestore) queries.project.sql.mockRestore();
   });
+
+  // Project-level (per-project .db file) queries all go through
+  // queries/getDbClient.js, which returns whatever's cached in
+  // global.projectDbClients[projectPath] instead of opening a real sqlite3
+  // connection. This builds a fake Client (the same shape as
+  // queries/client.js: promise-returning all/get/run that resolve to
+  // {rows}/{row}/{success,changes}) that routes queries to a handler based
+  // on a substring of the SQL text, mirroring how each queries.project.*
+  // helper's fixed query text identifies which query is running.
+  const projectPath = path.join(process.cwd(), "public", "projects", "testuser-test-project");
+
+  function mockProjectDb({ all = {}, get = {} } = {}) {
+    const dbMock = {
+      all: jest.fn((sql) => {
+        const s = String(sql);
+        for (const [pattern, rows] of Object.entries(all)) {
+          if (s.includes(pattern)) {
+            return Promise.resolve({ rows: typeof rows === "function" ? rows(s) : rows });
+          }
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      get: jest.fn((sql, params) => {
+        const s = String(sql);
+        for (const [pattern, row] of Object.entries(get)) {
+          if (s.includes(pattern)) {
+            return Promise.resolve({ row: typeof row === "function" ? row(params) : row });
+          }
+        }
+        return Promise.resolve({ row: null });
+      }),
+      run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
+    };
+    global.projectDbClients = { [projectPath]: dbMock };
+    return dbMock;
+  }
 
   describe("POST /changeValidation state preservation", () => {
     it("should toggle project Validate state without modifying individual image reviewImage records", async () => {
@@ -198,28 +243,13 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /project with Review buttons", () => {
     it("should render Review button for images flagged with reviewImage", async () => {
-      const sqlite3 = require("sqlite3");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          if (sql.includes("FROM Images")) {
-            if (callback) callback(null, [
-              { IName: "image1.jpg", reviewImage: 1, validateImage: 0, numLabels: 2 },
-              { IName: "image2.jpg", reviewImage: 0, validateImage: 0, numLabels: 0 },
-            ]);
-          } else {
-            if (callback) callback(null, []);
-          }
-        }),
-        run: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          if (callback) callback(null);
-        }),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+      mockProjectDb({
+        all: {
+          "FROM Images": [
+            { IName: "image1.jpg", reviewImage: 1, validateImage: 0, numLabels: 2 },
+            { IName: "image2.jpg", reviewImage: 0, validateImage: 0, numLabels: 0 },
+          ],
+        },
       });
 
       const res = await request(app)
@@ -238,40 +268,24 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /annotate with reviewFilter scrolling", () => {
     it("should filter navigation images to only those needing review when reviewFilter=true", async () => {
-      const sqlite3 = require("sqlite3");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (s.includes("reviewImage != 0")) {
-            if (callback) callback(null, [
-              { IName: "image1.jpg", reviewImage: 1 },
-              { IName: "image3.jpg", reviewImage: 1 },
-            ]);
-          } else if (s.includes("Classes")) {
-            if (callback) callback(null, [{ CName: "class1" }]);
-          } else if (s.includes("IName =") && s.includes("Images")) {
-            if (callback) callback(null, [{ IName: "image1.jpg", reviewImage: 1 }]);
-          } else if (s.includes("Labels")) {
-            if (callback) callback(null, []);
-          } else {
-            if (callback) callback(null, [
-              { IName: "image1.jpg", reviewImage: 1 },
-              { IName: "image2.jpg", reviewImage: 0 },
-              { IName: "image3.jpg", reviewImage: 1 },
-            ]);
-          }
-        }),
-        get: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          if (callback) callback(null, { AutoSave: 0 });
-        }),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+      mockProjectDb({
+        all: {
+          "FROM Classes": [{ CName: "class1" }],
+          "FROM Labels WHERE IName": [],
+          "FROM Images": [
+            { IName: "image1.jpg", reviewImage: 1 },
+            { IName: "image2.jpg", reviewImage: 0 },
+            { IName: "image3.jpg", reviewImage: 1 },
+          ],
+        },
+        get: {
+          "FROM Images WHERE IName": (params) => ({
+            IName: params[0],
+            reviewImage: 1,
+            Source: null,
+            SourceKey: null,
+          }),
+        },
       });
 
       const res = await request(app)
@@ -286,40 +300,21 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /review image rendering", () => {
     function mockReviewDb(overrides) {
-      const sqlite3 = require("sqlite3");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (!callback) return;
-
-          if (s.includes("NOT IN (SELECT IName FROM Labels)")) {
-            return callback(null, overrides.unlabeled || []);
-          }
-          if (s.includes("INNER JOIN Labels")) {
-            return callback(null, overrides.labeledImages || []);
-          }
-          if (s.includes("SELECT CName FROM Labels WHERE IName")) {
-            return callback(null, overrides.classForIName || []);
-          }
-          if (s.includes("SELECT CName FROM Classes")) {
-            return callback(null, overrides.defaultClass || []);
-          }
-          if (s.includes("SELECT * FROM Labels WHERE IName")) {
-            return callback(null, overrides.imageLabels || []);
-          }
-          if (s.includes("Classes")) {
-            return callback(null, overrides.classes || []);
-          }
-          return callback(null, []);
-        }),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+      return mockProjectDb({
+        all: {
+          "COUNT(*) as count FROM Images WHERE Images.IName NOT IN": [
+            { count: (overrides.unlabeled || []).length },
+          ],
+          "SELECT Images.IName FROM Images WHERE Images.IName NOT IN": overrides.unlabeled || [],
+          "COUNT(*) as count FROM Images INNER JOIN": [
+            { count: (overrides.labeledImages || []).length },
+          ],
+          "SELECT Images.IName FROM Images INNER JOIN": overrides.labeledImages || [],
+          "DISTINCT CName FROM Labels WHERE IName": overrides.classForIName || [],
+          "FROM Labels WHERE IName": overrides.imageLabels || [],
+          "FROM Classes": overrides.classes || [],
+        },
       });
-      return dbMock;
     }
 
     it("routes labeled images through the TIFF/SCN-aware crop-canvas loader instead of a plain <img>", async () => {
@@ -394,51 +389,37 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
     // with an uncaught TypeError. Regression covers a 6-image project where
     // the "needs review" image under test is the 4th row globally, but only
     // the 2nd of 3 in the filtered set.
-    function mockLabelingVDb() {
-      const sqlite3 = require("sqlite3");
-      // getValidationLabelingPage.js references the bare `sqlite3`/`fs`
-      // globals (set by server.js in production) rather than local requires.
-      global.sqlite3 = sqlite3;
-      global.fs = require("fs");
-      const allImages = [
-        { IName: "c1.png", reviewImage: 0, validateImage: 0 },
-        { IName: "c2.png", reviewImage: 1, validateImage: 0 },
-        { IName: "c3.png", reviewImage: 0, validateImage: 0 },
-        { IName: "c4.png", reviewImage: 1, validateImage: 0 },
-        { IName: "c5.png", reviewImage: 0, validateImage: 0 },
-        { IName: "c6.png", reviewImage: 1, validateImage: 0 },
-      ];
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (!callback) return;
+    function mockLabelingVDb({ allImages = [], reviewFiltered = null, classes = [{ CName: "cat" }] } = {}) {
+      const filtered = reviewFiltered !== null
+        ? reviewFiltered
+        : allImages.filter((img) => img.reviewImage === 1);
 
-          if (s.includes("FROM `Classes`")) return callback(null, [{ CName: "cat" }]);
-          if (s.includes("WHERE reviewImage=1")) return callback(null, allImages.filter((img) => img.reviewImage === 1));
-          if (s.includes("UPDATE Images SET reviewImage")) return callback(null, []);
-          if (s.includes("FROM `Labels` WHERE IName")) return callback(null, []);
-          if (s.includes("FROM `Images` WHERE IName")) {
-            const match = s.match(/IName = '([^']+)'/);
-            const img = allImages.find((i) => i.IName === (match && match[1]));
-            return callback(null, img ? [img] : []);
-          }
-          if (s.includes("FROM `Validation` WHERE IName")) return callback(null, []);
-          if (s.includes("FROM `Images`")) return callback(null, allImages);
-          return callback(null, []);
-        }),
-        get: jest.fn((sql, cb) => cb && cb(null, {})),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+      return mockProjectDb({
+        all: {
+          "FROM Classes": classes,
+          "WHERE reviewImage = 1": filtered,
+          "FROM Labels WHERE IName": [],
+          "FROM Validation WHERE IName": [],
+          "FROM Images": allImages,
+        },
+        get: {
+          "FROM Images WHERE IName": (params) =>
+            allImages.find((img) => img.IName === params[0]) || null,
+        },
       });
-      return dbMock;
     }
 
+    const sixImageFixture = [
+      { IName: "c1.png", reviewImage: 0, validateImage: 0 },
+      { IName: "c2.png", reviewImage: 1, validateImage: 0 },
+      { IName: "c3.png", reviewImage: 0, validateImage: 0 },
+      { IName: "c4.png", reviewImage: 1, validateImage: 0 },
+      { IName: "c5.png", reviewImage: 0, validateImage: 0 },
+      { IName: "c6.png", reviewImage: 1, validateImage: 0 },
+    ];
+
     it("does not crash and returns the correct filtered neighbors for a middle needs_review image", async () => {
-      const mockDb = mockLabelingVDb();
+      const mockDb = mockLabelingVDb({ allImages: sixImageFixture });
 
       const res = await request(app)
         .get("/labelingV?IDX=0&IName=c4.png&sort=needs_review")
@@ -450,12 +431,15 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
       expect(res.text).toContain('id="prev"');
       expect(res.text).toContain('id="next"');
       expect(res.text).toContain('sort=needs_review');
-      // Assert GET request does NOT issue DB update to clear reviewImage
-      expect(mockDb.all).not.toHaveBeenCalledWith(expect.stringContaining("UPDATE Images SET reviewImage"));
+      // Assert GET request does NOT issue a DB write to clear reviewImage
+      expect(mockDb.run).not.toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE Images SET reviewImage"),
+        expect.anything()
+      );
     });
 
     it("still resolves correct neighbors with no filter active", async () => {
-      mockLabelingVDb();
+      mockLabelingVDb({ allImages: sixImageFixture });
 
       const res = await request(app)
         .get("/labelingV?IDX=0&IName=c3.png")
@@ -467,33 +451,7 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
     });
 
     it("redirects to projectV when requested image is not in filtered results2 set and results2 is empty", async () => {
-      const sqlite3 = require("sqlite3");
-      global.sqlite3 = sqlite3;
-      global.fs = require("fs");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (!callback) return;
-
-          if (s.includes("FROM `Classes`")) return callback(null, [{ CName: "cat" }]);
-          if (s.includes("WHERE reviewImage=1")) return callback(null, []); // No review images left!
-          if (s.includes("UPDATE Images SET reviewImage")) return callback(null, []);
-          if (s.includes("FROM `Labels` WHERE IName")) return callback(null, []);
-          if (s.includes("FROM `Images` WHERE IName")) {
-            return callback(null, [{ IName: "c1.png", reviewImage: 0, validateImage: 0 }]);
-          }
-          if (s.includes("FROM `Validation` WHERE IName")) return callback(null, []);
-          if (s.includes("FROM `Images`")) return callback(null, []);
-          return callback(null, []);
-        }),
-        get: jest.fn((sql, cb) => cb && cb(null, {})),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
-      });
+      mockLabelingVDb({ allImages: sixImageFixture, reviewFiltered: [] });
 
       const res = await request(app)
         .get("/labelingV?IDX=0&IName=c1.png&sort=needs_review")
@@ -504,32 +462,9 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
     });
 
     it("redirects to next available filtered image when requested image does not match active filter but other images exist", async () => {
-      const sqlite3 = require("sqlite3");
-      global.sqlite3 = sqlite3;
-      global.fs = require("fs");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (!callback) return;
-
-          if (s.includes("FROM `Classes`")) return callback(null, [{ CName: "cat" }]);
-          if (s.includes("WHERE reviewImage=1")) return callback(null, [{ IName: "c2.png", reviewImage: 1 }]);
-          if (s.includes("UPDATE Images SET reviewImage")) return callback(null, []);
-          if (s.includes("FROM `Labels` WHERE IName")) return callback(null, []);
-          if (s.includes("FROM `Images` WHERE IName")) {
-            return callback(null, [{ IName: "c1.png", reviewImage: 0, validateImage: 0 }]);
-          }
-          if (s.includes("FROM `Validation` WHERE IName")) return callback(null, []);
-          if (s.includes("FROM `Images`")) return callback(null, []);
-          return callback(null, []);
-        }),
-        get: jest.fn((sql, cb) => cb && cb(null, {})),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+      mockLabelingVDb({
+        allImages: sixImageFixture,
+        reviewFiltered: [{ IName: "c2.png", reviewImage: 1 }],
       });
 
       const res = await request(app)
