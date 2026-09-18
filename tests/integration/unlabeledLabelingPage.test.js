@@ -4,46 +4,32 @@
 
 const UNLABELED_CLASS = require('../../utils/unlabeledClass');
 
+jest.mock('../../queries/queries', () => ({
+  managed: {
+    getUserProjects: jest.fn().mockResolvedValue({
+      rows: [{ PName: 'test-project', Admin: 'testuser', Username: 'testuser' }],
+    }),
+  },
+  project: {
+    getAllClasses: jest.fn().mockResolvedValue({ rows: [{ CName: 'cat' }] }),
+    sql: jest.fn((projectPath, sql) => {
+      if (sql.includes('NOT IN (SELECT IName FROM Labels)')) {
+        return Promise.resolve({ rows: [{ count: 4 }] });
+      }
+      if (sql.includes('COUNT(*) as count FROM Labels WHERE CName')) {
+        return Promise.resolve({ rows: [{ count: 7 }] });
+      }
+      return Promise.resolve({ rows: [{ count: 0 }] });
+    }),
+  },
+}));
+
 describe('GET /labeling - unlabeled bucket', () => {
   let getLabelingPage;
 
   beforeAll(() => {
     global.logger = { debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() };
     global.currentPath = '/test/path/';
-
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'test-project', Admin: 'testuser', Username: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue({}),
-    };
-
-    global.sqlite3 = {
-      Database: jest.fn((dbPath, cb) => {
-        if (typeof cb === 'function') cb(null);
-        return {
-          all: jest.fn((sql, cb2) => {
-            if (sql.includes('Classes')) {
-              return cb2(null, [{ CName: 'cat' }]);
-            }
-            return cb2(null, []);
-          }),
-          get: jest.fn((sql, cb2) => {
-            if (sql.includes('NOT IN (SELECT IName FROM Labels)')) {
-              return cb2(null, { count: 4 });
-            }
-            if (sql.includes('COUNT(*) FROM Labels WHERE CName')) {
-              return cb2(null, { 'COUNT(*)': 7 });
-            }
-            if (sql.includes('COUNT(*) FROM Images')) {
-              return cb2(null, { 'COUNT(*)': 11 });
-            }
-            return cb2(null, {});
-          }),
-          close: jest.fn((cb2) => cb2 && cb2()),
-        };
-      }),
-    };
 
     getLabelingPage = require('../../routes/pages/getLabelingPage');
   });

@@ -1,177 +1,83 @@
+const path = require("path");
 const UNLABELED_CLASS = require("../../utils/unlabeledClass");
+const queries = require("../../queries/queries");
 
 async function getLabelingPage(req, res) {
-    var username = req.cookies.Username;
-    var IDX = parseInt(req.query.IDX, 10);
-    var user = req.cookies.Username;
+    const username = req.cookies ? req.cookies.Username : undefined;
+    const user = username;
+    let idx = parseInt(req.query.IDX, 10);
 
-    if (isNaN(IDX) || IDX == undefined) {
-        IDX = 0;
+    if (isNaN(idx) || idx === undefined) {
+        idx = 0;
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
+    let projects, PName, admin, projectDir, classes;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
 
-    var num = IDX;
+        if (idx < 0 || idx >= projects.length) {
+            return res.redirect("/home");
+        }
 
-    if (!projects || num >= projects.length) {
-        return res.redirect("/home");
-    }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
+        ({ PName, Admin: admin } = projects[idx]);
 
-    var public_path = currentPath;
-    var main_path = public_path + "public/projects/";
-    var path = main_path + admin + "-" + PName + "/" + PName + ".db";
+        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + username + "'",
-    );
-    var project = projects[IDX];
-
-    if (!project) {
-        global.logger.error("No project found for IDX:", IDX);
-        return res.redirect("/home");
+        ({ rows: classes } = await queries.project.getAllClasses(projectDir));
+    } catch (err) {
+        global.logger.error("Error loading labeling page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    var PName = project.PName;
-    var admin = project.Admin;
-
-    var public_path = currentPath;
-    var db_path =
-        public_path +
-        "public/projects/" +
-        admin +
-        "-" +
-        PName +
-        "/" +
-        PName +
-        ".db";
-
-    global.logger.debug("Accessing database file:", db_path);
-
-    var pdb = new sqlite3.Database(db_path, (err) => {
-        if (err) {
-            return global.logger.error("Database connection error:", err.message);
-        }
-        global.logger.info("Connected to pdb.")
-    });
-    var sdb = new sqlite3.Database(path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
-        }
-        global.logger.info("Connected to tdb.")
-    });
-    pdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    sdb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    sdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    var Classes = await pdb.allAsync("SELECT * FROM `Classes`");
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var results2 = await sdb.allAsync("SELECT * FROM `Classes`");
-
-    var classes = [];
-    var counts = [];
-    var icounts = [];
-    var lcounts = {};
-
-    if (Classes && results2) {
-        for (var i = 0; i < Classes.length; i++) {
-            let countQuery = await sdb.getAsync(
-                "SELECT COUNT(*) FROM Labels WHERE CName = '" +
-                    results2[i].CName +
-                    "'",
+    const lcounts = {};
+    for (const cls of classes) {
+        try {
+            const countRes = await queries.project.sql(
+                projectDir,
+                "SELECT COUNT(*) as count FROM Labels WHERE CName = ?",
+                [cls.CName]
             );
 
-            const valueLabel = countQuery ? countQuery["COUNT(*)"] : 0;
-            lcounts[Classes[i].CName] = valueLabel;
+            const row = countRes.rows ? countRes.rows[0] : countRes.row;
+
+            lcounts[cls.CName] = Number(row && row.count) || 0;
+        } catch (err) {
+            global.logger.error(`Error counting labels for class ${cls.CName}:`, err);
+
+            lcounts[cls.CName] = 0;
         }
     }
 
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-    if (acc) {
-        for (var i = 0; i < acc.length; i++) {
-            access.push(acc[i].Username);
-        }
+    let unlabeledCount = 0;
+    try {
+        const unlabelRes = await queries.project.sql(
+            projectDir,
+            "SELECT COUNT(*) as count FROM Images WHERE IName NOT IN (SELECT IName FROM Labels)",
+            []
+        );
+
+        const row = unlabelRes.rows ? unlabelRes.rows[0] : unlabelRes.row;
+
+        unlabeledCount = Number(row && row.count) || 0;
+    } catch (err) {
+        global.logger.error("Error counting unlabeled images:", err);
     }
-
-    var results5 = await sdb.getAsync("SELECT COUNT(*) FROM Images");
-    var results6 = await sdb.allAsync("SELECT DISTINCT IName FROM Labels");
-
-    var unlabeledCountQuery = await sdb.getAsync(
-        "SELECT COUNT(*) as count FROM Images WHERE IName NOT IN (SELECT IName FROM Labels)",
-    );
-    var unlabeledCount = unlabeledCountQuery ? unlabeledCountQuery.count : 0;
-
-    sdb.close(function (err) {
-        if (err) {
-            global.logger.error(err);
-        }
-    });
 
     res.render("labeling", {
         title: "labeling",
         user: username,
         logged: req.query.logged,
         db: req.query.db,
-        PName: PName,
-        classes: Classes || [],
-        IDX: IDX,
-        lcounts: lcounts,
-        unlabeledCount: unlabeledCount,
+        PName,
+        classes: classes || [],
+        IDX: idx,
+        lcounts,
+        unlabeledCount,
         unlabeledClass: UNLABELED_CLASS,
         activePage: "Label",
     });

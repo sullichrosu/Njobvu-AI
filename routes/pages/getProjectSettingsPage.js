@@ -1,52 +1,48 @@
+const queries = require("../../queries/queries");
+
 async function getProjectSettingsPage(req, res) {
-    var user = req.cookies.Username;
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    if (req.query.IDX == undefined) {
+    const user = req.cookies ? req.cookies.Username : undefined;
+    if (user === undefined) {
+        return res.redirect("/");
+    }
+    if (req.query.IDX === undefined) {
         return res.redirect("/home");
     }
 
-    if (user == undefined) {
-        return res.redirect("/");
-    }
+    const idx = parseInt(req.query.IDX, 10);
 
-    var IDX = parseInt(req.query.IDX, 10);
-
-    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
-        return res.redirect("/home?error=project_not_found");
-    }
-
-    var PName = projects[IDX].PName;
-    var admin = projects[IDX].Admin;
-
-    var results1 = await db.getAsync(
-        "SELECT * FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-
-    if (!results1) {
-        return res.redirect("/home?error=project_not_found");
-    }
-
-    global.logger.debug("username: ", user);
     try {
+        const { rows: projects } = await queries.managed.getUserProjects(user);
+
+        if (!Number.isInteger(idx) || idx < 0 || idx >= projects.length) {
+            return res.redirect("/home?error=project_not_found");
+        }
+
+        const { PName, Admin: admin } = projects[idx];
+
+        const projRes = await queries.managed.sql(
+            "SELECT * FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        const projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+
+        if (!projRecord) {
+            return res.redirect("/home?error=project_not_found");
+        }
+
         res.render("settings/projSettings", {
             title: "projSettings",
             logged: req.query.logged,
-            user: user,
-            PName: PName,
+            user,
+            PName,
             Admin: admin,
-            PDescription: results1.PDescription,
-            IDX: IDX,
+            PDescription: projRecord.PDescription,
+            IDX: idx,
             activePage: "projSettings",
         });
-    } catch (error) {
-        global.logger.error("Error rendering projSettings:", error);
-        res.status(500).send("Error loading page");
+    } catch (err) {
+        global.logger.error("Error loading projSettings page:", err);
+        res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 }
 

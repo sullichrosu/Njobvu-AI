@@ -42,4 +42,3 @@ function getDbClient(projectPath) {
 }
 
 module.exports = getDbClient;
-

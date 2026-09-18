@@ -1,62 +1,49 @@
+const queries = require("../../queries/queries");
+
 async function getAccessSettingsPage(req, res) {
-    var user = req.cookies.Username;
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    var IDX = req.query.IDX;
+    const user = req.cookies ? req.cookies.Username : undefined;
 
-    var DAdmin = [];
-    for (var i = 0; i < projects.length; i++) {
-        DAdmin.push(projects[i].Admin);
-    }
-
-    if (req.query.IDX == undefined) {
-        return res.redirect("/home");
-    }
-
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    IDX = parseInt(IDX, 10);
-
-    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
-        return res.redirect("/home?error=project_not_found");
+    if (req.query.IDX === undefined) {
+        return res.redirect("/home");
     }
 
-    var PName = projects[IDX].PName;
-    var admin = projects[IDX].Admin;
-
-    var results3 = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName= '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "' AND Username != '" +
-            user +
-            "'",
-    );
-
-    var access = [];
-    for (var i = 0; i < results3.length; i++) {
-        access.push(results3[i].Username);
-    }
+    const idx = parseInt(req.query.IDX, 10);
 
     try {
+        const { rows: projects } = await queries.managed.getUserProjects(user);
+
+        if (!Number.isInteger(idx) || idx < 0 || idx >= projects.length) {
+            return res.redirect("/home?error=project_not_found");
+        }
+
+        const { PName, Admin: admin } = projects[idx];
+        const DAdmin = projects.map((p) => p.Admin);
+
+        const { rows: accessRows } = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ? AND Username != ?",
+            [PName, admin, user]
+        );
+
+        const accessUsers = accessRows.map((r) => r.Username);
+
         res.render("settings/accessSettings", {
             title: "accessSettings",
             logged: req.query.logged,
-            user: user,
-            IDX: IDX,
-            DAdmin: DAdmin,
-            access: access,
+            user,
+            IDX: idx,
+            DAdmin,
+            access: accessUsers,
             Admin: admin,
-            PName: PName,
+            PName,
             activePage: "accessSettings",
         });
     } catch (error) {
-        global.logger.error("Error rendering accessSettings:", error);
-        res.status(500).send("Error loading page");
+        global.logger.error("Error loading accessSettings page:", error);
+        res.redirect(`/error?error=${encodeURIComponent(error.message)}`);
     }
 }
 
