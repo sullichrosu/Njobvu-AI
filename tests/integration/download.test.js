@@ -55,10 +55,9 @@ jest.spyOn(express.response, 'download').mockImplementation(function (path, file
   if (typeof filename === 'function') {
     callback = filename;
   }
+  this.send('downloaded: ' + path);
   if (typeof callback === 'function') {
     callback(null);
-  } else {
-    this.send('downloaded: ' + path);
   }
 });
 
