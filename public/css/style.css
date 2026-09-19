@@ -75,6 +75,130 @@ a {
 a:hover {
   color: #0d406a;
 }
+
+/* Authentication forms */
+#login,
+#signup {
+    width: min(92vw, 460px);
+    margin: 3rem auto;
+    padding: 2rem;
+    background: #ffffff;
+    border-top: 4px solid #1569AE;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+#login form,
+#signup form {
+    width: 100%;
+}
+
+#login table,
+#signup table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 0.65rem;
+}
+
+#login td,
+#signup td {
+    padding: 0;
+}
+
+#login .label,
+#signup .label {
+    padding-top: 0.45rem;
+    color: #334E68;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+#login .textInput,
+#signup .textInput,
+#login #inputCaptcha {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid #BCCCDC;
+    border-radius: 0;
+    background: #F8FAFC;
+    color: #171717;
+    font-family: 'Saira Semi Condensed', sans-serif;
+    font-size: 1rem;
+}
+
+#login .textInput:focus,
+#signup .textInput:focus,
+#login #inputCaptcha:focus {
+    border-color: #1569AE;
+    outline: 3px solid rgba(21, 105, 174, 0.18);
+    background: #ffffff;
+}
+
+#login .formbutton2,
+#signup .formbutton2,
+#login #submitCaptcha {
+    width: 100%;
+    margin: 0.45rem 0 0;
+    padding: 0.7rem 1rem;
+    border: 1px solid #1569AE;
+    border-radius: 0;
+    background: #1569AE;
+    color: #ffffff;
+    font-family: 'Saira Semi Condensed', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#login .formbutton2:hover,
+#signup .formbutton2:hover,
+#login #submitCaptcha:hover {
+    background: #0d406a;
+    border-color: #0d406a;
+}
+
+#login #signup {
+    display: inline-block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0.25rem 0 0;
+    padding: 0.65rem 1rem;
+    border: 1px solid #BCCCDC;
+    border-radius: 0;
+    color: #1569AE;
+    font-family: 'Saira Semi Condensed', sans-serif;
+    font-weight: 600;
+}
+
+#login #signup:hover {
+    border-color: #1569AE;
+    background: #EEF5FB;
+    text-decoration: none;
+}
+
+#login .captcha-refresh {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #1569AE;
+    font-family: 'Saira Semi Condensed', sans-serif;
+    cursor: pointer;
+}
+
+#login .captcha-refresh:hover {
+    color: #0d406a;
+    text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+    #login,
+    #signup {
+        margin: 1.5rem auto;
+        padding: 1.25rem;
+    }
+}
 .row::after {
     content: "";
     clear: both;

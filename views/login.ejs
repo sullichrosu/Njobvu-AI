@@ -1,6 +1,7 @@
 <%- include('includes/Signin') %>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <div id="login">
+	<form action="/login" id="loginForm" name="loginForm" method="POST">
 	<input type="hidden" name="action" value="logon">
 	<table cellpadding="1" cellspacing="1" align="center" class="loginTable unsegmented">
 		<tbody>
@@ -26,7 +27,7 @@
 			</tr>
 			<tr>
 				<td class="form" id="form">
-					<input onclick="handleForm()" id="Login" type="submit" class="mr-1 ml-1 btn btn-secondary col text-center formbutton2" name="submit" value="Log In" fvvalidateonsubmit="true">
+					<input id="Login" type="submit" class="mr-1 ml-1 btn btn-secondary col text-center formbutton2" name="submit" value="Log In" fvvalidateonsubmit="true">
 				</td>
 			</tr>
 			<tr>
@@ -36,7 +37,7 @@
 			</tr>
 			<tr>
 				<td id="newCaptcha" class="New Captcha" colspan="2">
-					<a href="#" onclick="generateCaptcha()">New Captcha</a>
+					<button type="button" class="captcha-refresh" onclick="generateCaptcha()">New Captcha</button>
 				</td>
 			</tr>
 			<tr>
@@ -50,14 +51,15 @@
 					</td>
 			</tr>
 			<tr>
-				<td><input type="button" id="submitCaptcha" value="Submit" onclick="checkCaptcha()"/></td>
+				<td><input type="submit" id="submitCaptcha" value="Verify Captcha"/></td>
 			</tr>
 		</tbody>
 	</table>
+	</form>
 </div>
 <script>
 	document.cookie = "Username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-	var form = document.getElementById("Login");
+	var loginForm = document.getElementById("loginForm");
 
 
 	document.getElementById("newCaptcha").style.display = "none";
@@ -129,7 +131,14 @@
 		}
 
 	}
-	form.addEventListener("submit", handleForm);
+	loginForm.addEventListener("submit", function (event) {
+		event.preventDefault();
+		if (document.getElementById("inputCaptcha").style.display !== "none") {
+			checkCaptcha();
+		} else {
+			handleForm();
+		}
+	});
 
 	console.log(sessionStorage.getItem("test"));
 </script>
