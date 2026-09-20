@@ -86,18 +86,21 @@ jest.mock('../../queries/queries', () => ({
 }));
 
 // Mock fs module
-jest.mock('fs', () => ({
-  ...jest.requireActual('fs'),
-  existsSync: jest.fn().mockReturnValue(false),
-  mkdirSync: jest.fn(),
-  rmSync: jest.fn(),
-  writeFile: jest.fn((path, data, callback) => callback(null)),
-  writeFileSync: jest.fn(),
-  readdirSync: jest.fn().mockReturnValue([]),
-  unlinkSync: jest.fn(),
-  rename: jest.fn((oldPath, newPath, callback) => callback(null)),
-  readFileSync: jest.fn().mockReturnValue(''),
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn().mockReturnValue(false),
+    mkdirSync: jest.fn(),
+    rmSync: jest.fn(),
+    writeFile: jest.fn((path, data, callback) => callback(null)),
+    writeFileSync: jest.fn(),
+    readdirSync: jest.fn().mockReturnValue([]),
+    unlinkSync: jest.fn(),
+    rename: jest.fn((oldPath, newPath, callback) => callback(null)),
+    readFileSync: jest.fn().mockReturnValue(''),
+  };
+});
 
 // Mock file upload
 jest.mock('express-fileupload', () => jest.fn(() => (req, res, next) => {

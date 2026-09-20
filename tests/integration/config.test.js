@@ -51,16 +51,19 @@ jest.mock('socket.io-client', () => ({
 global.sqlite3 = require('sqlite3');
 
 // Mock fs module
-jest.mock('fs', () => ({
-  ...jest.requireActual('fs'),
-  existsSync: jest.fn().mockReturnValue(false),
-  mkdirSync: jest.fn(),
-  writeFile: jest.fn((path, data, callback) => callback(null)),
-  readdirSync: jest.fn().mockReturnValue([]),
-  unlinkSync: jest.fn(),
-  rename: jest.fn((oldPath, newPath, callback) => callback(null)),
-  readFileSync: jest.fn().mockReturnValue(''),
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn().mockReturnValue(false),
+    mkdirSync: jest.fn(),
+    writeFile: jest.fn((path, data, callback) => callback(null)),
+    readdirSync: jest.fn().mockReturnValue([]),
+    unlinkSync: jest.fn(),
+    rename: jest.fn((oldPath, newPath, callback) => callback(null)),
+    readFileSync: jest.fn().mockReturnValue(''),
+  };
+});
 
 // Mock file upload
 jest.mock('express-fileupload', () => jest.fn(() => (req, res, next) => {
@@ -116,6 +119,17 @@ describe('Configuration Routes - Basic Tests', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    if (global.db) {
+      global.db.allAsync = jest.fn().mockResolvedValue([
+        { PName: 'test-project', Admin: 'testuser' }
+      ]);
+      global.db.getAsync = jest.fn().mockResolvedValue({ 
+        PDescription: 'Test project description',
+        PName: 'test-project',
+        Admin: 'testuser'
+      });
+      global.db.runAsync = jest.fn().mockResolvedValue(undefined);
+    }
   });
 
   describe('GET /config - Main Configuration Page', () => {

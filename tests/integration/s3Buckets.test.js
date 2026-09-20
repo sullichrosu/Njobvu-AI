@@ -1,6 +1,10 @@
-jest.mock('fs', () => ({
-    existsSync: jest.fn().mockReturnValue(true),
-}));
+jest.mock('fs', () => {
+    const actualFs = jest.requireActual('fs');
+    return {
+        ...actualFs,
+        existsSync: jest.fn().mockReturnValue(true),
+    };
+});
 
 jest.mock('../../queries/queries', () => ({
     managed: {
