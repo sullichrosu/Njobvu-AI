@@ -95,13 +95,17 @@ jest.mock('fs', () => {
     existsSync: jest.fn().mockReturnValue(true),
     mkdirSync: jest.fn(),
     writeFileSync: jest.fn(),
-    createWriteStream: jest.fn().mockReturnValue({
-      on: jest.fn((event, callback) => {
+    createWriteStream: jest.fn().mockImplementation(() => {
+      const { EventEmitter } = require('events');
+      const stream = new EventEmitter();
+      stream.write = jest.fn().mockReturnValue(true);
+      stream.end = jest.fn();
+      stream.on('newListener', (event, listener) => {
         if (event === 'close') {
-          process.nextTick(callback);
+          process.nextTick(() => stream.emit('close'));
         }
-      }),
-      pipe: jest.fn(),
+      });
+      return stream;
     }),
     readFileSync: jest.fn().mockReturnValue('dummy_data'),
   };

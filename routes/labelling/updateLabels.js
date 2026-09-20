@@ -129,34 +129,34 @@ async function updateLabels(req, res) {
 
         if (formAction == "save") {
             return res.redirect(
-                "/annotate?IDX=" +
+                "/project/annotate?IDX=" +
                     IDX +
                     "&IName=" +
-                    IName +
+                    encodeURIComponent(IName) +
                     "&curr_class=" +
-                    currClass +
+                    encodeURIComponent(currClass) +
                     "&reviewFilter=" +
                     encodeURIComponent(reviewFilter),
             );
         } else if (formAction == "auto-prev") {
             return res.redirect(
-                "/annotate?IDX=" +
+                "/project/annotate?IDX=" +
                     IDX +
                     "&IName=" +
-                    prev_IName +
+                    encodeURIComponent(prev_IName) +
                     "&curr_class=" +
-                    currClass +
+                    encodeURIComponent(currClass) +
                     "&reviewFilter=" +
                     encodeURIComponent(reviewFilter),
             );
         } else if (formAction == "auto-next") {
             return res.redirect(
-                "/annotate?IDX=" +
+                "/project/annotate?IDX=" +
                     IDX +
                     "&IName=" +
-                    next_IName +
+                    encodeURIComponent(next_IName) +
                     "&curr_class=" +
-                    currClass +
+                    encodeURIComponent(currClass) +
                     "&reviewFilter=" +
                     encodeURIComponent(reviewFilter),
             );
@@ -165,9 +165,9 @@ async function updateLabels(req, res) {
                 "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
-                    IName +
+                    encodeURIComponent(IName) +
                     "&curr_class=" +
-                    currClass +
+                    encodeURIComponent(currClass) +
                     "&sort=" +
                     sortFilter +
                     "&class=" +
@@ -180,9 +180,9 @@ async function updateLabels(req, res) {
                 "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
-                    prev_IName +
+                    encodeURIComponent(prev_IName) +
                     "&curr_class=" +
-                    currClass +
+                    encodeURIComponent(currClass) +
                     "&sort=" +
                     sortFilter +
                     "&class=" +
@@ -195,9 +195,9 @@ async function updateLabels(req, res) {
                 "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
-                    next_IName +
+                    encodeURIComponent(next_IName) +
                     "&curr_class=" +
-                    currClass +
+                    encodeURIComponent(currClass) +
                     "&sort=" +
                     sortFilter +
                     "&class=" +
@@ -209,12 +209,12 @@ async function updateLabels(req, res) {
 
         // Fallback redirect to prevent request hanging if formAction is invalid/unmatched
         return res.redirect(
-            "/annotate?IDX=" +
+            "/project/annotate?IDX=" +
                 IDX +
                 "&IName=" +
-                IName +
+                encodeURIComponent(IName) +
                 "&curr_class=" +
-                currClass +
+                encodeURIComponent(currClass) +
                 "&reviewFilter=" +
                 encodeURIComponent(reviewFilter),
         );

@@ -24,21 +24,21 @@ async function addClasses(req, res) {
     let existingClasses;
     try {
         existingClasses = await queries.project.getAllClasses(projectPath);
+
+        var currentClasses = [];
+        for (var i = 0; i < existingClasses.rows.length; i++) {
+            currentClasses.push(existingClasses.rows[i].CName);
+        }
+
+        for (var i = 0; i < insertClasses.length; i++) {
+            if (!currentClasses.includes(insertClasses[i])) {
+                currentClasses.push(insertClasses[i]);
+                await queries.project.createClass(projectPath, insertClasses[i]);
+            }
+        }
     } catch (err) {
         global.logger.error(err);
-        return res.status(500).send("Error fetching existing classes");
-    }
-
-    var currentClasses = [];
-    for (var i = 0; i < existingClasses.rows.length; i++) {
-        currentClasses.push(existingClasses.rows[i].CName);
-    }
-
-    for (var i = 0; i < insertClasses.length; i++) {
-        if (!currentClasses.includes(insertClasses[i])) {
-            currentClasses.push(insertClasses[i]);
-            await queries.project.createClass(projectPath, insertClasses[i]);
-        }
+        return res.status(500).send("Error adding classes");
     }
 
     if (validation) return res.redirect("/configV?IDX=" + IDX);

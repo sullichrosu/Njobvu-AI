@@ -1,13 +1,21 @@
 // Unit tests for routes/pages/getAnnotatePage.js's S3 "stream" mode handling.
 //
-// Calls the handler directly (bypassing the full Express app/static
-// middleware) since that stack is heavily mocked elsewhere for unrelated
-// tests in a way that intercepts every route with an empty static response -
-// exercising the real branching logic here needs a narrower harness.
+// getAnnotatePage.js is built entirely on the async queries library
+// (queries.managed.* / queries.project.*), not raw sqlite3/global.db, so
+// every project/image lookup it makes is mocked at that layer.
 
 jest.mock('../../queries/queries', () => ({
     managed: {
+        getUserProjects: jest.fn(),
         getBucket: jest.fn(),
+        sql: jest.fn(),
+    },
+    project: {
+        getAllClasses: jest.fn(),
+        getAllImages: jest.fn(),
+        getLabelsForImageName: jest.fn(),
+        getImage: jest.fn(),
+        sql: jest.fn(),
     },
 }));
 
@@ -23,13 +31,6 @@ jest.mock('fs', () => {
         readFileSync: jest.fn(),
     };
 });
-jest.mock('sqlite3', () => {
-    const Database = jest.fn();
-    return {
-        Database,
-        verbose: () => ({ Database }),
-    };
-});
 jest.mock('probe-image-size', () => {
     const probe = jest.fn();
     probe.sync = jest.fn();
@@ -38,34 +39,25 @@ jest.mock('probe-image-size', () => {
 
 const { Readable } = require('stream');
 const fs = require('fs');
-const sqlite3 = require('sqlite3');
 const probe = require('probe-image-size');
 const queries = require('../../queries/queries');
 const s3Client = require('../../utils/s3Client');
 const getAnnotatePage = require('../../routes/pages/getAnnotatePage');
 
-// Mirrors the real sqlite3 driver's callback style, since getAnnotatePage.js
-// wraps `this.get`/`this.all` in its own Promise-returning getAsync/allAsync
-// right after construction - only the raw callback methods are ever called.
-// getAsync/allAsync always invoke the 3-arg form (sql, params, callback), so
-// these must accept that arity rather than the 2-arg (sql, callback) form.
-function makeFakeProjectDb({ classesRows = [], labelsRows = [], imagesRows = [], displayRow }) {
-    return {
-        get: jest.fn((sql, params, cb) => {
-            const callback = typeof params === 'function' ? params : cb;
-            if (sql.includes('display_id')) return callback(null, displayRow);
-            return callback(null, undefined);
-        }),
-        all: jest.fn((sql, params, cb) => {
-            const callback = typeof params === 'function' ? params : cb;
-            if (sql.includes('Classes')) return callback(null, classesRows);
-            if (sql.includes('Labels')) return callback(null, labelsRows);
-            if (sql.includes('Images')) return callback(null, imagesRows);
-            return callback(null, []);
-        }),
-        each: jest.fn((sql, cb) => cb(null, undefined)),
-        close: jest.fn((cb) => cb && cb(null)),
-    };
+function setupCommonQueries({ imageRow, classRows = [{ CName: 'class1' }] }) {
+    queries.managed.getUserProjects.mockResolvedValue({
+        rows: [{ PName: 'test-project', Admin: 'testuser' }],
+    });
+    queries.project.getAllClasses.mockResolvedValue({ rows: classRows });
+    queries.project.getAllImages.mockResolvedValue({ rows: [imageRow] });
+    queries.project.sql.mockResolvedValue({ rows: [{ IName: imageRow.IName, display_id: 1 }] });
+    queries.project.getLabelsForImageName.mockResolvedValue({ rows: [] });
+    queries.project.getImage.mockResolvedValue({ row: imageRow });
+    queries.managed.sql.mockImplementation((sql) => {
+        if (sql.includes('AutoSave')) return Promise.resolve({ rows: [{ AutoSave: 1 }], row: { AutoSave: 1 } });
+        if (sql.includes('Access')) return Promise.resolve({ rows: [], row: null });
+        return Promise.resolve({ rows: [], row: null });
+    });
 }
 
 describe('getAnnotatePage - S3-backed image serving', () => {
@@ -78,10 +70,6 @@ describe('getAnnotatePage - S3-backed image serving', () => {
         global.logger = { debug: jest.fn(), error: jest.fn(), info: jest.fn() };
         global.currentPath = '/app/';
         global.colorsJSON = [{ value: '#FF0000' }];
-        global.db = {
-            allAsync: jest.fn().mockResolvedValue([{ PName: 'test-project', Admin: 'testuser' }]),
-            getAsync: jest.fn().mockResolvedValue({ AutoSave: 1 }),
-        };
 
         req = {
             query: { IDX: '0', IName: 'image1.jpg', curr_class: 'class1' },
@@ -92,16 +80,10 @@ describe('getAnnotatePage - S3-backed image serving', () => {
 
     it('serves a "stream"-mode image with no local file via the on-demand S3 proxy, without touching disk', async () => {
         const imageRow = { IName: 'image1.jpg', reviewImage: 0, Source: 's3', SourceKey: 'images/image1.jpg' };
+        setupCommonQueries({ imageRow });
 
         fs.existsSync.mockReturnValue(false);
         fs.readFileSync.mockReset();
-        sqlite3.Database.mockImplementation((dbPath, cb) => {
-            cb && cb(null);
-            return makeFakeProjectDb({
-                imagesRows: [imageRow],
-                displayRow: { IName: 'image1.jpg', display_id: 1 },
-            });
-        });
         probe.mockResolvedValue({ width: 400, height: 300 });
         probe.sync.mockReset();
 
@@ -123,7 +105,7 @@ describe('getAnnotatePage - S3-backed image serving', () => {
             'images/image1.jpg',
         );
         expect(res.render).toHaveBeenCalledWith('annotate', expect.objectContaining({
-            image_path: 'api/v2/projects/testuser/test-project/images/image1.jpg',
+            image_path: '/api/v2/projects/testuser/test-project/images/image1.jpg',
             image_width: 400,
             image_height: 300,
         }));
@@ -131,16 +113,10 @@ describe('getAnnotatePage - S3-backed image serving', () => {
 
     it('still reads a locally-present file straight from disk, unaffected by the S3 changes', async () => {
         const imageRow = { IName: 'image1.jpg', reviewImage: 0, Source: null, SourceKey: null };
+        setupCommonQueries({ imageRow });
 
         fs.existsSync.mockReturnValue(true);
         fs.readFileSync.mockReturnValue(Buffer.from('img-bytes'));
-        sqlite3.Database.mockImplementation((dbPath, cb) => {
-            cb && cb(null);
-            return makeFakeProjectDb({
-                imagesRows: [imageRow],
-                displayRow: { IName: 'image1.jpg', display_id: 1 },
-            });
-        });
         probe.mockReset();
         probe.sync.mockReturnValue({ width: 800, height: 600 });
 
@@ -149,7 +125,7 @@ describe('getAnnotatePage - S3-backed image serving', () => {
         expect(s3Client.getObjectStream).not.toHaveBeenCalled();
         expect(queries.managed.getBucket).not.toHaveBeenCalled();
         expect(res.render).toHaveBeenCalledWith('annotate', expect.objectContaining({
-            image_path: 'projects/testuser-test-project/images/image1.jpg',
+            image_path: '/projects/testuser-test-project/images/image1.jpg',
             image_width: 800,
             image_height: 600,
         }));
@@ -157,16 +133,10 @@ describe('getAnnotatePage - S3-backed image serving', () => {
 
     it('renders 404 when there is no local file and the image is not S3-backed', async () => {
         const imageRow = { IName: 'image1.jpg', reviewImage: 0, Source: null, SourceKey: null };
+        setupCommonQueries({ imageRow });
 
         fs.existsSync.mockReturnValue(false);
         fs.readFileSync.mockReset();
-        sqlite3.Database.mockImplementation((dbPath, cb) => {
-            cb && cb(null);
-            return makeFakeProjectDb({
-                imagesRows: [imageRow],
-                displayRow: { IName: 'image1.jpg', display_id: 1 },
-            });
-        });
 
         await getAnnotatePage(req, res);
 

@@ -5,7 +5,19 @@
 // globals set by server.js rather than importable modules.
 
 jest.mock('../../queries/queries', () => ({
+  managed: {
+    getUserProjects: jest.fn().mockResolvedValue({
+      rows: [{ PName: 'test-project', Admin: 'testuser', Username: 'testuser' }],
+    }),
+    sql: jest.fn().mockResolvedValue({
+      rows: [{ PDescription: 'Test project description', PName: 'test-project', Admin: 'testuser', AutoSave: 1 }],
+    }),
+  },
   project: {
+    getAllClasses: jest.fn().mockResolvedValue({
+      rows: [{ CName: 'person' }, { CName: 'car' }, { CName: 'unlabeled_class' }],
+    }),
+    getClassLabelCounts: jest.fn().mockResolvedValue({ rows: [] }),
     getClassImageCounts: jest.fn(),
   },
 }));
@@ -27,35 +39,6 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
     global.util = require('util');
     global.currentPath = '/test/path/';
     global.configFile = { default_yolo_path: '' };
-
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'test-project', Admin: 'testuser', Username: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue({
-        PDescription: 'Test project description',
-        PName: 'test-project',
-        Admin: 'testuser',
-        AutoSave: 1,
-      }),
-    };
-
-    global.sqlite3 = {
-      Database: jest.fn((dbPath, cb) => {
-        if (typeof cb === 'function') cb(null);
-        return {
-          get: jest.fn((sql, cb2) => cb2 && cb2(null, {})),
-          all: jest.fn((sql, cb2) =>
-            cb2 && cb2(null, [
-              { CName: 'person' },
-              { CName: 'car' },
-              { CName: 'unlabeled_class' },
-            ]),
-          ),
-          close: jest.fn((cb2) => cb2 && cb2()),
-        };
-      }),
-    };
 
     global.fs = {
       existsSync: jest.fn().mockReturnValue(true),
@@ -79,15 +62,16 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    global.db.allAsync.mockResolvedValue([
-      { PName: 'test-project', Admin: 'testuser', Username: 'testuser' },
-    ]);
-    global.db.getAsync.mockResolvedValue({
-      PDescription: 'Test project description',
-      PName: 'test-project',
-      Admin: 'testuser',
-      AutoSave: 1,
+    queries.managed.getUserProjects.mockResolvedValue({
+      rows: [{ PName: 'test-project', Admin: 'testuser', Username: 'testuser' }],
     });
+    queries.managed.sql.mockResolvedValue({
+      rows: [{ PDescription: 'Test project description', PName: 'test-project', Admin: 'testuser', AutoSave: 1 }],
+    });
+    queries.project.getAllClasses.mockResolvedValue({
+      rows: [{ CName: 'person' }, { CName: 'car' }, { CName: 'unlabeled_class' }],
+    });
+    queries.project.getClassLabelCounts.mockResolvedValue({ rows: [] });
   });
 
   function makeReqRes() {

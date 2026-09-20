@@ -81,7 +81,8 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
+    global.projectDbClients = {};
   });
 
   describe("POST /changeValidation state preservation", () => {
@@ -198,28 +199,16 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /project with Review buttons", () => {
     it("should render Review button for images flagged with reviewImage", async () => {
-      const sqlite3 = require("sqlite3");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          if (sql.includes("FROM Images")) {
-            if (callback) callback(null, [
+      jest.spyOn(queries.project, "sql").mockImplementation((projectDir, sql) => {
+        if (String(sql).includes("FROM Images")) {
+          return Promise.resolve({
+            rows: [
               { IName: "image1.jpg", reviewImage: 1, validateImage: 0, numLabels: 2 },
               { IName: "image2.jpg", reviewImage: 0, validateImage: 0, numLabels: 0 },
-            ]);
-          } else {
-            if (callback) callback(null, []);
-          }
-        }),
-        run: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          if (callback) callback(null);
-        }),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+            ],
+          });
+        }
+        return Promise.resolve({ rows: [] });
       });
 
       const res = await request(app)
@@ -238,40 +227,20 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /annotate with reviewFilter scrolling", () => {
     it("should filter navigation images to only those needing review when reviewFilter=true", async () => {
-      const sqlite3 = require("sqlite3");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (s.includes("reviewImage != 0")) {
-            if (callback) callback(null, [
-              { IName: "image1.jpg", reviewImage: 1 },
-              { IName: "image3.jpg", reviewImage: 1 },
-            ]);
-          } else if (s.includes("Classes")) {
-            if (callback) callback(null, [{ CName: "class1" }]);
-          } else if (s.includes("IName =") && s.includes("Images")) {
-            if (callback) callback(null, [{ IName: "image1.jpg", reviewImage: 1 }]);
-          } else if (s.includes("Labels")) {
-            if (callback) callback(null, []);
-          } else {
-            if (callback) callback(null, [
-              { IName: "image1.jpg", reviewImage: 1 },
-              { IName: "image2.jpg", reviewImage: 0 },
-              { IName: "image3.jpg", reviewImage: 1 },
-            ]);
-          }
-        }),
-        get: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          if (callback) callback(null, { AutoSave: 0 });
-        }),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
+      const allImages = [
+        { IName: "image1.jpg", reviewImage: 1, Source: null },
+        { IName: "image2.jpg", reviewImage: 0, Source: null },
+        { IName: "image3.jpg", reviewImage: 1, Source: null },
+      ];
 
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+      jest.spyOn(queries.project, "getAllClasses").mockResolvedValue({ rows: [{ CName: "class1" }] });
+      jest.spyOn(queries.project, "getAllImages").mockResolvedValue({ rows: allImages });
+      jest.spyOn(queries.project, "sql").mockResolvedValue({ rows: [{ IName: "image1.jpg", display_id: 1 }] });
+      jest.spyOn(queries.project, "getLabelsForImageName").mockResolvedValue({ rows: [] });
+      jest.spyOn(queries.project, "getImage").mockResolvedValue({ row: allImages[0] });
+      jest.spyOn(queries.managed, "sql").mockImplementation((sql) => {
+        if (String(sql).includes("AutoSave")) return Promise.resolve({ rows: [{ AutoSave: 0 }], row: { AutoSave: 0 } });
+        return Promise.resolve({ rows: [], row: null });
       });
 
       const res = await request(app)
@@ -286,40 +255,35 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
 
   describe("GET /review image rendering", () => {
     function mockReviewDb(overrides) {
-      const sqlite3 = require("sqlite3");
-      const dbMock = {
-        all: jest.fn((sql, params, cb) => {
-          const callback = typeof params === "function" ? params : (typeof cb === "function" ? cb : null);
-          const s = String(sql);
-          if (!callback) return;
+      jest.spyOn(queries.project, "sql").mockImplementation((projectDir, sql) => {
+        const s = String(sql);
 
-          if (s.includes("NOT IN (SELECT IName FROM Labels)")) {
-            return callback(null, overrides.unlabeled || []);
-          }
-          if (s.includes("INNER JOIN Labels")) {
-            return callback(null, overrides.labeledImages || []);
-          }
-          if (s.includes("SELECT CName FROM Labels WHERE IName")) {
-            return callback(null, overrides.classForIName || []);
-          }
-          if (s.includes("SELECT CName FROM Classes")) {
-            return callback(null, overrides.defaultClass || []);
-          }
-          if (s.includes("SELECT * FROM Labels WHERE IName")) {
-            return callback(null, overrides.imageLabels || []);
-          }
-          if (s.includes("Classes")) {
-            return callback(null, overrides.classes || []);
-          }
-          return callback(null, []);
-        }),
-        close: jest.fn((cb) => cb && cb(null)),
-      };
-      jest.spyOn(sqlite3, "Database").mockImplementation((dbPath, cb) => {
-        if (cb) cb(null);
-        return dbMock;
+        if (s.includes("SELECT CName FROM Labels WHERE IName")) {
+          return Promise.resolve({ rows: overrides.classForIName || [] });
+        }
+        if (s.includes("SELECT CName FROM Classes")) {
+          return Promise.resolve({ rows: overrides.defaultClass || [] });
+        }
+        if (s.startsWith("SELECT COUNT(*)") && s.includes("NOT IN (SELECT IName FROM Labels)")) {
+          return Promise.resolve({ rows: [{ count: (overrides.unlabeled || []).length }] });
+        }
+        if (s.startsWith("SELECT COUNT(*)") && s.includes("INNER JOIN Labels")) {
+          return Promise.resolve({ rows: [{ count: (overrides.labeledImages || []).length }] });
+        }
+        if (s.includes("NOT IN (SELECT IName FROM Labels)")) {
+          return Promise.resolve({ rows: overrides.unlabeled || [] });
+        }
+        if (s.includes("INNER JOIN Labels")) {
+          return Promise.resolve({ rows: overrides.labeledImages || [] });
+        }
+        if (s.includes("SELECT * FROM Labels WHERE IName")) {
+          return Promise.resolve({ rows: overrides.imageLabels || [] });
+        }
+        if (s.includes("SELECT * FROM Classes")) {
+          return Promise.resolve({ rows: overrides.classes || [] });
+        }
+        return Promise.resolve({ rows: [] });
       });
-      return dbMock;
     }
 
     it("routes labeled images through the TIFF/SCN-aware crop-canvas loader instead of a plain <img>", async () => {
@@ -386,6 +350,9 @@ describe("Review Mode Changes & Preservation Integration Tests", () => {
   });
 
   describe("GET /labelingV filtered prev/next navigation", () => {
+    beforeEach(() => {
+      global.projectDbClients = {};
+    });
     // curr_index used to come from a ROW_NUMBER() query over the *entire*
     // unfiltered Images table, while prev/next indexed into results2 (a
     // filtered/sorted subset, e.g. sort=needs_review). Once a filter shrank

@@ -19,6 +19,20 @@ function enotdirError(target) {
   return err;
 }
 
+jest.mock('../../queries/queries', () => ({
+  managed: {
+    getUserProjects: jest.fn().mockResolvedValue({
+      rows: [{ PName: 'test-project', Admin: 'testuser', Username: 'testuser' }],
+    }),
+    sql: jest.fn().mockResolvedValue({
+      rows: [{ PDescription: 'Test project description', PName: 'test-project', Admin: 'testuser', AutoSave: 1 }],
+    }),
+  },
+  project: {
+    getAllClasses: jest.fn().mockResolvedValue({ rows: [] }),
+  },
+}));
+
 describe('GET /training - stray file in logs directory', () => {
   let getTrainingPage;
 
@@ -27,29 +41,6 @@ describe('GET /training - stray file in logs directory', () => {
     global.util = require('util');
     global.currentPath = '/test/path/';
     global.configFile = { default_yolo_path: '' };
-
-    global.db = {
-      allAsync: jest.fn().mockResolvedValue([
-        { PName: 'test-project', Admin: 'testuser', Username: 'testuser' },
-      ]),
-      getAsync: jest.fn().mockResolvedValue({
-        PDescription: 'Test project description',
-        PName: 'test-project',
-        Admin: 'testuser',
-        AutoSave: 1,
-      }),
-    };
-
-    global.sqlite3 = {
-      Database: jest.fn((dbPath, cb) => {
-        if (typeof cb === 'function') cb(null);
-        return {
-          get: jest.fn((sql, cb2) => cb2 && cb2(null, {})),
-          all: jest.fn((sql, cb2) => cb2 && cb2(null, [])),
-          close: jest.fn((cb2) => cb2 && cb2()),
-        };
-      }),
-    };
 
     global.fs = {
       existsSync: jest.fn().mockReturnValue(true),

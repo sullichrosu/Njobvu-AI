@@ -35,8 +35,8 @@ const app = require('../../app');
 describe('GET /', () => {
 
   beforeAll(() => {
-    global.db = {
-      runAsync: jest.fn().mockResolvedValue(undefined),
+    global.managedDbClient = {
+      run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
     };
   });
 
@@ -69,18 +69,18 @@ describe('GET /', () => {
     expect(res.text).toContain('Log In');           
   });
 
-  it('should call db.runAsync with autosave query', async() => {
+  it('should call managedDbClient.run with autosave query', async() => {
     await request(app).get('/');
-    expect(global.db.runAsync).toHaveBeenCalled();
-    expect(global.db.runAsync.mock.calls[0][0]).toMatch(/AutoSave/i);
+    expect(global.managedDbClient.run).toHaveBeenCalled();
+    expect(global.managedDbClient.run.mock.calls[0][0]).toMatch(/AutoSave/i);
   });
 
-  /* 
+  /*
   * this tests if the page will still render if the database fails to run
   * This test expects a status code 200 and render the login page.
   */
-  it('should still render the login page even if db.runAsync fails', async () => {
-    global.db.runAsync = jest.fn().mockRejectedValue(new Error('Simulated DB Error'));
+  it('should still render the login page even if the autosave update fails', async () => {
+    global.managedDbClient.run = jest.fn().mockRejectedValue(new Error('Simulated DB Error'));
 
     const res = await request(app).get('/');
     expect(res.statusCode).toBe(200); // or 500 if your app chooses to crash

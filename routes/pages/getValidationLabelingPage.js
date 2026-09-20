@@ -278,7 +278,7 @@ async function getValidationLabelingPage(req, res) {
                     "&class=" +
                     (imageClass || "null") +
                     "&classFilter=" +
-                    (classFilter || "false"),
+                    (classFilter || "true"),
             );
         } else {
             return res.redirect(
@@ -435,7 +435,7 @@ async function getValidationLabelingPage(req, res) {
             stats: statsO,
             sortFilter: sortFilter || "null",
             imageClass: imageClass || "null",
-            classFilter: classFilter || "false",
+            classFilter: classFilter || "true",
         });
     }
 }
