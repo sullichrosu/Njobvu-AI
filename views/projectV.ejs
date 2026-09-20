@@ -80,7 +80,7 @@
 			<tbody>
 				<% for(var i=0; i<images.length; i++) {%>
 				<tr>
-					<td scope="row"><a href="/validation/labeling?IDX=<%= IDX %>&IName=<%= images[i].IName %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true"><%= images[i].IName %></a></td>
+					<td scope="row"><a href="/labelingV?IDX=<%= IDX %>&IName=<%= images[i].IName %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true"><%= images[i].IName %></a></td>
 					<!-- input checkbox for review here -->
 					<% if(images[i].reviewImage != 0) {%>
 						<td class="text-center"><h4 style="border-radius: 0; color: red;">Needs Review</h4></td>
@@ -101,7 +101,7 @@
 					<td class="text-center"><%= list_counter[i] %></td>
 					<td></td>
 					<td class="text-center"> <%= Math.round(Number(imageConf[i])) %></td>
-					<td class="text-right"><a class="btn btn-primary" href="/validation/labeling?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true" role="button" style="border-radius: 0">View</a></td>
+					<td class="text-right"><a class="btn btn-primary" href="/labelingV?IDX=<%= IDX %>&IName=<%= String(images[i].IName) %>&sort=<%= sortFilter %>&class=<%= imageClass %>&classFilter=true" role="button" style="border-radius: 0">View</a></td>
 					<td onclick="deleteImage('<%= String(images[i].IName) %>')" class="text-right"><a class="btn btn-danger" role="button" style="border-radius: 0">X</a></td>
 				</tr>
 				<% } %>

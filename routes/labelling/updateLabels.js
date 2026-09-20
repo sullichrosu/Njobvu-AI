@@ -162,7 +162,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "saveV") {
             return res.redirect(
-                "/validation/labeling?IDX=" +
+                "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
                     encodeURIComponent(IName) +
@@ -177,7 +177,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "auto-prevV") {
             return res.redirect(
-                "/validation/labeling?IDX=" +
+                "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
                     encodeURIComponent(prev_IName) +
@@ -192,7 +192,7 @@ async function updateLabels(req, res) {
             );
         } else if (formAction == "auto-nextV") {
             return res.redirect(
-                "/validation/labeling?IDX=" +
+                "/labelingV?IDX=" +
                     IDX +
                     "&IName=" +
                     encodeURIComponent(next_IName) +
