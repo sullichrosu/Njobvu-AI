@@ -1,4 +1,6 @@
 const express = require('express');
+// must run before any route is registered so async handler rejections reach the error handler
+require("./middleware/asyncErrors").installAsyncErrorForwarding(express);
 const path = require("path");
 const cookieParser = require("cookie-parser")
 const fileUpload = require("express-fileupload")
@@ -49,6 +51,7 @@ const {
     getMegadetectorSettingsPage,
 } = require("./routes/pages");
 const { getHelpApi } = require("./routes/api/help");
+const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 
 // middleware
 
@@ -103,5 +106,7 @@ app.get("/createClassification", getClassificationPage);
 app.get("/api/gpuinfo");
 
 app.get("*", get404Page);
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 module.exports = app;
