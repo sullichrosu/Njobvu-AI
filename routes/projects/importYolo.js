@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const spawn = require('../../utils/safeSpawn');
 const unzip = require('../../utils/unzipFile');
 const queries = require('../../queries/queries');
 const { Client } = require('../../queries/client');

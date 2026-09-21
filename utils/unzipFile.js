@@ -1,6 +1,6 @@
 const path = require("path");
 const cleanDirectory = require("./cleanDirectory");
-const { spawn } = require("child_process");
+const spawn = require("./safeSpawn");
 const fs = require("fs");
 const rimraf = require("../public/libraries/rimraf");
 const configFile = require("./config");
