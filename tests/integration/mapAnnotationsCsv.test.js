@@ -237,8 +237,8 @@ describe('v2 annotations CSV mapping', () => {
                     errors: [],
                 });
                 expect(db.state.labels).toEqual([
-                    { LID: 1, CName: 'cat', X: 0, Y: 0, W: 64, H: 48, IName: 'cat1.png' },
-                    { LID: 2, CName: 'dog', X: 0, Y: 0, W: 20, H: 30, IName: 'dog1.png' },
+                    { LID: 1, CName: 'cat', X: 0, Y: 0, W: 63, H: 47, IName: 'cat1.png' },
+                    { LID: 2, CName: 'dog', X: 0, Y: 0, W: 19, H: 29, IName: 'dog1.png' },
                 ]);
             });
 

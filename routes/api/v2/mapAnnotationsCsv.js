@@ -16,6 +16,19 @@ const MAX_REPORTED_ERRORS = 50;
 const ALLOWED_EXTENSIONS = new Set(['.csv', '.txt']);
 const UPLOAD_FIELD_NAMES = ['annotation_csv', 'kwcoco_csv', 'csv_file', 'upload_csv'];
 
+// An edge-to-edge box has its outline clipped by the canvas, so pull the bottom-right in slightly.
+const WHOLE_IMAGE_BOX_MARGIN_RATIO = 0.005;
+
+function wholeImageBox(width, height) {
+    const margin = Math.max(1, Math.round(Math.min(width, height) * WHOLE_IMAGE_BOX_MARGIN_RATIO));
+    return {
+        x: 0,
+        y: 0,
+        w: Math.max(1, width - margin),
+        h: Math.max(1, height - margin),
+    };
+}
+
 function fail(res, status, code, message, extra = {}) {
     return res.status(status).json({ success: false, code, message, ...extra });
 }
@@ -176,7 +189,7 @@ async function mapAnnotationsCsv(req, res) {
                     continue;
                 }
 
-                labelRows.push({ ...row, x: 0, y: 0, w: size.width, h: size.height });
+                labelRows.push({ ...row, ...wholeImageBox(size.width, size.height) });
             }
         } else {
             labelRows.push(...parsed.rows);
