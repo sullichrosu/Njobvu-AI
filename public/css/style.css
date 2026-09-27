@@ -126,6 +126,39 @@ a:hover {
     }
 #header .navbar-nav > li > a {padding-top:1px !important; padding-bottom:1px !important;}
 .navbar-brand img{max-height: 32px !important; transform: translate(0, -10%);}
+.project-header-name {
+    display: inline-flex;
+    align-items: center;
+    max-width: 24vw;
+    margin-left: 1rem;
+    overflow: hidden;
+    color: #FFFFFF;
+    font-family: 'Saira Semi Condensed', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+.header-actions form {
+    margin: 0;
+}
+.header-actions .navbar-brand {
+    margin-right: 0;
+    margin-left: 0;
+    font-size: 0.95rem;
+}
+.header-actions button.navbar-brand {
+    padding: 0.5rem;
+    color: #FFFFFF;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
 /* #header .navbar {max-height:32px !important} */
 /*
     Home
@@ -363,6 +396,80 @@ a:hover {
 
 .modal-backdrop {
     display:none;
+}
+
+/* Keep the annotation image menu on the left without letting it overflow small screens. */
+.annotation-menu-panel {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: min(420px, 92vw);
+    max-width: 100%;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+.annotation-menu-panel .modal-dialog {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    margin: 0;
+}
+.annotation-menu-panel .modal-content {
+    min-height: 100%;
+    border: 0;
+    border-radius: 0;
+}
+.annotation-menu-panel .modal-body {
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+}
+.annotation-info-panel {
+    width: min(420px, 92vw);
+    max-width: 100%;
+    height: 100vh;
+    margin: 0 0 0 auto;
+    padding: 0;
+}
+.annotation-info-panel .modal-dialog {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    margin: 0;
+}
+.annotation-info-panel .modal-content {
+    min-height: 100%;
+    border: 0;
+    border-radius: 0;
+}
+.annotation-info-panel .modal-body {
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+}
+
+.project-info-sidebar {
+    margin: 1rem;
+    padding: 0.85rem 1rem;
+    border-left: 4px solid #1569AE;
+    background: #F1F4F9;
+}
+.project-info-sidebar h5 {
+    margin-bottom: 0.75rem;
+    color: #1569AE;
+}
+.project-info-sidebar dl {
+    margin: 0;
+}
+.project-info-sidebar dt {
+    color: #627D98;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+.project-info-sidebar dd {
+    margin-bottom: 0.6rem;
+    color: #171717;
+    overflow-wrap: anywhere;
 }
 
 .page-item.active .page-link {
