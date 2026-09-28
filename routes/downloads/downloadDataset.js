@@ -240,12 +240,6 @@ async function downloadDataset(req, res) {
             console.log(
                 "archiver has been finalized and the output file descriptor has closed.",
             );
-            dddb.close((err) => {
-                if (err) {
-                    global.logger.error(err);
-                } else {
-                }
-            });
             res.download(folderZip, (err) => {
                 if (err) {
                     global.logger.error("Error downloading the file:", err);

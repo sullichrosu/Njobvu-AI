@@ -74,6 +74,7 @@ const {
     syncS3Bucket,
     getProjectImage,
 } = require("./api/v2/s3Buckets");
+const { mapAnnotationsCsv, getAnnotationsCsvTemplate } = require("./api/v2/mapAnnotationsCsv");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -174,6 +175,9 @@ api.post("/api/projects/import-yolo", importYolo);
 api.post("/api/projects/import-kwcoco", importKwCoco);
 api.post("/api/projects/map-kwcoco-csv", mapKwCocoCsv);
 api.post("/mapKwCocoCsv", mapKwCocoCsv);
+// Strangler-fig v2 of the CSV mapping: header-based CSV, classification support, downloadable examples
+api.post("/api/v2/projects/map-annotations-csv", mapAnnotationsCsv);
+api.get("/api/v2/projects/map-annotations-csv/template", getAnnotationsCsvTemplate);
 api.post("/api/projects/import-ifcb", importIfcb);
 api.post("/mergeLocal", mergeLocal);
 api.post("/removeAccess", removeAccess);
