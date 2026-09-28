@@ -83,7 +83,7 @@ a:hover {
     margin: 3rem auto;
     padding: 2rem;
     background: #ffffff;
-    border-top: 4px solid #1569AE;
+    border-top: 4px solid #000000;
     border-radius: 0;
     box-shadow: none;
 }
@@ -97,7 +97,7 @@ a:hover {
 #signup table {
     width: 100%;
     border-collapse: separate;
-    border-spacing: 0 0.65rem;
+    /* border-spacing: 0 0.65rem; */
 }
 
 #login td,
@@ -108,7 +108,7 @@ a:hover {
 #login .label,
 #signup .label {
     padding-top: 0.45rem;
-    color: #334E68;
+    color: #000000;
     font-size: 0.9rem;
     font-weight: 600;
     text-align: left;
@@ -120,7 +120,7 @@ a:hover {
     width: 100%;
     box-sizing: border-box;
     padding: 0.7rem 0.8rem;
-    border: 1px solid #BCCCDC;
+    border: 1px solid #000000;
     border-radius: 0;
     background: #F8FAFC;
     color: #171717;
@@ -131,7 +131,7 @@ a:hover {
 #login .textInput:focus,
 #signup .textInput:focus,
 #login #inputCaptcha:focus {
-    border-color: #1569AE;
+    border-color: #000000;
     outline: 3px solid rgba(21, 105, 174, 0.18);
     background: #ffffff;
 }
@@ -142,9 +142,9 @@ a:hover {
     width: 100%;
     margin: 0.45rem 0 0;
     padding: 0.7rem 1rem;
-    border: 1px solid #1569AE;
+    border: 1px solid #000000;
     border-radius: 0;
-    background: #1569AE;
+    background: #000000;
     color: #ffffff;
     font-family: 'Saira Semi Condensed', sans-serif;
     font-size: 1rem;
@@ -155,8 +155,8 @@ a:hover {
 #login .formbutton2:hover,
 #signup .formbutton2:hover,
 #login #submitCaptcha:hover {
-    background: #0d406a;
-    border-color: #0d406a;
+    background: #000000;
+    border-color: #000000;
 }
 
 #login #signup {
@@ -165,16 +165,16 @@ a:hover {
     box-sizing: border-box;
     margin: 0.25rem 0 0;
     padding: 0.65rem 1rem;
-    border: 1px solid #BCCCDC;
+    border: 1px solid #000000;
     border-radius: 0;
-    color: #1569AE;
+    color: #000000;
     font-family: 'Saira Semi Condensed', sans-serif;
     font-weight: 600;
 }
 
 #login #signup:hover {
-    border-color: #1569AE;
-    background: #EEF5FB;
+    border-color: #000000;
+    background: #000000;
     text-decoration: none;
 }
 
@@ -182,7 +182,7 @@ a:hover {
     padding: 0;
     border: 0;
     background: transparent;
-    color: #1569AE;
+    color: #000000;
     font-family: 'Saira Semi Condensed', sans-serif;
     cursor: pointer;
 }
