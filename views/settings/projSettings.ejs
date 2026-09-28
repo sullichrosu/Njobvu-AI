@@ -100,10 +100,9 @@
         <p>
             Upload a `.csv` or `.json` annotation file (KW COCO format) to map labels directly to project images.
         </p>
-        <p class="small text-muted">
+        <p class="medium text-muted">
             CSV files need a header row. Detection files use <code>file_name,class_name,x,y,w,h</code>
-            (or <code>xmin,ymin,xmax,ymax</code>). Classification files only need <code>file_name,class_name</code>;
-            each image is labelled as a whole.
+            (or <code>xmin,ymin,xmax,ymax</code>). Classification files only need <code>file_name,class_name</code>
             Download an example:
             <a href="/api/v2/projects/map-annotations-csv/template?type=detection">detection</a>,
             <a href="/api/v2/projects/map-annotations-csv/template?type=detection-corners">detection (corners)</a>,
