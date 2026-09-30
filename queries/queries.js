@@ -4,6 +4,7 @@ const projects = require("./projects/projects");
 const classes = require("./classes/classes");
 const images = require("./images/images");
 const labelling = require("./labelling/labelling");
+const labelAuthorHistory = require("./labelling/labelAuthorHistory");
 const validation = require("./validation/validation");
 const s3 = require("./s3/s3");
 const getDbClient = require("./getDbClient");
@@ -29,6 +30,7 @@ module.exports = {
         ...classes.project,
         ...images.project,
         ...labelling.project,
+        ...labelAuthorHistory.project,
         ...validation.project,
         sql: async function (projectPath, sql, params) {
             try {

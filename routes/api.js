@@ -75,6 +75,7 @@ const {
     getProjectImage,
 } = require("./api/v2/s3Buckets");
 const { mapAnnotationsCsv, getAnnotationsCsvTemplate } = require("./api/v2/mapAnnotationsCsv");
+const { saveImageLabels, getImageLabelHistory, getLabelHistory } = require("./api/v2/labelAuthors");
 
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
@@ -202,6 +203,11 @@ api.get("/api/v2/projects/:admin/:projectName/images/:imageName", getProjectImag
 api.post("/updateLabels", updateLabels);
 api.delete("/deleteBadLabels/:Admin/:PName/:Lid", deleteLabels);
 api.put("/api/switchLabels", switchLabels);
+// Strangler-fig v2 of label saving: preserves label identity across saves and
+// tracks a breadcrumb author history per annotation (CEO-66).
+api.post("/api/v2/projects/:admin/:projectName/images/:imageName/labels", saveImageLabels);
+api.get("/api/v2/projects/:admin/:projectName/images/:imageName/labels/history", getImageLabelHistory);
+api.get("/api/v2/projects/:admin/:projectName/labels/:lid/history", getLabelHistory);
 
 // DOWNLOAD ROUTES
 api.post("/downloadDataset", downloadDataset);

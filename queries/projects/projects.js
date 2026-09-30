@@ -210,6 +210,12 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
+            // Breadcrumb trail of who authored/last modified each annotation. Kept as its
+            // own table (rather than more Labels columns) so a label's full author history
+            // survives even across the row rewrites the legacy labelling flow still does.
+            await db.run(
+                "CREATE TABLE IF NOT EXISTS LabelHistory (HistoryId INTEGER PRIMARY KEY AUTOINCREMENT, LID INTEGER NOT NULL, AuthorId VARCHAR NOT NULL, AuthorType VARCHAR NOT NULL DEFAULT 'user', Action VARCHAR NOT NULL, ChangedAt TEXT NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID))",
+            );
 
             // Images predates the reviewImage/validateImage/Source/SourceKey columns, so
             // CREATE TABLE IF NOT EXISTS above is a no-op on any project database created
@@ -235,6 +241,28 @@ module.exports = {
             for (const column of backfillColumns) {
                 if (!existingColumnNames.has(column.name)) {
                     await db.run(`ALTER TABLE Images ADD COLUMN ${column.ddl}`);
+                }
+            }
+
+            // Labels predates author tracking; back-fill the same way as Images above.
+            // AuthorId/AuthorType are set only through the v2 label-authoring route, so
+            // existing rows keep NULL/'user' until they are next created or edited there.
+            const labelColumnsResult = await db.all("PRAGMA table_info(Labels)");
+            const labelColumns = Array.isArray(labelColumnsResult)
+                ? labelColumnsResult
+                : (labelColumnsResult && labelColumnsResult.rows) || [];
+            const existingLabelColumnNames = new Set(
+                labelColumns.map((column) => column.name),
+            );
+
+            const labelBackfillColumns = [
+                { name: "AuthorId", ddl: "AuthorId VARCHAR DEFAULT NULL" },
+                { name: "AuthorType", ddl: "AuthorType VARCHAR NOT NULL DEFAULT 'user'" },
+            ];
+
+            for (const column of labelBackfillColumns) {
+                if (!existingLabelColumnNames.has(column.name)) {
+                    await db.run(`ALTER TABLE Labels ADD COLUMN ${column.ddl}`);
                 }
             }
         },
