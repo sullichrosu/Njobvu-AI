@@ -9,15 +9,11 @@ const IMAGE_NAME = 'img1.jpg';
 const projectDir = path.join(__dirname, '..', '..', 'public', 'projects', `${ADMIN}-${PROJECT_NAME}`);
 
 const LABELS_URL = `/api/v2/projects/${ADMIN}/${PROJECT_NAME}/images/${IMAGE_NAME}/labels`;
-const IMAGE_HISTORY_URL = `${LABELS_URL}/history`;
-const labelHistoryUrl = (lid) => `/api/v2/projects/${ADMIN}/${PROJECT_NAME}/labels/${lid}/history`;
 
 /** In-memory stand-in for the per-project sqlite client, backing the real queries module. */
 function createFakeProjectDb() {
     const state = {
         labels: [],
-        labelHistory: [],
-        nextHistoryId: 1,
     };
 
     return {
@@ -36,23 +32,6 @@ function createFakeProjectDb() {
             }
             if (/FROM Labels WHERE IName = \?$/i.test(sql.trim())) {
                 return { success: true, rows: state.labels.filter((l) => l.IName === params[0]) };
-            }
-            if (/SELECT \* FROM LabelHistory WHERE LID = \?/i.test(sql)) {
-                return {
-                    success: true,
-                    rows: state.labelHistory
-                        .filter((h) => h.LID === params[0])
-                        .sort((a, b) => a.HistoryId - b.HistoryId),
-                };
-            }
-            if (/FROM LabelHistory INNER JOIN Labels/i.test(sql)) {
-                const imageName = params[0];
-                const labelsByLid = new Map(state.labels.map((l) => [l.LID, l]));
-                const rows = state.labelHistory
-                    .filter((h) => labelsByLid.has(h.LID) && labelsByLid.get(h.LID).IName === imageName)
-                    .map((h) => ({ ...h, CName: labelsByLid.get(h.LID).CName, IName: labelsByLid.get(h.LID).IName }))
-                    .sort((a, b) => (a.LID - b.LID) || (a.HistoryId - b.HistoryId));
-                return { success: true, rows };
             }
             return { success: true, rows: [] };
         }),
@@ -77,11 +56,6 @@ function createFakeProjectDb() {
                 state.labels = state.labels.filter((l) => l.LID !== params[0]);
                 return { success: true, changes: before - state.labels.length, lastID: 0 };
             }
-            if (/INSERT INTO LabelHistory/i.test(sql)) {
-                const [LID, AuthorId, AuthorType, Action, ChangedAt] = params;
-                state.labelHistory.push({ HistoryId: state.nextHistoryId++, LID, AuthorId, AuthorType, Action, ChangedAt });
-                return { success: true, changes: 1, lastID: 0 };
-            }
             return { success: true, changes: 0, lastID: 0 };
         }),
     };
@@ -97,7 +71,7 @@ function expectJsonError(res, status, code) {
     expect(res.body.code).toBe(code);
 }
 
-describe('v2 label author history', () => {
+describe('v2 label authors', () => {
     let db;
 
     beforeEach(() => {
@@ -123,7 +97,7 @@ describe('v2 label author history', () => {
     });
 
     describe(`POST ${LABELS_URL}`, () => {
-        test('creates new labels and records a "created" breadcrumb entry authored by the caller', async () => {
+        test('creates new labels authored by the caller', async () => {
             const res = await asUser(request(app).post(LABELS_URL), ADMIN).send({
                 labels: [
                     { className: 'dolphin', x: 1, y: 2, w: 3, h: 4 },
@@ -135,10 +109,6 @@ describe('v2 label author history', () => {
             expect(res.body).toMatchObject({ success: true, created: 2, updated: 0, unchanged: 0, deleted: 0 });
             expect(db.state.labels).toHaveLength(2);
             expect(db.state.labels.every((l) => l.AuthorId === ADMIN && l.AuthorType === 'user')).toBe(true);
-            expect(db.state.labelHistory).toEqual([
-                expect.objectContaining({ LID: 1, AuthorId: ADMIN, Action: 'created' }),
-                expect.objectContaining({ LID: 2, AuthorId: ADMIN, Action: 'created' }),
-            ]);
         });
 
         test('supports a model author for bootstrapped annotations', async () => {
@@ -150,10 +120,9 @@ describe('v2 label author history', () => {
 
             expect(res.statusCode).toBe(200);
             expect(db.state.labels[0]).toMatchObject({ AuthorId: 'megadetector-v5', AuthorType: 'model' });
-            expect(db.state.labelHistory[0]).toMatchObject({ AuthorId: 'megadetector-v5', AuthorType: 'model', Action: 'created' });
         });
 
-        test('re-saving an annotation unchanged keeps its original author and adds no breadcrumb entry', async () => {
+        test('re-saving an annotation unchanged keeps its original author', async () => {
             const create = await asUser(request(app).post(LABELS_URL), ADMIN).send({
                 authorId: 'megadetector-v5',
                 authorType: 'model',
@@ -168,10 +137,9 @@ describe('v2 label author history', () => {
             expect(resave.statusCode).toBe(200);
             expect(resave.body).toMatchObject({ created: 0, updated: 0, unchanged: 1, deleted: 0 });
             expect(db.state.labels[0]).toMatchObject({ AuthorId: 'megadetector-v5', AuthorType: 'model' });
-            expect(db.state.labelHistory).toHaveLength(1);
         });
 
-        test('editing an annotation bumps its author and records a "modified" breadcrumb entry', async () => {
+        test('editing an annotation bumps its author, leaving untouched ones alone', async () => {
             const create = await asUser(request(app).post(LABELS_URL), ADMIN).send({
                 authorId: 'megadetector-v5',
                 authorType: 'model',
@@ -196,12 +164,6 @@ describe('v2 label author history', () => {
             const shark = db.state.labels.find((l) => l.LID === sharkLid);
             expect(dolphin).toMatchObject({ X: 99, AuthorId: 'labeler', AuthorType: 'user' });
             expect(shark).toMatchObject({ AuthorId: 'megadetector-v5', AuthorType: 'model' });
-
-            expect(db.state.labelHistory).toEqual([
-                expect.objectContaining({ LID: dolphinLid, Action: 'created', AuthorId: 'megadetector-v5' }),
-                expect.objectContaining({ LID: sharkLid, Action: 'created', AuthorId: 'megadetector-v5' }),
-                expect.objectContaining({ LID: dolphinLid, Action: 'modified', AuthorId: 'labeler' }),
-            ]);
         });
 
         test('omitting a previously-saved lid deletes that label', async () => {
@@ -258,60 +220,6 @@ describe('v2 label author history', () => {
                 .send({ labels: [] });
 
             expectJsonError(res, 404, 'PROJECT_NOT_FOUND');
-        });
-    });
-
-    describe('breadcrumb history reads', () => {
-        test(`GET ${IMAGE_HISTORY_URL} returns each annotation's breadcrumb trail in order`, async () => {
-            const create = await asUser(request(app).post(LABELS_URL), ADMIN).send({
-                authorId: 'megadetector-v5',
-                authorType: 'model',
-                labels: [{ className: 'dolphin', x: 1, y: 2, w: 3, h: 4 }],
-            });
-            const lid = create.body.labels[0].lid;
-
-            await asUser(request(app).post(LABELS_URL), 'labeler').send({
-                labels: [{ lid, className: 'dolphin', x: 99, y: 2, w: 3, h: 4 }],
-            });
-
-            const res = await asUser(request(app).get(IMAGE_HISTORY_URL), ADMIN);
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body).toEqual({
-                success: true,
-                imageName: IMAGE_NAME,
-                labels: [
-                    {
-                        lid,
-                        className: 'dolphin',
-                        history: [
-                            { authorId: 'megadetector-v5', authorType: 'model', action: 'created', changedAt: expect.any(String) },
-                            { authorId: 'labeler', authorType: 'user', action: 'modified', changedAt: expect.any(String) },
-                        ],
-                    },
-                ],
-            });
-        });
-
-        test(`GET ${labelHistoryUrl(':lid')} returns the breadcrumb for a single annotation`, async () => {
-            const create = await asUser(request(app).post(LABELS_URL), ADMIN).send({
-                labels: [{ className: 'dolphin', x: 1, y: 2, w: 3, h: 4 }],
-            });
-            const lid = create.body.labels[0].lid;
-
-            const res = await asUser(request(app).get(labelHistoryUrl(lid)), ADMIN);
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body.lid).toBe(lid);
-            expect(res.body.history).toEqual([
-                { authorId: ADMIN, authorType: 'user', action: 'created', changedAt: expect.any(String) },
-            ]);
-        });
-
-        test('returns 403 for a history read from a user without access', async () => {
-            const res = await asUser(request(app).get(IMAGE_HISTORY_URL), 'stranger');
-
-            expectJsonError(res, 403, 'FORBIDDEN');
         });
     });
 });

@@ -210,12 +210,6 @@ module.exports = {
             await db.run(
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
-            // Breadcrumb trail of who authored/last modified each annotation. Kept as its
-            // own table (rather than more Labels columns) so a label's full author history
-            // survives even across the row rewrites the legacy labelling flow still does.
-            await db.run(
-                "CREATE TABLE IF NOT EXISTS LabelHistory (HistoryId INTEGER PRIMARY KEY AUTOINCREMENT, LID INTEGER NOT NULL, AuthorId VARCHAR NOT NULL, AuthorType VARCHAR NOT NULL DEFAULT 'user', Action VARCHAR NOT NULL, ChangedAt TEXT NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID))",
-            );
 
             // Images predates the reviewImage/validateImage/Source/SourceKey columns, so
             // CREATE TABLE IF NOT EXISTS above is a no-op on any project database created

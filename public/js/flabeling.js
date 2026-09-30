@@ -220,15 +220,17 @@ var ShapeDrawer = (function() {
             inst.currObject = o.target.id;
             o.target.set({ fill: o.target.stroke.replace(')', ', 0.33)').replace('rgb', 'rgba') });
 
+            var authorSuffix = o.target.author ? " — " + String(o.target.author) : "";
+
             if (state == 1) {
-                var text = new fabric.Text(String(o.target.class) + " (" + String(o.target.id) + ")", {
+                var text = new fabric.Text(String(o.target.class) + " (" + String(o.target.id) + ")" + authorSuffix, {
                     id: o.target.id,
                     selectable: false,
                     textAlign: 'center',
                     backgroundColor: "white",
                 });
             } else {
-                var text = new fabric.Text(String(o.target.class), {
+                var text = new fabric.Text(String(o.target.class) + authorSuffix, {
                     id: o.target.id,
                     selectable: false,
                     textAlign: 'center',
@@ -788,7 +790,7 @@ function resizeRectangles(diff_width_ratio) {
 }
 classes[allClasses.indexOf(curr_class)].style.backgroundColor;
 // draw all rectangles that came from the database
-for (var i = 0; i < list_labels.length; i += 6) {
+for (var i = 0; i < list_labels.length; i += 7) {
     var labelId = list_labels[i].value;
     var className = list_labels[i + 1].value;
 
@@ -798,7 +800,9 @@ for (var i = 0; i < list_labels.length; i += 6) {
     var wVal = list_labels[i + 4].value;
     var hVal = list_labels[i + 5].value;
 
-    console.log("[redraw loop] labelId:", labelId, "className:", className, "xVal:", xVal, "yVal:", yVal, "wVal:", wVal, "hVal:", hVal, "diff_width_ratio:", diff_width_ratio);
+    var authorVal = list_labels[i + 6].value;
+
+    console.log("[redraw loop] labelId:", labelId, "className:", className, "xVal:", xVal, "yVal:", yVal, "wVal:", wVal, "hVal:", hVal, "authorVal:", authorVal, "diff_width_ratio:", diff_width_ratio);
 
     if (!xVal.includes(",") && !yVal.includes(",")) { //This is a rectangle
         console.log("[redraw] Rectangle:", labelId, "left:", parseFloat(xVal) * diff_width_ratio, "width:", parseFloat(wVal) * diff_width_ratio);
@@ -824,7 +828,8 @@ for (var i = 0; i < list_labels.length; i += 6) {
             hasControls: false,
             selectable: true,
             class: list_labels[i + 1].value,
-            classId: allClasses.indexOf(className) + 1
+            classId: allClasses.indexOf(className) + 1,
+            author: authorVal
         });
         rect.lockMovementX = true,
             rect.lockMovementY = true;
@@ -873,6 +878,7 @@ for (var i = 0; i < list_labels.length; i += 6) {
 
             class: className,
             classId: allClasses.indexOf(className) + 1,
+            author: authorVal,
             segmentationComplete: true
         });
 
