@@ -39,16 +39,11 @@
     <div id="header">
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow">
             <a class="navbar-brand" href="/home"><img src="/images/FullLogo_Transparent_NoBuffer.png" alt="Njobvu-AI home"></a>
-            <form action="/logout" method="post">
-                <input class="navbar-brand" type="hidden" name="user" value="<%= user%>">
-                <button class="navbar-brand navbar-dark"
-                    style="right: 0%; cursor: pointer; color: white; background-color: black; border: none;"
-                    type="submit">Logout</button>
-            </form>
-            <a class="navbar-brand" href="/user" style="left: 100%; float: right;">User: <%= user%></a>
-            <a class="navbar-brand text-light ml-2" href="/help" style="font-size: 0.95rem;" title="Help & Documentation Wiki" data-toggle="tooltip">
-                <i class="fas fa-question-circle text-info"></i> Help / Wiki
-            </a>
+            <% if (typeof PName !== 'undefined' && PName) { %>
+                <span class="project-header-name" title="Current project">
+                    <i class="fas fa-folder-open mr-2" aria-hidden="true"></i><%= PName %>
+                </span>
+            <% } %>
             <% if (typeof activePage !== 'undefined' && activePage !== null) { %>
                 <ul class="nav nav-tabs" style="border-bottom: 0px; margin-left: 10px;">
                     <li class="nav-item">
@@ -96,6 +91,16 @@
                     </li>
                 </ul>
                 <% } %>
+            <div class="header-actions ml-auto">
+                <a class="navbar-brand text-light" href="/help" title="Help & Documentation Wiki" data-toggle="tooltip">
+                    <i class="fas fa-question-circle text-info" aria-hidden="true"></i> Help / Wiki
+                </a>
+                <a class="navbar-brand" href="/user">User: <%= user%></a>
+                <form action="/logout" method="post">
+                    <input type="hidden" name="user" value="<%= user%>">
+                    <button class="navbar-brand navbar-dark" type="submit">Logout</button>
+                </form>
+            </div>
         </nav>
     </div>
     <div id="content">
