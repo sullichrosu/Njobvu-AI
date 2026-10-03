@@ -567,3 +567,92 @@ btn-info:hover {
 .unlabeled-row a {
     font-weight: bold;
 }
+
+/* Header project switcher */
+.project-switcher {
+    position: relative;
+    margin-left: 1rem;
+}
+.project-switcher-toggle {
+    display: inline-flex;
+    align-items: center;
+    max-width: 24vw;
+    padding: 0.35rem 0.55rem;
+    overflow: hidden;
+    color: #FFFFFF;
+    background: transparent;
+    border: 1px solid transparent;
+    font-family: 'Saira Semi Condensed', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.project-switcher-toggle:hover,
+.project-switcher-toggle:focus {
+    border-color: #5AB8EB;
+    outline: none;
+}
+.project-switcher-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    z-index: 1050;
+    width: min(320px, 82vw);
+    padding: 0.6rem;
+    background: #FFFFFF;
+    border: 1px solid #BCCCDC;
+    box-shadow: 0 4px 10px rgba(23, 23, 23, 0.2);
+}
+.project-switcher-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #BCCCDC;
+    border-radius: 0;
+    color: #171717;
+}
+.project-switcher-search:focus {
+    border-color: #1569AE;
+    outline: 2px solid rgba(21, 105, 174, 0.2);
+}
+.project-switcher-list {
+    max-height: min(55vh, 360px);
+    margin-top: 0.5rem;
+    overflow-y: auto;
+}
+.project-switcher-item {
+    display: block;
+    padding: 0.55rem 0.6rem;
+    color: #1569AE;
+    white-space: normal;
+}
+.project-switcher-item:hover,
+.project-switcher-item:focus {
+    background: #EEF5FB;
+    color: #0d406a;
+    text-decoration: none;
+}
+.project-switcher-item small {
+    color: #627D98;
+}
+.project-switcher-status {
+    display: block;
+    padding: 0.6rem;
+    color: #627D98;
+    font-size: 0.9rem;
+}
+.project-switcher-error {
+    color: #C60D0D;
+}
+
+@media (max-width: 520px) {
+    .project-switcher {
+        margin-left: 0.25rem;
+    }
+    .project-switcher-toggle {
+        max-width: 42vw;
+        font-size: 0.95rem;
+    }
+}
