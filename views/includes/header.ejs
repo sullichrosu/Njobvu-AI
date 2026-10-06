@@ -40,23 +40,25 @@
     <div id="header">
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow">
             <a class="navbar-brand" href="/home"><img src="/images/FullLogo_Transparent_NoBuffer.png" alt="Njobvu-AI home"></a>
-            <div class="project-switcher" id="project-switcher">
-                <button class="project-switcher-toggle" id="project-switcher-toggle" type="button"
-                    aria-haspopup="true" aria-expanded="false">
-                    <i class="fas fa-folder-open mr-2" aria-hidden="true"></i>
-                    <span id="project-switcher-current"><%= (typeof PName !== 'undefined' && PName) ? PName : 'Projects' %></span>
-                    <i class="fas fa-chevron-down ml-2" aria-hidden="true"></i>
-                </button>
-                <div class="project-switcher-menu" id="project-switcher-menu" hidden>
-                    <label class="sr-only" for="project-switcher-search">Search projects</label>
-                    <input id="project-switcher-search" class="project-switcher-search" type="search"
-                        placeholder="Search projects..." autocomplete="off">
-                    <div id="project-switcher-list" class="project-switcher-list" role="listbox"
-                        aria-label="Available projects">
-                        <span class="project-switcher-status">Loading projects...</span>
+            <% if (typeof PName !== 'undefined' && PName) { %>
+                <div class="project-switcher" id="project-switcher">
+                    <button class="project-switcher-toggle" id="project-switcher-toggle" type="button"
+                        aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-folder-open mr-2" aria-hidden="true"></i>
+                        <span id="project-switcher-current"><%= PName %></span>
+                        <i class="fas fa-chevron-down ml-2" aria-hidden="true"></i>
+                    </button>
+                    <div class="project-switcher-menu" id="project-switcher-menu" hidden>
+                        <label class="sr-only" for="project-switcher-search">Search projects</label>
+                        <input id="project-switcher-search" class="project-switcher-search" type="search"
+                            placeholder="Search projects..." autocomplete="off">
+                        <div id="project-switcher-list" class="project-switcher-list" role="listbox"
+                            aria-label="Available projects">
+                            <span class="project-switcher-status">Loading projects...</span>
+                        </div>
                     </div>
                 </div>
-            </div>
+            <% } %>
             <% if (typeof activePage !== 'undefined' && activePage !== null) { %>
                 <ul class="nav nav-tabs" style="border-bottom: 0px; margin-left: 10px;">
                     <li class="nav-item">
