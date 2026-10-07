@@ -27,6 +27,7 @@ async function updateLabels(req, res) {
 
     try {
         global.logger.info("[updateLabels] Request body: " + JSON.stringify(req.body));
+        await queries.project.migrateProjectDb(projectPath);
         await queries.project.updateReviewImage(
             projectPath,
             reviewImage,
@@ -53,6 +54,7 @@ async function updateLabels(req, res) {
         const ys = Array.isArray(req.body.Y) ? req.body.Y : (req.body.Y ? [req.body.Y] : []);
         const ws = Array.isArray(req.body.W) ? req.body.W : (req.body.W ? [req.body.W] : []);
         const hs = Array.isArray(req.body.H) ? req.body.H : (req.body.H ? [req.body.H] : []);
+        const authors = Array.isArray(req.body.AuthorId) ? req.body.AuthorId : (req.body.AuthorId ? [req.body.AuthorId] : []);
         const lids = Array.isArray(req.body.LabelingID) ? req.body.LabelingID : (req.body.LabelingID ? [req.body.LabelingID] : []);
 
         global.logger.info("[updateLabels] Normalized arrays: " + JSON.stringify({ cnames, xs, ys, ws, hs, lids }));
@@ -110,6 +112,7 @@ async function updateLabels(req, res) {
                 wVal,
                 hVal,
                 IName,
+                authors[i] || null, // author is fixed at creation; blank means none was recorded
             );
 
             if (currentConfidence[i] && currentConfidence[i][0]) {

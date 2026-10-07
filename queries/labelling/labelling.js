@@ -58,10 +58,12 @@ module.exports = {
             labelWidth,
             labelHeight,
             imageName,
+            authorId,
         ) {
             const db = getDbClient(projectPath);
-            const query =
-                "INSERT INTO Labels (LID, CName, X, Y, W, H, IName) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            const query = authorId
+                ? "INSERT INTO Labels (LID, CName, X, Y, W, H, IName, AuthorId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                : "INSERT INTO Labels (LID, CName, X, Y, W, H, IName) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
             const result = await db.run(query, [
                 labelId,
@@ -71,6 +73,7 @@ module.exports = {
                 labelWidth,
                 labelHeight,
                 imageName,
+                ...(authorId ? [authorId] : []),
             ]);
 
             return result;

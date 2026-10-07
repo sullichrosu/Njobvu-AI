@@ -53,6 +53,7 @@ jest.mock('../../queries/queries', () => ({
     sql: jest.fn().mockResolvedValue({ row: { success: true } }),
   },
   project: {
+    migrateProjectDb: jest.fn().mockResolvedValue(undefined),
     updateReviewImage: jest.fn().mockResolvedValue({ success: true }),
     getAllValidationsForImage: jest.fn().mockResolvedValue({ rows: [] }),
     deleteAllLabelsForImage: jest.fn().mockResolvedValue({ success: true }),

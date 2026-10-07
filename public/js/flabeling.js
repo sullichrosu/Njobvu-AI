@@ -77,6 +77,10 @@ function hex2rgba(hex, o) {
     throw new Error('Bad Hex');
 }
 
+function currentUser() {
+    return $('input[name="user"]').val() || '';
+}
+
 var ShapeDrawer = (function() {
     function ShapeDrawer(canvas, shapeStrategy) {
         this.canvas = canvas;
@@ -220,7 +224,7 @@ var ShapeDrawer = (function() {
             inst.currObject = o.target.id;
             o.target.set({ fill: o.target.stroke.replace(')', ', 0.33)').replace('rgb', 'rgba') });
 
-            var authorSuffix = o.target.author ? " — " + String(o.target.author) : "";
+            var authorSuffix = " — " + (o.target.author ? String(o.target.author) : "No author recorded");
 
             if (state == 1) {
                 var text = new fabric.Text(String(o.target.class) + " (" + String(o.target.id) + ")" + authorSuffix, {
@@ -289,7 +293,8 @@ var ShapeDrawer = (function() {
             '<input class="labels label-' + id + ' label-x" type="hidden" name="X" value="' + (origX / diff_width_ratio) + '">' +
             '<input class="labels label-' + id + ' label-y" type="hidden" name="Y" value="' + (origY / diff_width_ratio) + '">' +
             '<input class="labels label-' + id + ' label-w" type="hidden" name="W" value="0">' +
-            '<input class="labels label-' + id + ' label-h" type="hidden" name="H" value="0">'
+            '<input class="labels label-' + id + ' label-h" type="hidden" name="H" value="0">' +
+            '<input class="labels label-' + id + ' label-author" type="hidden" name="AuthorId" value="' + currentUser() + '">'
         );
     }
 
@@ -381,6 +386,7 @@ var SegmentationStrategy = {
             { x: pointer.x, y: pointer.y }
         ], {
             id: id,
+            author: currentUser(),
             left: pointer.x,
             top: pointer.y,
             originX: 'left',
@@ -518,6 +524,7 @@ var SegmentationStrategy = {
         console.log(`Top: ${minY}`);
         var finalPolygon = new fabric.Polygon(normalizedPoints, {
             id: shape.id,
+            author: shape.author,
             left: minX,
             top: minY,
             originX: 'left',
@@ -562,7 +569,8 @@ var SegmentationStrategy = {
             '<input class="labels label-' + shape.id + ' label-x" type="hidden" name="X" value="' + (xPoints) + '">' +
             '<input class="labels label-' + shape.id + ' label-y" type="hidden" name="Y" value="' + (yPoints) + '">' +
             '<input class="labels label-' + shape.id + ' label-w" type="hidden" name="W" value="' + 0 + '">' +
-            '<input class="labels label-' + shape.id + ' label-h" type="hidden" name="H" value="' + 0 + '">'
+            '<input class="labels label-' + shape.id + ' label-h" type="hidden" name="H" value="' + 0 + '">' +
+            '<input class="labels label-' + shape.id + ' label-author" type="hidden" name="AuthorId" value="' + currentUser() + '">'
         );
 
         canvas.renderAll();
@@ -595,6 +603,7 @@ var RectangleStrategy = {
     createShape: function(id, pointer, curr_class, allClasses) {
         return new fabric.Rect({
             id: id,
+            author: currentUser(),
             left: pointer.x,
             top: pointer.y,
             originX: 'left',
