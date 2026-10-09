@@ -52,6 +52,37 @@ class TestRunPipeline(unittest.TestCase):
 
         np.testing.assert_array_equal(result, cv2.flip(self.img, 1))
 
+    def test_custom_step_with_python_path_runs_in_worker_subprocess(self):
+        custom_script = os.path.join(self.test_dir, "flip.py")
+        with open(custom_script, "w") as f:
+            f.write("import cv2\n\ndef process(img):\n    print('noise on stdout')\n    return cv2.flip(img, 1)\n")
+
+        steps = [{"type": "custom", "order": 0, "params": {}, "scriptPath": custom_script, "pythonPath": sys.executable}]
+        external = run_pipeline.ExternalStepWorkers()
+        try:
+            first = run_pipeline.process_image(self.img.copy(), steps, external)
+            second = run_pipeline.process_image(self.img.copy(), steps, external)
+        finally:
+            external.close()
+
+        np.testing.assert_array_equal(first, cv2.flip(self.img, 1))
+        np.testing.assert_array_equal(second, cv2.flip(self.img, 1))
+
+    def test_external_worker_surfaces_script_errors(self):
+        custom_script = os.path.join(self.test_dir, "boom.py")
+        with open(custom_script, "w") as f:
+            f.write("def process(img):\n    raise ValueError('boom')\n")
+
+        steps = [{"type": "custom", "order": 0, "params": {}, "scriptPath": custom_script, "pythonPath": sys.executable}]
+        external = run_pipeline.ExternalStepWorkers()
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                run_pipeline.process_image(self.img.copy(), steps, external)
+        finally:
+            external.close()
+
+        self.assertIn("boom", str(ctx.exception))
+
     def test_main_processes_every_image_in_directory(self):
         images_dir = os.path.join(self.test_dir, "images")
         output_dir = os.path.join(self.test_dir, "output")

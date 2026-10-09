@@ -10,6 +10,9 @@
             <a class="nav-link <%= activePage === 'training' ? 'active' : '' %>" href="/customTraining?IDX=<%= IDX %>" style="border-radius: 0">Custom Training</a>
         </li>
         <li class="nav-item">
+            <a class="nav-link <%= activePage === 'preprocessingSettings' ? 'active' : '' %>" href="/config/preprocessingSettings?IDX=<%= IDX %>" style="border-radius: 0">Pre-processing</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link <%= activePage === 'servstats' ? 'active' : '' %>" href="/servstats?IDX=<%= IDX %>" style="border-radius: 0">Server Stats</a>
         </li>
     </ul>

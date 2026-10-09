@@ -211,11 +211,21 @@ module.exports = {
                 "CREATE TABLE IF NOT EXISTS Validation (Confidence INTEGER NOT NULL, LID INTEGER NOT NULL PRIMARY KEY, CName VARCHAR NOT NULL, IName VARCHAR NOT NULL, FOREIGN KEY(LID) REFERENCES Labels(LID), FOREIGN KEY(IName) REFERENCES Images(IName), FOREIGN KEY(CName) REFERENCES Classes(CName))",
             );
             await db.run(
-                "CREATE TABLE IF NOT EXISTS PreprocessingScripts (ScriptId VARCHAR NOT NULL PRIMARY KEY, Name VARCHAR NOT NULL, FileName VARCHAR NOT NULL, UploadedAt TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS PreprocessingScripts (ScriptId VARCHAR NOT NULL PRIMARY KEY, Name VARCHAR NOT NULL, FileName VARCHAR NOT NULL, UploadedAt TEXT NOT NULL, PythonPath TEXT DEFAULT NULL)",
             );
             await db.run(
                 "CREATE TABLE IF NOT EXISTS PreprocessingSteps (StepId VARCHAR NOT NULL PRIMARY KEY, StepType VARCHAR NOT NULL, ScriptId VARCHAR, Enabled INTEGER NOT NULL DEFAULT 1, StepOrder INTEGER NOT NULL, Params TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(ScriptId) REFERENCES PreprocessingScripts(ScriptId))",
             );
+
+            // PreprocessingScripts.PythonPath (per-script interpreter) was added after the
+            // table first shipped; back-fill it the same way, guarded by a PRAGMA check.
+            const scriptColumnsResult = await db.all("PRAGMA table_info(PreprocessingScripts)");
+            const scriptColumns = Array.isArray(scriptColumnsResult)
+                ? scriptColumnsResult
+                : (scriptColumnsResult && scriptColumnsResult.rows) || [];
+            if (!scriptColumns.some((column) => column.name === "PythonPath")) {
+                await db.run("ALTER TABLE PreprocessingScripts ADD COLUMN PythonPath TEXT DEFAULT NULL");
+            }
 
             // Images predates the reviewImage/validateImage/Source/SourceKey columns, so
             // CREATE TABLE IF NOT EXISTS above is a no-op on any project database created

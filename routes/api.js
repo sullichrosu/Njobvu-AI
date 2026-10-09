@@ -80,6 +80,7 @@ const {
     savePreprocessingPipeline,
     uploadCustomScript,
     deleteCustomScript,
+    setCustomScriptPythonPath,
     applyPreprocessingPipeline,
     downloadExampleScript,
 } = require("./api/v2/preprocessing");
@@ -211,6 +212,7 @@ api.get("/api/v2/projects/preprocessing/example-script", downloadExampleScript);
 api.get("/api/v2/projects/:admin/:projectName/preprocessing", getPreprocessingPipeline);
 api.put("/api/v2/projects/:admin/:projectName/preprocessing", savePreprocessingPipeline);
 api.post("/api/v2/projects/:admin/:projectName/preprocessing/scripts", uploadCustomScript);
+api.put("/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId/python-path", setCustomScriptPythonPath);
 api.delete("/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId", deleteCustomScript);
 api.post("/api/v2/projects/:admin/:projectName/preprocessing/apply", applyPreprocessingPipeline);
 

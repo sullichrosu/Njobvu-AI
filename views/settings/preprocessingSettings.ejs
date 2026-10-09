@@ -1,5 +1,5 @@
 <%- include('../includes/header') %>
-<%- include('../includes/configNav', { activePage }) %>
+<%- include('../includes/processingNav', { activePage }) %>
 
 <div class="container pb-5">
     <div class="row">
@@ -42,6 +42,17 @@
                         </select>
                     </div>
                     <button type="button" class="btn btn-primary btn-block mb-3" id="addCustomStepBtn" style="border-radius: 0" disabled>Add Custom Step</button>
+
+                    <div class="form-group">
+                        <label for="customScriptPythonPath">Python path for selected script</label>
+                        <input type="text" id="customScriptPythonPath" class="form-control"
+                            placeholder="Server default (e.g. /usr/bin/python3)" maxlength="1024" disabled>
+                        <small class="form-text text-muted">
+                            Absolute path to the interpreter that runs this script. Leave empty to use the server default.
+                        </small>
+                    </div>
+                    <button type="button" class="btn btn-outline-dark btn-block mb-1" id="savePythonPathBtn" style="border-radius: 0" disabled>Save Python Path</button>
+                    <label id="pythonPathStatus" class="text-info d-block mb-3" aria-live="polite" aria-atomic="true"></label>
 
                     <div class="form-group">
                         <label for="customScriptUpload">Upload custom pipeline script (.py)</label>
@@ -334,15 +345,53 @@
         renderPipeline();
     }
 
+    function selectedCustomScript() {
+        const id = document.getElementById("customScriptSelect").value;
+        return customScripts.find((s) => s.id === id);
+    }
+
+    function syncPythonPathInput() {
+        const script = selectedCustomScript();
+        const input = document.getElementById("customScriptPythonPath");
+        input.disabled = !script;
+        document.getElementById("savePythonPathBtn").disabled = !script;
+        input.value = script && script.pythonPath ? script.pythonPath : "";
+        document.getElementById("pythonPathStatus").textContent = "";
+    }
+
+    async function savePythonPath() {
+        const script = selectedCustomScript();
+        if (!script) return;
+        const status = document.getElementById("pythonPathStatus");
+        const pythonPath = document.getElementById("customScriptPythonPath").value.trim();
+
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/scripts/${encodeURIComponent(script.id)}/python-path`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pythonPath }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to save Python path");
+            script.pythonPath = data.pythonPath;
+            status.textContent = data.pythonPath ? "Saved." : "Cleared; using the server default.";
+        } catch (err) {
+            status.textContent = "";
+            alert("Could not save Python path.\nReason: " + err.message);
+        }
+    }
+
     function renderCustomScriptOptions() {
         const select = document.getElementById("customScriptSelect");
         const addBtn = document.getElementById("addCustomStepBtn");
         if (customScripts.length === 0) {
             select.innerHTML = '<option value="" disabled selected>No custom scripts uploaded</option>';
             addBtn.disabled = true;
+            syncPythonPathInput();
             return;
         }
         select.innerHTML = customScripts.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+        syncPythonPathInput();
         addBtn.disabled = false;
     }
 
@@ -460,6 +509,8 @@
         if (scriptId) addCustomStep(scriptId);
     });
     document.getElementById("uploadScriptBtn").addEventListener("click", uploadCustomScript);
+    document.getElementById("customScriptSelect").addEventListener("change", syncPythonPathInput);
+    document.getElementById("savePythonPathBtn").addEventListener("click", savePythonPath);
     document.getElementById("savePipelineBtn").addEventListener("click", savePipeline);
     document.getElementById("applyAllBtn").addEventListener("click", applyToAll);
 

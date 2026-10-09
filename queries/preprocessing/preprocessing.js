@@ -34,7 +34,7 @@ module.exports = {
         getCustomScripts: async function (projectPath) {
             const db = getDbClient(projectPath);
             const query =
-                "SELECT ScriptId, Name, FileName, UploadedAt FROM PreprocessingScripts ORDER BY UploadedAt ASC";
+                "SELECT ScriptId, Name, FileName, UploadedAt, PythonPath FROM PreprocessingScripts ORDER BY UploadedAt ASC";
             const result = await db.all(query);
 
             return result;
@@ -42,7 +42,7 @@ module.exports = {
         getCustomScriptById: async function (projectPath, scriptId) {
             const db = getDbClient(projectPath);
             const query =
-                "SELECT ScriptId, Name, FileName, UploadedAt FROM PreprocessingScripts WHERE ScriptId = ?";
+                "SELECT ScriptId, Name, FileName, UploadedAt, PythonPath FROM PreprocessingScripts WHERE ScriptId = ?";
             const result = await db.get(query, [scriptId]);
 
             return result;
@@ -54,6 +54,13 @@ module.exports = {
             await db.run(query, [script.id, script.name, script.fileName, script.uploadedAt]);
 
             return { success: true };
+        },
+        setCustomScriptPythonPath: async function (projectPath, scriptId, pythonPath) {
+            const db = getDbClient(projectPath);
+            const query = "UPDATE PreprocessingScripts SET PythonPath = ? WHERE ScriptId = ?";
+            const result = await db.run(query, [pythonPath || null, scriptId]);
+
+            return result;
         },
         deleteCustomScript: async function (projectPath, scriptId) {
             const db = getDbClient(projectPath);

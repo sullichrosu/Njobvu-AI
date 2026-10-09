@@ -8,13 +8,18 @@ Invoked by routes/api/v2/preprocessing.js's /apply endpoint as:
 The manifest is `{"steps": [{"type", "order", "params", "scriptPath"?}]}` -
 already filtered to enabled steps and sorted by order. Custom steps point at
 an uploaded script that exposes `def process(img): -> img` (img is a
-cv2/numpy BGR array), loaded dynamically via importlib.
+cv2/numpy BGR array), loaded dynamically via importlib. A custom step may also
+carry `pythonPath`; it then runs in a custom_step_worker.py subprocess started
+with that interpreter instead of in this process.
 """
 import argparse
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 
 import cv2
 import numpy as np
@@ -165,14 +170,97 @@ def run_custom_script(script_path, img):
     return module.process(img)
 
 
-def process_image(img, steps):
+WORKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_step_worker.py")
+
+
+class ExternalStepWorkers:
+    """Keeps one custom_step_worker.py subprocess per (script, interpreter) pair.
+
+    Images travel as lossless PNG temp files, so the worker's interpreter only
+    needs cv2/numpy, never this process's modules. stderr goes to a file (not a
+    pipe) so a chatty script can never block on a full buffer.
+    """
+
+    def __init__(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="njobvu-preprocess-")
+        self.workers = {}
+
+    def _worker(self, script_path, python_path):
+        key = (script_path, python_path)
+        entry = self.workers.get(key)
+        if entry is None or entry["proc"].poll() is not None:
+            err_path = os.path.join(self.tmp_dir, f"worker-{len(self.workers)}.err")
+            err_file = open(err_path, "w")
+            proc = subprocess.Popen(
+                [python_path, WORKER_PATH, "--script", script_path],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=err_file,
+                text=True,
+            )
+            entry = {"proc": proc, "err_path": err_path, "err_file": err_file}
+            self.workers[key] = entry
+        return entry
+
+    def _error_tail(self, entry):
+        entry["err_file"].flush()
+        with open(entry["err_path"], "r") as f:
+            return f.read()[-2000:]
+
+    def run(self, script_path, python_path, img):
+        entry = self._worker(script_path, python_path)
+        proc = entry["proc"]
+        in_path = os.path.join(self.tmp_dir, "in.png")
+        out_path = os.path.join(self.tmp_dir, "out.png")
+        cv2.imwrite(in_path, img)
+
+        try:
+            proc.stdin.write(json.dumps({"input": in_path, "output": out_path}) + "\n")
+            proc.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+        line = proc.stdout.readline()
+
+        if not line:
+            code = proc.wait()
+            raise RuntimeError(
+                f"custom script worker ({python_path}) exited with code {code}\n{self._error_tail(entry)}"
+            )
+        reply = json.loads(line)
+        if not reply.get("ok"):
+            raise RuntimeError(f"custom script failed: {reply.get('error')}\n{self._error_tail(entry)}")
+
+        result = cv2.imread(out_path)
+        if result is None:
+            raise RuntimeError("custom script worker produced no readable output image")
+        return result
+
+    def close(self):
+        for entry in self.workers.values():
+            try:
+                entry["proc"].stdin.close()
+                entry["proc"].wait(timeout=10)
+            except Exception:
+                entry["proc"].kill()
+                entry["proc"].wait()
+            entry["proc"].stdout.close()
+            entry["err_file"].close()
+        self.workers = {}
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+
+def process_image(img, steps, external=None):
     for step in steps:
         step_type = step.get("type")
 
         if step_type == "custom":
             script_path = step.get("scriptPath")
             if script_path:
-                img = run_custom_script(script_path, img)
+                python_path = step.get("pythonPath")
+                if python_path and external is not None:
+                    img = external.run(script_path, python_path, img)
+                else:
+                    img = run_custom_script(script_path, img)
             continue
 
         handler = BUILTIN_STEPS.get(step_type)
@@ -197,18 +285,22 @@ def main():
     os.makedirs(args.output, exist_ok=True)
 
     processed = 0
-    for name in sorted(os.listdir(args.images)):
-        src_path = os.path.join(args.images, name)
-        if not os.path.isfile(src_path):
-            continue
+    external = ExternalStepWorkers()
+    try:
+        for name in sorted(os.listdir(args.images)):
+            src_path = os.path.join(args.images, name)
+            if not os.path.isfile(src_path):
+                continue
 
-        img = cv2.imread(src_path)
-        if img is None:
-            continue
+            img = cv2.imread(src_path)
+            if img is None:
+                continue
 
-        img = process_image(img, steps)
-        cv2.imwrite(os.path.join(args.output, name), img)
-        processed += 1
+            img = process_image(img, steps, external)
+            cv2.imwrite(os.path.join(args.output, name), img)
+            processed += 1
+    finally:
+        external.close()
 
     print(f"Processed {processed} image(s)")
 

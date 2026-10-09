@@ -16,6 +16,55 @@ const BUILTIN_STEP_TYPES = new Set([
 ]);
 const MAX_SCRIPT_SIZE_BYTES = 1024 * 1024; // 1MB is generous for a single pre-processing step script.
 const MAX_PARAMS_JSON_LENGTH = 10000;
+const MAX_PYTHON_PATH_LENGTH = 1024;
+
+/**
+ * Validates a user-supplied interpreter path. Returns { value } (null clears the
+ * setting and falls back to the server default) or { error }.
+ *
+ * Run later through execFile (no shell), so metacharacters are not an injection
+ * risk; the checks below make sure it is a real, runnable file the server
+ * can reach, and keep control characters out of stored paths and logs.
+ */
+function validatePythonPath(raw) {
+    if (raw === undefined || raw === null) {
+        return { value: null };
+    }
+    if (typeof raw !== "string") {
+        return { error: "pythonPath must be a string" };
+    }
+
+    const value = raw.trim();
+    if (value === "") {
+        return { value: null };
+    }
+    if (value.length > MAX_PYTHON_PATH_LENGTH) {
+        return { error: `pythonPath is too long (max ${MAX_PYTHON_PATH_LENGTH} characters)` };
+    }
+    if (/[\u0000-\u001f\u007f]/.test(value)) {
+        return { error: "pythonPath contains invalid characters" };
+    }
+    if (!path.isAbsolute(value)) {
+        return { error: "pythonPath must be an absolute path" };
+    }
+
+    let stat;
+    try {
+        stat = fs.statSync(value);
+    } catch (err) {
+        return { error: "pythonPath does not exist on the server" };
+    }
+    if (!stat.isFile()) {
+        return { error: "pythonPath must point to an executable file" };
+    }
+    try {
+        fs.accessSync(value, fs.constants.X_OK);
+    } catch (err) {
+        return { error: "pythonPath is not executable" };
+    }
+
+    return { value };
+}
 
 const EXAMPLE_SCRIPT_PATH = path.join(
     __dirname,
@@ -104,6 +153,7 @@ async function getPreprocessingPipeline(req, res) {
                 name: row.Name,
                 filename: row.FileName,
                 uploadedAt: row.UploadedAt,
+                pythonPath: row.PythonPath || null,
             })),
         });
     } catch (err) {
@@ -204,6 +254,7 @@ async function uploadCustomScript(req, res) {
             name: file.name,
             fileName: fileName,
             uploadedAt: new Date().toISOString(),
+            pythonPath: null,
         };
         await queries.project.addCustomScript(projectPath, script);
 
@@ -211,6 +262,39 @@ async function uploadCustomScript(req, res) {
     } catch (err) {
         global.logger.error(err);
         return res.status(500).json({ success: false, error: "Error uploading custom pipeline script" });
+    }
+}
+
+async function setCustomScriptPythonPath(req, res) {
+    const { admin, projectName, scriptId } = req.params;
+
+    if (!isOwner(req, admin)) {
+        return res.status(403).json({ success: false, error: "Not authorized for this project" });
+    }
+
+    const projectPath = getProjectPath(admin, projectName);
+    if (!fs.existsSync(projectPath)) {
+        return res.status(404).json({ success: false, error: "Project not found" });
+    }
+
+    const validation = validatePythonPath(req.body && req.body.pythonPath);
+    if (validation.error) {
+        return res.status(400).json({ success: false, error: validation.error });
+    }
+
+    try {
+        const script = await queries.project.getCustomScriptById(projectPath, scriptId);
+        const row = script && script.row;
+        if (!row) {
+            return res.status(404).json({ success: false, error: "Custom script not found" });
+        }
+
+        await queries.project.setCustomScriptPythonPath(projectPath, scriptId, validation.value);
+
+        return res.status(200).json({ success: true, pythonPath: validation.value });
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).json({ success: false, error: "Error saving custom script Python path" });
     }
 }
 
@@ -280,9 +364,27 @@ async function applyPreprocessingPipeline(req, res) {
                     step.scriptPath = script
                         ? path.join(projectPath, "preprocessing", "scripts", script.FileName)
                         : null;
+                    if (script && script.PythonPath) {
+                        step.pythonPath = script.PythonPath;
+                        step.scriptName = script.Name;
+                    }
                 }
                 return step;
             });
+
+        // The configured interpreter may have been removed since it was saved; fail the
+        // request up front rather than inside the background job.
+        for (const step of enabledSteps) {
+            if (step.pythonPath) {
+                const check = validatePythonPath(step.pythonPath);
+                if (check.error) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Custom script "${step.scriptName}": ${check.error}`,
+                    });
+                }
+            }
+        }
 
         if (enabledSteps.length === 0) {
             return res.status(400).json({ success: false, error: "Pipeline has no enabled steps to apply" });
@@ -350,6 +452,7 @@ module.exports = {
     getPreprocessingPipeline,
     savePreprocessingPipeline,
     uploadCustomScript,
+    setCustomScriptPythonPath,
     deleteCustomScript,
     applyPreprocessingPipeline,
 };

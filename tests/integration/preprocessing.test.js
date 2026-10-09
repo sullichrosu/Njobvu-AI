@@ -14,6 +14,7 @@ jest.mock('../../queries/queries', () => ({
         getCustomScriptById: jest.fn(),
         addCustomScript: jest.fn().mockResolvedValue({ success: true }),
         deleteCustomScript: jest.fn().mockResolvedValue({ success: true }),
+        setCustomScriptPythonPath: jest.fn().mockResolvedValue({ success: true }),
     },
 }));
 
@@ -31,6 +32,7 @@ const {
     savePreprocessingPipeline,
     uploadCustomScript,
     deleteCustomScript,
+    setCustomScriptPythonPath,
     applyPreprocessingPipeline,
     downloadExampleScript,
 } = require('../../routes/api/v2/preprocessing');
@@ -49,6 +51,7 @@ function buildTestApp() {
     app.get('/api/v2/projects/:admin/:projectName/preprocessing', getPreprocessingPipeline);
     app.put('/api/v2/projects/:admin/:projectName/preprocessing', savePreprocessingPipeline);
     app.post('/api/v2/projects/:admin/:projectName/preprocessing/scripts', uploadCustomScript);
+    app.put('/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId/python-path', setCustomScriptPythonPath);
     app.delete('/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId', deleteCustomScript);
     app.post('/api/v2/projects/:admin/:projectName/preprocessing/apply', applyPreprocessingPipeline);
 
@@ -126,6 +129,129 @@ describe('Pre-processing Pipeline Routes', () => {
         });
     });
 
+    describe('PUT /api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId/python-path', () => {
+        const url = '/api/v2/projects/testuser/test-project/preprocessing/scripts/c1/python-path';
+        let fakePython;
+
+        beforeAll(() => {
+            fakePython = path.join(tmpRoot, 'fake-python');
+            fs.writeFileSync(fakePython, '#!/bin/sh\n', { mode: 0o755 });
+        });
+
+        beforeEach(() => {
+            queries.project.getCustomScriptById.mockResolvedValue({
+                success: true,
+                row: { ScriptId: 'c1', Name: 'my_script.py', FileName: 'c1-my_script.py' },
+            });
+        });
+
+        const put = (body, user = 'testuser') =>
+            request(app).put(url).set('Cookie', [`Username=${user}`]).send(body);
+
+        it('persists a valid interpreter path', async () => {
+            const res = await put({ pythonPath: fakePython });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toEqual({ success: true, pythonPath: fakePython });
+            expect(queries.project.setCustomScriptPythonPath).toHaveBeenCalledWith(projectPath, 'c1', fakePython);
+        });
+
+        it('clears the setting when the path is empty', async () => {
+            const res = await put({ pythonPath: '   ' });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.pythonPath).toBeNull();
+            expect(queries.project.setCustomScriptPythonPath).toHaveBeenCalledWith(projectPath, 'c1', null);
+        });
+
+        it.each([
+            ['a non-string value', 123],
+            ['a relative path', 'python3'],
+            ['a path with a newline', '/usr/bin/python3\n/bin/sh'],
+            ['a path that does not exist', '/definitely/not/here/python'],
+            ['a directory', os.tmpdir()],
+            ['an over-long path', '/' + 'a'.repeat(1100)],
+        ])('rejects %s', async (_label, pythonPath) => {
+            const res = await put({ pythonPath });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.success).toBe(false);
+            expect(queries.project.setCustomScriptPythonPath).not.toHaveBeenCalled();
+        });
+
+        it('rejects a file that is not executable', async () => {
+            const plain = path.join(tmpRoot, 'not-executable');
+            fs.writeFileSync(plain, 'x', { mode: 0o644 });
+
+            const res = await put({ pythonPath: plain });
+
+            expect(res.statusCode).toBe(400);
+            expect(queries.project.setCustomScriptPythonPath).not.toHaveBeenCalled();
+        });
+
+        it('returns 404 for an unknown script', async () => {
+            queries.project.getCustomScriptById.mockResolvedValueOnce({ success: true, row: undefined });
+
+            const res = await put({ pythonPath: fakePython });
+
+            expect(res.statusCode).toBe(404);
+            expect(queries.project.setCustomScriptPythonPath).not.toHaveBeenCalled();
+        });
+
+        it('rejects requests from a non-owner', async () => {
+            const res = await put({ pythonPath: fakePython }, 'someone-else');
+
+            expect(res.statusCode).toBe(403);
+            expect(queries.project.setCustomScriptPythonPath).not.toHaveBeenCalled();
+        });
+
+        it('exposes the saved path on GET and passes it into the apply manifest', async () => {
+            const rows = [{ ScriptId: 'c1', Name: 'my_script.py', FileName: 'c1-my_script.py', UploadedAt: 't', PythonPath: fakePython }];
+            queries.project.getCustomScripts.mockResolvedValue({ success: true, rows });
+            queries.project.getPipeline.mockResolvedValue({
+                success: true,
+                rows: [{ StepId: 's1', StepType: 'custom', ScriptId: 'c1', Enabled: 1, StepOrder: 0, Params: '{}' }],
+            });
+
+            const getRes = await request(app)
+                .get('/api/v2/projects/testuser/test-project/preprocessing')
+                .set('Cookie', ['Username=testuser']);
+            expect(getRes.body.customScripts[0].pythonPath).toBe(fakePython);
+
+            const applyRes = await request(app)
+                .post('/api/v2/projects/testuser/test-project/preprocessing/apply')
+                .set('Cookie', ['Username=testuser']);
+            expect(applyRes.statusCode).toBe(200);
+
+            const args = execFile.mock.calls[0][1];
+            const manifestPath = args[args.indexOf('--manifest') + 1];
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+            expect(manifest.steps[0].pythonPath).toBe(fakePython);
+
+            queries.project.getCustomScripts.mockResolvedValue({ success: true, rows: [] });
+            queries.project.getPipeline.mockResolvedValue({ success: true, rows: [] });
+        });
+
+        it('refuses to apply when a saved interpreter no longer exists', async () => {
+            queries.project.getCustomScripts.mockResolvedValueOnce({
+                success: true,
+                rows: [{ ScriptId: 'c1', Name: 'my_script.py', FileName: 'f.py', PythonPath: '/gone/python' }],
+            });
+            queries.project.getPipeline.mockResolvedValueOnce({
+                success: true,
+                rows: [{ StepId: 's1', StepType: 'custom', ScriptId: 'c1', Enabled: 1, StepOrder: 0, Params: '{}' }],
+            });
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/preprocessing/apply')
+                .set('Cookie', ['Username=testuser']);
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.error).toMatch(/my_script\.py/);
+            expect(execFile).not.toHaveBeenCalled();
+        });
+    });
+
     describe('GET /api/v2/projects/:admin/:projectName/preprocessing', () => {
         it('returns the saved pipeline and custom scripts for the project owner', async () => {
             queries.project.getPipeline.mockResolvedValueOnce({
@@ -149,7 +275,7 @@ describe('Pre-processing Pipeline Routes', () => {
                 { id: 's1', type: 'resize', enabled: true, order: 0, params: { width: 640 } },
             ]);
             expect(res.body.customScripts).toEqual([
-                { id: 'c1', name: 'my_script.py', filename: 'c1-my_script.py', uploadedAt: '2026-01-01T00:00:00.000Z' },
+                { id: 'c1', name: 'my_script.py', filename: 'c1-my_script.py', uploadedAt: '2026-01-01T00:00:00.000Z', pythonPath: null },
             ]);
         });
 
