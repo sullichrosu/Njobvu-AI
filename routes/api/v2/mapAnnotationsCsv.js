@@ -225,7 +225,7 @@ async function mapAnnotationsCsv(req, res) {
         let nextLid = maxLidRows.length > 0 && maxLidRows[0].LID ? maxLidRows[0].LID + 1 : 1;
 
         for (const row of labelRows) {
-            await queries.project.createLabel(projectPath, nextLid++, row.className, row.x, row.y, row.w, row.h, row.filename);
+            await queries.project.createLabel(projectPath, nextLid++, row.className, row.x, row.y, row.w, row.h, row.filename, req.cookies.Username);
         }
 
         skipped.sort((a, b) => a.line - b.line);

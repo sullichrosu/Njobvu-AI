@@ -94,7 +94,8 @@ async function mapKwCocoCsv(req, res) {
             nextLid = maxLidRows[0].LID + 1;
         }
 
-        // 4. Insert labels
+        // 4. Insert labels, authored by the user performing the import
+        const importer = req.cookies?.Username || null;
         let labelsInserted = 0;
         for (const ann of parsedAnnotations) {
             await queries.project.createLabel(
@@ -105,7 +106,8 @@ async function mapKwCocoCsv(req, res) {
                 ann.y,
                 ann.w,
                 ann.h,
-                ann.filename
+                ann.filename,
+                importer
             );
             labelsInserted++;
         }
