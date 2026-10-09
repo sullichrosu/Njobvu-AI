@@ -48,6 +48,10 @@
                         <input type="file" id="customScriptUpload" class="form-control-file" accept=".py">
                     </div>
                     <button type="button" class="btn btn-outline-dark btn-block" id="uploadScriptBtn" style="border-radius: 0">Upload Script</button>
+                    <a class="btn btn-link btn-sm btn-block" id="downloadExampleScriptLink"
+                        href="/api/v2/projects/preprocessing/example-script" download="example_custom_script.py">
+                        Download example script
+                    </a>
                     <label id="uploadProgress" class="mt-2 text-info d-block" aria-live="polite" aria-atomic="true"></label>
                 </div>
             </div>
@@ -152,10 +156,14 @@
             return `<input type="checkbox" class="step-param" id="${inputId}" data-key="${field.key}" ${value ? "checked" : ""}>`;
         }
         if (field.type === "range") {
+            // Slider plus a typed-value box kept in sync with it (see the step-param handler).
             return `
                 <input type="range" class="custom-range step-param" id="${inputId}" data-key="${field.key}"
                     min="${field.min}" max="${field.max}" step="${field.step}" value="${value}">
-                <span class="text-muted small" id="${inputId}-val">${value}</span>`;
+                <input type="number" class="form-control form-control-sm mt-1 step-param-number" id="${inputId}-num"
+                    data-key="${field.key}" data-slider-id="${inputId}"
+                    min="${field.min}" max="${field.max}" step="${field.step}" value="${value}"
+                    aria-label="${field.label} value">`;
         }
         if (field.type === "color") {
             return `<input type="color" class="step-param" id="${inputId}" data-key="${field.key}" value="${value}">`;
@@ -230,14 +238,39 @@
                 li.querySelectorAll(".step-param").forEach((input) => {
                     const key = input.dataset.key;
                     const eventName = input.type === "checkbox" ? "change" : "input";
+                    const numberBox = li.querySelector(`#${input.id}-num`);
                     input.addEventListener(eventName, (e) => {
                         let value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
                         if (e.target.type === "range" || e.target.type === "number") {
                             value = parseFloat(value);
-                            const valLabel = document.getElementById(`${input.id}-val`);
-                            if (valLabel) valLabel.textContent = value;
+                            if (input.type === "range" && numberBox) numberBox.value = value;
                         }
                         step.params[key] = value;
+                    });
+                });
+
+                // Typed values for sliders: update the slider live while typing (when the number
+                // is in range), and clamp/snap to min/max on commit so out-of-range or empty text
+                // can never reach the saved pipeline.
+                li.querySelectorAll(".step-param-number").forEach((numberBox) => {
+                    const slider = li.querySelector(`#${numberBox.dataset.sliderId}`);
+                    const key = numberBox.dataset.key;
+                    const min = parseFloat(numberBox.min);
+                    const max = parseFloat(numberBox.max);
+
+                    numberBox.addEventListener("input", () => {
+                        const typed = parseFloat(numberBox.value);
+                        if (Number.isNaN(typed) || typed < min || typed > max) return;
+                        slider.value = typed;
+                        step.params[key] = typed;
+                    });
+                    numberBox.addEventListener("change", () => {
+                        let typed = parseFloat(numberBox.value);
+                        if (Number.isNaN(typed)) typed = parseFloat(slider.value);
+                        typed = Math.min(max, Math.max(min, typed));
+                        numberBox.value = typed;
+                        slider.value = typed;
+                        step.params[key] = typed;
                     });
                 });
 

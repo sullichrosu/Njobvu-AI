@@ -81,6 +81,7 @@ const {
     uploadCustomScript,
     deleteCustomScript,
     applyPreprocessingPipeline,
+    downloadExampleScript,
 } = require("./api/v2/preprocessing");
 
 const updateLabels = require("./labelling/updateLabels");
@@ -206,6 +207,7 @@ api.post("/api/v2/projects/:admin/:projectName/s3-bucket/sync", syncS3Bucket);
 api.get("/api/v2/projects/:admin/:projectName/images/:imageName", getProjectImage);
 
 // PRE-PROCESSING ROUTES (pipeline CRUD + custom scripts + apply-to-all-images job)
+api.get("/api/v2/projects/preprocessing/example-script", downloadExampleScript);
 api.get("/api/v2/projects/:admin/:projectName/preprocessing", getPreprocessingPipeline);
 api.put("/api/v2/projects/:admin/:projectName/preprocessing", savePreprocessingPipeline);
 api.post("/api/v2/projects/:admin/:projectName/preprocessing/scripts", uploadCustomScript);

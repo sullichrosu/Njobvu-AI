@@ -32,7 +32,9 @@ const {
     uploadCustomScript,
     deleteCustomScript,
     applyPreprocessingPipeline,
+    downloadExampleScript,
 } = require('../../routes/api/v2/preprocessing');
+const { sanitizeCode } = require('../../utils/sandboxedPythonRunner');
 
 // Handlers are exercised against a minimal app (mirroring
 // tests/integration/s3Buckets.test.js) rather than the full app.js -> routes/api.js
@@ -43,6 +45,7 @@ function buildTestApp() {
     app.use(cookieParser());
     app.use(fileUpload());
 
+    app.get('/api/v2/projects/preprocessing/example-script', downloadExampleScript);
     app.get('/api/v2/projects/:admin/:projectName/preprocessing', getPreprocessingPipeline);
     app.put('/api/v2/projects/:admin/:projectName/preprocessing', savePreprocessingPipeline);
     app.post('/api/v2/projects/:admin/:projectName/preprocessing/scripts', uploadCustomScript);
@@ -74,6 +77,53 @@ describe('Pre-processing Pipeline Routes', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+    });
+
+    describe('GET /api/v2/projects/preprocessing/example-script', () => {
+        it('serves the example script as a python attachment', async () => {
+            const res = await request(app).get('/api/v2/projects/preprocessing/example-script');
+
+            expect(res.statusCode).toBe(200);
+            expect(res.headers['content-type']).toMatch(/text\/x-python/);
+            expect(res.headers['content-disposition']).toBe('attachment; filename="example_custom_script.py"');
+            expect(res.text).toMatch(/^def process\(img\):/m);
+        });
+
+        it('is commented to explain the implementation', async () => {
+            const res = await request(app).get('/api/v2/projects/preprocessing/example-script');
+
+            const commentLines = res.text.split('\n').filter((l) => l.trim().startsWith('#')).length;
+            expect(commentLines).toBeGreaterThanOrEqual(5);
+            expect(res.text).toMatch(/BGR/);
+            expect(res.text).toMatch(/process\(img\)/);
+        });
+
+        it('passes the same static checks applied to uploaded scripts', async () => {
+            const res = await request(app).get('/api/v2/projects/preprocessing/example-script');
+
+            expect(() => sanitizeCode(res.text)).not.toThrow();
+        });
+
+        it('can be uploaded back unchanged as a custom script', async () => {
+            const download = await request(app).get('/api/v2/projects/preprocessing/example-script');
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/preprocessing/scripts')
+                .set('Cookie', ['Username=testuser'])
+                .attach('script', Buffer.from(download.text), 'example_custom_script.py');
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(queries.project.addCustomScript).toHaveBeenCalled();
+        });
+
+        it('does not require ownership since the content is static', async () => {
+            const res = await request(app)
+                .get('/api/v2/projects/preprocessing/example-script')
+                .set('Cookie', ['Username=someone-else']);
+
+            expect(res.statusCode).toBe(200);
+        });
     });
 
     describe('GET /api/v2/projects/:admin/:projectName/preprocessing', () => {

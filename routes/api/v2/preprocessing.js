@@ -17,6 +17,17 @@ const BUILTIN_STEP_TYPES = new Set([
 const MAX_SCRIPT_SIZE_BYTES = 1024 * 1024; // 1MB is generous for a single pre-processing step script.
 const MAX_PARAMS_JSON_LENGTH = 10000;
 
+const EXAMPLE_SCRIPT_PATH = path.join(
+    __dirname,
+    "..",
+    "..",
+    "..",
+    "controllers",
+    "preprocessing",
+    "example_custom_script.py",
+);
+const EXAMPLE_SCRIPT_FILENAME = "example_custom_script.py";
+
 function getProjectPath(admin, projectName) {
     return path.join(currentPath, "public", "projects", `${admin}-${projectName}`);
 }
@@ -316,7 +327,26 @@ async function applyPreprocessingPipeline(req, res) {
     }
 }
 
+/**
+ * GET /api/v2/projects/preprocessing/example-script
+ *
+ * Returns a heavily commented example custom step users can download, edit and
+ * upload back as a pipeline script. Content is static, so no project is needed.
+ */
+async function downloadExampleScript(req, res) {
+    try {
+        const content = await fs.promises.readFile(EXAMPLE_SCRIPT_PATH, "utf8");
+        res.set("Content-Type", "text/x-python; charset=utf-8");
+        res.set("Content-Disposition", `attachment; filename="${EXAMPLE_SCRIPT_FILENAME}"`);
+        return res.send(content);
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).json({ success: false, error: "Error reading example script" });
+    }
+}
+
 module.exports = {
+    downloadExampleScript,
     getPreprocessingPipeline,
     savePreprocessingPipeline,
     uploadCustomScript,
