@@ -13,6 +13,23 @@ const {
 const { generateModelCard } = require("../../utils/runSummaryGenerator");
 const config = require("../../config.json");
 
+// draws a uniform random sample of `count` images (without replacement) from `images`
+function sampleImages(images, count) {
+    if (count >= images.length) {
+        return images.slice();
+    }
+    if (count <= 0) {
+        return [];
+    }
+
+    const pool = images.slice();
+    for (let i = pool.length - 1; i > pool.length - 1 - count; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(pool.length - count);
+}
+
 // Function to detect the best available device for YOLO training
 async function detectBestDevice() {
     return new Promise((resolve) => {
@@ -485,9 +502,49 @@ async function yoloRun(req, res) {
         );
     }
 
-    // Parse maximum image clamping
+    // how many unlabeled images to sample in as background/negative
+    // examples. Absent or blank means the slider wasn't submitted at all, so we
+    // keep the old behavior of including every unlabeled image
+    const rawUnlabeledCount = req.body.unlabeled_count ?? req.body.unlabeledCount;
+    const unlabeledCountProvided =
+        rawUnlabeledCount !== undefined && rawUnlabeledCount !== null && rawUnlabeledCount !== "";
+    const requestedUnlabeledCount = parseInt(rawUnlabeledCount, 10);
+
+    // parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
+    let includedUnlabeledCount = 0;
+
+    if (["detect", "segment", "obb"].includes(yoloTask)) {
+        try {
+            const unlabeledResult = await queries.project.getUnlabeledImages(projectPath);
+            const unlabeledImages = unlabeledResult.rows || [];
+
+            const sampledUnlabeled = unlabeledCountProvided
+                ? sampleImages(
+                    unlabeledImages,
+                    Math.max(
+                        0,
+                        Math.min(
+                            unlabeledImages.length,
+                            Number.isFinite(requestedUnlabeledCount) ? requestedUnlabeledCount : 0,
+                        ),
+                    ),
+                )
+                : unlabeledImages;
+
+            includedUnlabeledCount = sampledUnlabeled.length;
+            const sampledNames = new Set(sampledUnlabeled.map((row) => row.IName));
+            const unlabeledImageNames = new Set(unlabeledImages.map((row) => row.IName));
+
+            targetImages = targetImages.filter(
+                (img) => !unlabeledImageNames.has(img.IName) || sampledNames.has(img.IName),
+            );
+        } catch (err) {
+            global.logger.error(err);
+        }
+    }
+
     if (Number.isFinite(maxImages) && maxImages > 0 && maxImages < targetImages.length) {
         targetImages = targetImages.slice(0, maxImages);
     }
@@ -902,6 +959,7 @@ async function yoloRun(req, res) {
         val_percent: valPct,
         test_percent: testPct,
         selected_classes: selectedClassesList ? selectedClassesList.join(", ") : null,
+        unlabeled_count: includedUnlabeledCount,
         max_images: Number.isFinite(maxImages) ? maxImages : null,
         batch,
         subdiv,

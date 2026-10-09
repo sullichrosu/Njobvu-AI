@@ -7,6 +7,7 @@
 jest.mock('../../queries/queries', () => ({
   project: {
     getClassImageCounts: jest.fn(),
+    getUnlabeledImages: jest.fn(),
   },
 }));
 
@@ -96,7 +97,7 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
     return { req, res };
   }
 
-  it('attaches imageCount to each class from queries.project.getClassImageCounts, keyed by CName', async () => {
+  it('attaches imageCount to each class from queries.project.getClassImageCounts, keyed by CName, and appends an Unlabeled pseudo-class', async () => {
     queries.project.getClassImageCounts.mockResolvedValue({
       success: true,
       rows: [
@@ -105,11 +106,17 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
         // no row for 'unlabeled_class' -- must default to 0, not be dropped or crash
       ],
     });
+    queries.project.getUnlabeledImages.mockResolvedValue({
+      rows: [{ IName: 'a.jpg' }, { IName: 'b.jpg' }, { IName: 'c.jpg' }],
+    });
 
     const { req, res } = makeReqRes();
     await expect(getYoloXTrainingSettingsPage(req, res)).resolves.not.toThrow();
 
     expect(queries.project.getClassImageCounts).toHaveBeenCalledWith(
+      expect.stringContaining('testuser-test-project'),
+    );
+    expect(queries.project.getUnlabeledImages).toHaveBeenCalledWith(
       expect.stringContaining('testuser-test-project'),
     );
     expect(res.render).toHaveBeenCalledWith(
@@ -119,13 +126,16 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
           expect.objectContaining({ CName: 'person', imageCount: 42 }),
           expect.objectContaining({ CName: 'car', imageCount: 7 }),
           expect.objectContaining({ CName: 'unlabeled_class', imageCount: 0 }),
+          expect.objectContaining({ CName: '__UNLABELED__', imageCount: 3 }),
         ],
+        unlabeledClass: '__UNLABELED__',
       }),
     );
   });
 
-  it('defaults every class to imageCount 0 and still renders when the count query fails', async () => {
+  it('defaults every class and the Unlabeled pseudo-class to imageCount 0 and still renders when the count queries fail', async () => {
     queries.project.getClassImageCounts.mockRejectedValue(new Error('db unavailable'));
+    queries.project.getUnlabeledImages.mockRejectedValue(new Error('db unavailable'));
 
     const { req, res } = makeReqRes();
     await expect(getYoloXTrainingSettingsPage(req, res)).resolves.not.toThrow();
@@ -137,6 +147,7 @@ describe('GET /yolo/yolovXTrainingSettings - per-class image counts', () => {
           expect.objectContaining({ CName: 'person', imageCount: 0 }),
           expect.objectContaining({ CName: 'car', imageCount: 0 }),
           expect.objectContaining({ CName: 'unlabeled_class', imageCount: 0 }),
+          expect.objectContaining({ CName: '__UNLABELED__', imageCount: 0 }),
         ],
       }),
     );

@@ -1,4 +1,5 @@
 const queries = require("../../queries/queries");
+const UNLABELED_CLASS = require("../../utils/unlabeledClass");
 
 async function getYoloXSettingsPage(req, res) {
     const readdir = util.promisify(fs.readdir);
@@ -133,6 +134,20 @@ async function getYoloXSettingsPage(req, res) {
         return Object.assign({}, cls, {
             labelCount: classLabelCounts[cls.CName] || 0,
         });
+    });
+
+    var unlabeledImageCount = 0;
+    try {
+        var unlabeledResult = await queries.project.getUnlabeledImages(project_path);
+        unlabeledImageCount = (unlabeledResult && unlabeledResult.rows) ? unlabeledResult.rows.length : 0;
+    } catch (err) {
+        global.logger.error(err);
+    }
+
+    results2.push({
+        CName: UNLABELED_CLASS,
+        labelCount: 0,
+        imageCount: unlabeledImageCount,
     });
 
     var acc = await db.allAsync(
@@ -273,6 +288,7 @@ async function getYoloXSettingsPage(req, res) {
         PDescription: results1.PDescription,
         AutoSave: results1.AutoSave,
         classes: results2,
+        unlabeledClass: UNLABELED_CLASS,
         logs: log_files,
         err_file: err_file,
         err_contents: err,
