@@ -17,6 +17,26 @@ const BUILTIN_STEP_TYPES = new Set([
 const MAX_SCRIPT_SIZE_BYTES = 1024 * 1024; // 1MB is generous for a single pre-processing step script.
 const MAX_PARAMS_JSON_LENGTH = 10000;
 const MAX_PYTHON_PATH_LENGTH = 1024;
+const JOB_ID_PATTERN = /^\d+$/;
+
+function jobStatusPath(projectPath, jobId) {
+    return path.join(projectPath, "preprocessing", "jobs", `${jobId}-status.json`);
+}
+
+function readJobStatus(statusPath) {
+    try {
+        return JSON.parse(fs.readFileSync(statusPath, "utf8"));
+    } catch (err) {
+        return null;
+    }
+}
+
+function writeJobStatus(statusPath, status) {
+    // Same temp-file + rename dance as run_pipeline.py so a poll never reads half a file.
+    const tmpPath = `${statusPath}.node.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(status));
+    fs.renameSync(tmpPath, statusPath);
+}
 
 /**
  * Validates a user-supplied interpreter path. Returns { value } (null clears the
@@ -398,6 +418,7 @@ async function applyPreprocessingPipeline(req, res) {
 
         const manifestPath = path.join(jobsDir, `${jobId}-manifest.json`);
         const logPath = path.join(jobsDir, `${jobId}.log`);
+        const statusPath = jobStatusPath(projectPath, jobId);
         const outputPath = path.join(projectPath, "preprocessing", "output", jobId);
         fs.writeFileSync(manifestPath, JSON.stringify({ steps: enabledSteps }, null, 2));
 
@@ -405,17 +426,63 @@ async function applyPreprocessingPipeline(req, res) {
         const wrapperPath = path.join(currentPath, "controllers", "preprocessing", "run_pipeline.py");
         const imagesPath = path.join(projectPath, "images");
 
+        let totalImages = 0;
+        try {
+            totalImages = fs
+                .readdirSync(imagesPath, { withFileTypes: true })
+                .filter((entry) => entry.isFile()).length;
+        } catch (err) {
+            totalImages = 0;
+        }
+
+        // Record the job as running before the interpreter is even spawned so the UI
+        // always has something to poll, even if the process dies immediately.
+        const startedAt = new Date().toISOString();
+        writeJobStatus(statusPath, {
+            state: "running",
+            total: totalImages,
+            processed: 0,
+            skipped: 0,
+            startedAt,
+        });
+
         // execFile (no shell) rather than exec(<interpolated string>): projectName/paths
         // land in this argument list, and a shell would let a metacharacter in either
         // break out of the command instead of being passed through as a literal arg.
         execFile(
             pythonPath,
-            [wrapperPath, "--images", imagesPath, "--manifest", manifestPath, "--output", outputPath],
+            [
+                wrapperPath,
+                "--images",
+                imagesPath,
+                "--manifest",
+                manifestPath,
+                "--output",
+                outputPath,
+                "--status",
+                statusPath,
+            ],
             (err, stdout, stderr) => {
                 const summary = err
                     ? `FAILED: ${err.message}\n${stderr || ""}`
                     : `SUCCEEDED\n${stdout || ""}`;
                 fs.writeFile(logPath, summary, () => {});
+
+                // The wrapper reports progress itself; this callback is the authority on
+                // how the process ended, including when it never got as far as Python
+                // code (bad interpreter, missing OpenCV, ...).
+                const last = readJobStatus(statusPath) || {};
+                try {
+                    writeJobStatus(statusPath, {
+                        ...last,
+                        startedAt,
+                        state: err ? "failed" : "completed",
+                        error: err ? tailOf(`${stderr || ""}` || err.message) : undefined,
+                        finishedAt: new Date().toISOString(),
+                    });
+                } catch (writeErr) {
+                    global.logger.error(writeErr);
+                }
                 if (err) {
                     global.logger.error(`Pre-processing job ${jobId} failed:`, err);
                 }
@@ -427,6 +494,38 @@ async function applyPreprocessingPipeline(req, res) {
         global.logger.error(err);
         return res.status(500).json({ success: false, error: "Error starting pre-processing job" });
     }
+}
+
+function tailOf(text) {
+    return text.length > 2000 ? text.slice(-2000) : text;
+}
+
+/**
+ * GET /api/v2/projects/:admin/:projectName/preprocessing/jobs/:jobId
+ *
+ * Progress of an /apply job: { state: running|completed|failed, total, processed, skipped, error? }.
+ */
+async function getPreprocessingJobStatus(req, res) {
+    const { admin, projectName, jobId } = req.params;
+
+    if (!isOwner(req, admin)) {
+        return res.status(403).json({ success: false, error: "Not authorized for this project" });
+    }
+    if (!JOB_ID_PATTERN.test(jobId)) {
+        return res.status(400).json({ success: false, error: "Invalid job id" });
+    }
+
+    const projectPath = getProjectPath(admin, projectName);
+    if (!fs.existsSync(projectPath)) {
+        return res.status(404).json({ success: false, error: "Project not found" });
+    }
+
+    const status = readJobStatus(jobStatusPath(projectPath, jobId));
+    if (!status) {
+        return res.status(404).json({ success: false, error: "Job not found" });
+    }
+
+    return res.status(200).json({ success: true, jobId, ...status });
 }
 
 /**
@@ -455,4 +554,5 @@ module.exports = {
     setCustomScriptPythonPath,
     deleteCustomScript,
     applyPreprocessingPipeline,
+    getPreprocessingJobStatus,
 };

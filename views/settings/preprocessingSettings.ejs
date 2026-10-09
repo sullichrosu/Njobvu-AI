@@ -44,17 +44,6 @@
                     <button type="button" class="btn btn-primary btn-block mb-3" id="addCustomStepBtn" style="border-radius: 0" disabled>Add Custom Step</button>
 
                     <div class="form-group">
-                        <label for="customScriptPythonPath">Python path for selected script</label>
-                        <input type="text" id="customScriptPythonPath" class="form-control"
-                            placeholder="Server default (e.g. /usr/bin/python3)" maxlength="1024" disabled>
-                        <small class="form-text text-muted">
-                            Absolute path to the interpreter that runs this script. Leave empty to use the server default.
-                        </small>
-                    </div>
-                    <button type="button" class="btn btn-outline-dark btn-block mb-1" id="savePythonPathBtn" style="border-radius: 0" disabled>Save Python Path</button>
-                    <label id="pythonPathStatus" class="text-info d-block mb-3" aria-live="polite" aria-atomic="true"></label>
-
-                    <div class="form-group">
                         <label for="customScriptUpload">Upload custom pipeline script (.py)</label>
                         <input type="file" id="customScriptUpload" class="form-control-file" accept=".py">
                     </div>
@@ -83,6 +72,13 @@
                         <button type="button" class="btn btn-warning" id="applyAllBtn" style="border-radius: 0">Apply to All Images</button>
                     </div>
                     <label id="pipelineStatus" class="mt-2 d-block" aria-live="polite" aria-atomic="true"></label>
+                    <div id="jobProgressWrap" class="d-none mt-2">
+                        <div class="progress" style="height: 1.5rem; border-radius: 0;">
+                            <div id="jobProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar" style="width: 0%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</div>
+                        </div>
+                        <small id="jobProgressText" class="form-text text-muted" aria-live="polite"></small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -186,7 +182,16 @@
     function stepFieldsHtml(step) {
         if (step.type === "custom") {
             const script = customScripts.find((s) => s.id === step.scriptId);
-            return `<div class="text-muted small">Custom script: ${script ? script.name : step.scriptId}</div>`;
+            const pythonPath = script && script.pythonPath ? script.pythonPath : "";
+            return `
+                <div class="text-muted small mb-1">Custom script: ${script ? script.name : step.scriptId}</div>
+                <div class="form-group mb-0">
+                    <label class="small mb-0" for="python-path-${step.id}">Python path</label>
+                    <input type="text" class="form-control form-control-sm step-python-path" id="python-path-${step.id}"
+                        data-script-id="${step.scriptId}" maxlength="1024" value="${pythonPath.replace(/"/g, "&quot;")}"
+                        placeholder="Server default (e.g. /usr/bin/python3)">
+                    <small class="form-text text-muted step-python-path-status" aria-live="polite"></small>
+                </div>`;
         }
         const def = STEP_TYPES[step.type];
         if (!def) return "";
@@ -240,6 +245,13 @@
                 li.querySelector(".step-enabled").addEventListener("change", (e) => {
                     step.enabled = e.target.checked;
                 });
+
+                const pathInput = li.querySelector(".step-python-path");
+                if (pathInput) {
+                    pathInput.addEventListener("change", () => {
+                        saveScriptPythonPath(pathInput.dataset.scriptId, pathInput.value.trim(), li);
+                    });
+                }
 
                 li.querySelector(".remove-step-btn").addEventListener("click", () => {
                     pipeline = pipeline.filter((s) => s.id !== step.id);
@@ -345,28 +357,16 @@
         renderPipeline();
     }
 
-    function selectedCustomScript() {
-        const id = document.getElementById("customScriptSelect").value;
-        return customScripts.find((s) => s.id === id);
-    }
-
-    function syncPythonPathInput() {
-        const script = selectedCustomScript();
-        const input = document.getElementById("customScriptPythonPath");
-        input.disabled = !script;
-        document.getElementById("savePythonPathBtn").disabled = !script;
-        input.value = script && script.pythonPath ? script.pythonPath : "";
-        document.getElementById("pythonPathStatus").textContent = "";
-    }
-
-    async function savePythonPath() {
-        const script = selectedCustomScript();
+    // The interpreter belongs to the script, so steps that share a script share its path;
+    // saving one re-renders the rest with the stored value.
+    async function saveScriptPythonPath(scriptId, pythonPath, li) {
+        const script = customScripts.find((s) => s.id === scriptId);
         if (!script) return;
-        const status = document.getElementById("pythonPathStatus");
-        const pythonPath = document.getElementById("customScriptPythonPath").value.trim();
+        const statusEl = li.querySelector(".step-python-path-status");
+        statusEl.textContent = "Saving...";
 
         try {
-            const res = await fetch(`${PREPROCESSING_API}/scripts/${encodeURIComponent(script.id)}/python-path`, {
+            const res = await fetch(`${PREPROCESSING_API}/scripts/${encodeURIComponent(scriptId)}/python-path`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ pythonPath }),
@@ -374,10 +374,12 @@
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || "Failed to save Python path");
             script.pythonPath = data.pythonPath;
-            status.textContent = data.pythonPath ? "Saved." : "Cleared; using the server default.";
+            renderPipeline();
         } catch (err) {
-            status.textContent = "";
+            statusEl.textContent = "";
             alert("Could not save Python path.\nReason: " + err.message);
+            const input = li.querySelector(".step-python-path");
+            input.value = script.pythonPath || "";
         }
     }
 
@@ -387,11 +389,9 @@
         if (customScripts.length === 0) {
             select.innerHTML = '<option value="" disabled selected>No custom scripts uploaded</option>';
             addBtn.disabled = true;
-            syncPythonPathInput();
             return;
         }
         select.innerHTML = customScripts.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
-        syncPythonPathInput();
         addBtn.disabled = false;
     }
 
@@ -454,24 +454,72 @@
         }
     }
 
+    function showJobProgress(job) {
+        const wrap = document.getElementById("jobProgressWrap");
+        const bar = document.getElementById("jobProgressBar");
+        const text = document.getElementById("jobProgressText");
+        const percent = job.total > 0
+            ? Math.min(100, Math.round(((job.processed + (job.skipped || 0)) / job.total) * 100))
+            : (job.state === "completed" ? 100 : 0);
+
+        wrap.classList.remove("d-none");
+        bar.style.width = percent + "%";
+        bar.setAttribute("aria-valuenow", percent);
+        bar.textContent = percent + "%";
+        bar.classList.toggle("progress-bar-animated", job.state === "running");
+        bar.classList.toggle("progress-bar-striped", job.state === "running");
+        bar.classList.toggle("bg-success", job.state === "completed");
+        bar.classList.toggle("bg-danger", job.state === "failed");
+
+        if (job.state === "failed") {
+            text.textContent = "Pre-processing failed" + (job.error ? ": " + job.error : ".");
+        } else if (job.state === "completed") {
+            text.textContent = `Done: ${job.processed} of ${job.total} image(s) processed` +
+                (job.skipped ? `, ${job.skipped} skipped.` : ".");
+        } else {
+            text.textContent = `Processing ${job.processed} of ${job.total} image(s)...`;
+        }
+    }
+
+    async function pollJob(jobId) {
+        const status = document.getElementById("pipelineStatus");
+        const btn = document.getElementById("applyAllBtn");
+        try {
+            for (;;) {
+                const res = await fetch(`${PREPROCESSING_API}/jobs/${encodeURIComponent(jobId)}`);
+                const job = await res.json();
+                if (!res.ok || !job.success) throw new Error(job.error || "Could not read job status");
+                showJobProgress(job);
+                if (job.state !== "running") {
+                    status.textContent = job.state === "completed" ? "Pre-processing finished." : "Pre-processing failed.";
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+        } catch (err) {
+            status.textContent = "Lost track of the job: " + err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     async function applyToAll() {
         if (!confirm("Apply this pipeline to every image in the project? This may take a while.")) return;
         const status = document.getElementById("pipelineStatus");
         const btn = document.getElementById("applyAllBtn");
         btn.disabled = true;
-        status.textContent = "Applying pipeline to all images...";
+        status.textContent = "Starting pre-processing job...";
         try {
             const res = await fetch(`${PREPROCESSING_API}/apply`, { method: "POST" });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || "Failed to apply pipeline");
-            status.textContent = data.jobId
-                ? `Pipeline job started (job ${data.jobId}).`
-                : `Pipeline applied to ${data.processed || 0} image(s).`;
+            status.textContent = `Pipeline job started (job ${data.jobId}).`;
+            showJobProgress({ state: "running", total: 0, processed: 0, skipped: 0 });
+            await pollJob(data.jobId);
         } catch (err) {
             status.textContent = "";
-            alert("Could not apply pipeline to all images.\nReason: " + err.message);
-        } finally {
             btn.disabled = false;
+            alert("Could not apply pipeline to all images.\nReason: " + err.message);
         }
     }
 
@@ -509,8 +557,6 @@
         if (scriptId) addCustomStep(scriptId);
     });
     document.getElementById("uploadScriptBtn").addEventListener("click", uploadCustomScript);
-    document.getElementById("customScriptSelect").addEventListener("change", syncPythonPathInput);
-    document.getElementById("savePythonPathBtn").addEventListener("click", savePythonPath);
     document.getElementById("savePipelineBtn").addEventListener("click", savePipeline);
     document.getElementById("applyAllBtn").addEventListener("click", applyToAll);
 

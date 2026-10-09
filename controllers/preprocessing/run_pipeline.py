@@ -3,7 +3,7 @@
 
 Invoked by routes/api/v2/preprocessing.js's /apply endpoint as:
 
-    python run_pipeline.py --images <dir> --manifest <manifest.json> --output <dir>
+    python run_pipeline.py --images <dir> --manifest <manifest.json> --output <dir> [--status <status.json>]
 
 The manifest is `{"steps": [{"type", "order", "params", "scriptPath"?}]}` -
 already filtered to enabled steps and sorted by order. Custom steps point at
@@ -270,11 +270,31 @@ def process_image(img, steps, external=None):
     return img
 
 
+def list_images(images_dir):
+    """Every regular file in the directory; ones cv2 cannot decode count as skipped."""
+    return [
+        name
+        for name in sorted(os.listdir(images_dir))
+        if os.path.isfile(os.path.join(images_dir, name))
+    ]
+
+
+def write_status(status_path, **fields):
+    """Atomically replaces the job status file the web UI polls for its progress bar."""
+    if not status_path:
+        return
+    tmp_path = status_path + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(fields, f)
+    os.replace(tmp_path, status_path)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Apply a pre-processing pipeline to a project's images.")
     parser.add_argument("--images", required=True, help="Directory of source images")
     parser.add_argument("--manifest", required=True, help="Pipeline manifest JSON path")
     parser.add_argument("--output", required=True, help="Directory to write processed images to")
+    parser.add_argument("--status", help="Optional path of a JSON file updated with job progress")
     args = parser.parse_args()
 
     with open(args.manifest, "r") as manifest_file:
@@ -284,24 +304,27 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
 
+    names = list_images(args.images)
+    total = len(names)
     processed = 0
+    skipped = 0
+    write_status(args.status, state="running", total=total, processed=0, skipped=0)
+
     external = ExternalStepWorkers()
     try:
-        for name in sorted(os.listdir(args.images)):
-            src_path = os.path.join(args.images, name)
-            if not os.path.isfile(src_path):
-                continue
-
-            img = cv2.imread(src_path)
+        for name in names:
+            img = cv2.imread(os.path.join(args.images, name))
             if img is None:
-                continue
-
-            img = process_image(img, steps, external)
-            cv2.imwrite(os.path.join(args.output, name), img)
-            processed += 1
+                skipped += 1
+            else:
+                img = process_image(img, steps, external)
+                cv2.imwrite(os.path.join(args.output, name), img)
+                processed += 1
+            write_status(args.status, state="running", total=total, processed=processed, skipped=skipped)
     finally:
         external.close()
 
+    write_status(args.status, state="completed", total=total, processed=processed, skipped=skipped)
     print(f"Processed {processed} image(s)")
 
 

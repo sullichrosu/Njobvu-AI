@@ -101,6 +101,30 @@ class TestRunPipeline(unittest.TestCase):
         out_img = cv2.imread(os.path.join(output_dir, "a.png"))
         self.assertEqual(out_img.shape[:2], (20, 20))
 
+    def test_main_reports_progress_to_the_status_file(self):
+        images_dir = os.path.join(self.test_dir, "images")
+        output_dir = os.path.join(self.test_dir, "output")
+        os.makedirs(images_dir)
+        cv2.imwrite(os.path.join(images_dir, "a.png"), self.img)
+        cv2.imwrite(os.path.join(images_dir, "b.png"), self.img)
+        with open(os.path.join(images_dir, "notes.txt"), "w") as f:
+            f.write("not an image")
+
+        manifest_path = os.path.join(self.test_dir, "manifest.json")
+        with open(manifest_path, "w") as f:
+            json.dump({"steps": [{"type": "resize", "order": 0, "params": {"width": 20, "height": 20}}]}, f)
+        status_path = os.path.join(self.test_dir, "status.json")
+
+        sys.argv = [
+            "run_pipeline.py", "--images", images_dir, "--manifest", manifest_path,
+            "--output", output_dir, "--status", status_path,
+        ]
+        run_pipeline.main()
+
+        with open(status_path) as f:
+            status = json.load(f)
+        self.assertEqual(status, {"state": "completed", "total": 3, "processed": 2, "skipped": 1})
+
     def test_apply_resize_keeps_aspect_ratio_when_requested(self):
         result = run_pipeline.apply_resize(self.img, {"width": 40, "height": 40, "keepAspectRatio": True})
 

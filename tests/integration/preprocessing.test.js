@@ -34,6 +34,7 @@ const {
     deleteCustomScript,
     setCustomScriptPythonPath,
     applyPreprocessingPipeline,
+    getPreprocessingJobStatus,
     downloadExampleScript,
 } = require('../../routes/api/v2/preprocessing');
 const { sanitizeCode } = require('../../utils/sandboxedPythonRunner');
@@ -54,6 +55,7 @@ function buildTestApp() {
     app.put('/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId/python-path', setCustomScriptPythonPath);
     app.delete('/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId', deleteCustomScript);
     app.post('/api/v2/projects/:admin/:projectName/preprocessing/apply', applyPreprocessingPipeline);
+    app.get('/api/v2/projects/:admin/:projectName/preprocessing/jobs/:jobId', getPreprocessingJobStatus);
 
     return app;
 }
@@ -466,6 +468,49 @@ describe('Pre-processing Pipeline Routes', () => {
             );
         });
 
+        it('passes a status file to the wrapper and records the job as running before it exits', async () => {
+            queries.project.getPipeline.mockResolvedValueOnce({
+                success: true,
+                rows: [{ StepId: 's1', StepType: 'resize', ScriptId: null, Enabled: 1, StepOrder: 0, Params: '{}' }],
+            });
+            // Hold the process open so the pre-exit state is observable.
+            execFile.mockImplementationOnce(() => {});
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/preprocessing/apply')
+                .set('Cookie', ['Username=testuser']);
+            expect(res.statusCode).toBe(200);
+
+            const args = execFile.mock.calls[0][1];
+            expect(args[args.indexOf('--status') + 1]).toMatch(/-status\.json$/);
+
+            const status = await request(app)
+                .get(`/api/v2/projects/testuser/test-project/preprocessing/jobs/${res.body.jobId}`)
+                .set('Cookie', ['Username=testuser']);
+            expect(status.statusCode).toBe(200);
+            expect(status.body).toMatchObject({ success: true, state: 'running', processed: 0 });
+        });
+
+        it('marks the job failed with the stderr tail when the process exits with an error', async () => {
+            queries.project.getPipeline.mockResolvedValueOnce({
+                success: true,
+                rows: [{ StepId: 's1', StepType: 'resize', ScriptId: null, Enabled: 1, StepOrder: 0, Params: '{}' }],
+            });
+            execFile.mockImplementationOnce((cmd, args, cb) =>
+                cb(new Error('exit 1'), '', "ModuleNotFoundError: No module named 'cv2'"),
+            );
+
+            const res = await request(app)
+                .post('/api/v2/projects/testuser/test-project/preprocessing/apply')
+                .set('Cookie', ['Username=testuser']);
+
+            const status = await request(app)
+                .get(`/api/v2/projects/testuser/test-project/preprocessing/jobs/${res.body.jobId}`)
+                .set('Cookie', ['Username=testuser']);
+            expect(status.body.state).toBe('failed');
+            expect(status.body.error).toMatch(/No module named 'cv2'/);
+        });
+
         it('rejects when the pipeline has no enabled steps', async () => {
             queries.project.getPipeline.mockResolvedValueOnce({
                 success: true,
@@ -487,6 +532,27 @@ describe('Pre-processing Pipeline Routes', () => {
 
             expect(res.statusCode).toBe(403);
             expect(execFile).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('GET /api/v2/projects/:admin/:projectName/preprocessing/jobs/:jobId', () => {
+        const url = (id) => `/api/v2/projects/testuser/test-project/preprocessing/jobs/${id}`;
+
+        it('404s for an unknown job', async () => {
+            const res = await request(app).get(url('123')).set('Cookie', ['Username=testuser']);
+            expect(res.statusCode).toBe(404);
+        });
+
+        it('400s for a job id that is not numeric (no path traversal)', async () => {
+            const res = await request(app).get(url('..%2F..%2Fx')).set('Cookie', ['Username=testuser']);
+            expect([400, 404]).toContain(res.statusCode);
+            const bad = await request(app).get(url('abc')).set('Cookie', ['Username=testuser']);
+            expect(bad.statusCode).toBe(400);
+        });
+
+        it('rejects requests from a non-owner', async () => {
+            const res = await request(app).get(url('123')).set('Cookie', ['Username=someone-else']);
+            expect(res.statusCode).toBe(403);
         });
     });
 });
