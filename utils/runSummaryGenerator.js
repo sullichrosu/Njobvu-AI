@@ -1002,9 +1002,10 @@ function listAvailableRuns(projectNameOrOptions, baseRunsDir) {
         runsRoot,
         path.join(runsRoot, "train"),
         path.join(runsRoot, "inference"),
-        path.join(runsRoot, "detect"),
-        publicProjectsRoot
+        path.join(runsRoot, "detect")
     ];
+    // An explicit base dir scopes discovery to that dir; only the default search also covers project training dirs
+    if (!rootDir) searchRoots.push(publicProjectsRoot);
 
     const allDiscoveredPaths = new Set();
     searchRoots.forEach(root => {
