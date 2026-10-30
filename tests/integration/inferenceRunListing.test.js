@@ -11,14 +11,18 @@ jest.mock('../../utils/isRunArtifactFile', () => {
 
 // getInferencePage.js does `const fs = require("fs")`, so the module-level mock (not a
 // global.fs assignment) is what actually reaches it.
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  mkdirSync: jest.fn(),
-  writeFile: jest.fn((p, data, cb) => cb(null)),
-  readFileSync: jest.fn().mockReturnValue(''),
-  readdir: jest.fn((p, cb) => cb(null, [])),
-  readFile: jest.fn((p, cb) => cb(null, '')),
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn().mockReturnValue(true),
+    mkdirSync: jest.fn(),
+    writeFile: jest.fn((p, data, cb) => cb(null)),
+    readFileSync: jest.fn().mockReturnValue(''),
+    readdir: jest.fn((p, cb) => cb(null, [])),
+    readFile: jest.fn((p, cb) => cb(null, '')),
+  };
+});
 
 const { isReservedInferenceFile } = require('../../utils/isRunArtifactFile');
 

@@ -65,11 +65,6 @@ async function megadetectorInference(req, res) {
             }
         }
 
-        // config["default_python_path"] is admin-configured and may be a relative,
-        // forward-slash path (e.g. a local venv: "./.venv/Scripts/python"). That's fine
-        // for POSIX shells, but Windows' cmd.exe (what child_process.exec spawns into)
-        // can't resolve a leading "./" and fails with "'.' is not recognized...". Resolve
-        // it to an absolute, platform-native path relative to the app root before use.
         var pythonPath = path.resolve(currentPath, config["default_python_path"]);
 
         var cmd = `"${pythonPath}" ${megadetectorScript} -i ${inferenceFilePath} -m ${model} -o ${runPath} -t ${threshold} -f ${fps}`;
@@ -86,14 +81,7 @@ async function megadetectorInference(req, res) {
 
         fs.writeFileSync(`${runPath}/${log}`, `${runOptionsHeader}${cmd}\n\n`);
 
-        // megadetector.py reports its real failure reason (missing deps, a failed
-        // model download, the inner `megadetector` subprocess's own stderr, etc.)
-        // via print() -- i.e. on its OWN stdout, not stderr -- before calling
-        // sys.exit(1). child_process's `err.message` only ever includes the
-        // command line plus *stderr*, so on failure it looked empty/useless even
-        // though the actual cause was captured. Log stdout alongside it. Also
-        // raise exec's default 1MB maxBuffer: MegaDetector's batch runner and
-        // ffmpeg frame extraction can both be chatty on longer videos.
+
         exec(cmd, { maxBuffer: 1024 * 1024 * 20 }, (err, stdout, stderr) => {
             if (err) {
                 global.logger.error(err);

@@ -76,26 +76,30 @@ jest.mock('../../queries/queries', () => ({
 }));
 
 // Mock fs module
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  mkdirSync: jest.fn(),
-  writeFile: jest.fn((path, data, callback) => callback(null)),
-  readdirSync: jest.fn().mockReturnValue([]),
-  unlinkSync: jest.fn(),
-  rename: jest.fn((oldPath, newPath, callback) => callback(null)),
-  stat: jest.fn((path, callback) => callback(null, { isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() })),
-  statSync: jest.fn().mockReturnValue({ isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() }),
-  createReadStream: jest.fn().mockImplementation(() => {
-    const { Readable } = require('stream');
-    return new Readable({
-      read() {
-        this.push(null);
-      }
-    });
-  }),
-  ReadStream: class {},
-  readFileSync: jest.fn().mockReturnValue(''),
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn().mockReturnValue(true),
+    mkdirSync: jest.fn(),
+    writeFile: jest.fn((path, data, callback) => callback(null)),
+    readdirSync: jest.fn().mockReturnValue([]),
+    unlinkSync: jest.fn(),
+    rename: jest.fn((oldPath, newPath, callback) => callback(null)),
+    stat: jest.fn((path, callback) => callback(null, { isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() })),
+    statSync: jest.fn().mockReturnValue({ isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() }),
+    createReadStream: jest.fn().mockImplementation(() => {
+      const { Readable } = require('stream');
+      return new Readable({
+        read() {
+          this.push(null);
+        }
+      });
+    }),
+    ReadStream: class {},
+    readFileSync: jest.fn().mockReturnValue(''),
+  };
+});
 
 // Mock file upload
 jest.mock('express-fileupload', () => jest.fn(() => (req, res, next) => {

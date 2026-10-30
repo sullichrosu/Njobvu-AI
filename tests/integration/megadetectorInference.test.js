@@ -67,28 +67,32 @@ jest.mock('../../queries/queries', () => ({
   project: {},
 }));
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  mkdirSync: jest.fn(),
-  writeFile: jest.fn((path, data, callback) => callback(null)),
-  writeFileSync: jest.fn(),
-  readdirSync: jest.fn().mockReturnValue([]),
-  unlinkSync: jest.fn(),
-  rename: jest.fn((oldPath, newPath, callback) => callback(null)),
-  readFileSync: jest.fn().mockReturnValue(''),
-  copyFileSync: jest.fn(),
-  stat: jest.fn((path, callback) => callback(null, { isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() })),
-  statSync: jest.fn().mockReturnValue({ isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() }),
-  createReadStream: jest.fn().mockImplementation(() => {
-    const { Readable } = require('stream');
-    return new Readable({
-      read() {
-        this.push(null);
-      }
-    });
-  }),
-  ReadStream: class {},
-}));
+jest.mock('fs', () => {
+  const actualFs = jest.requireActual('fs');
+  return {
+    ...actualFs,
+    existsSync: jest.fn().mockReturnValue(true),
+    mkdirSync: jest.fn(),
+    writeFile: jest.fn((path, data, callback) => callback(null)),
+    writeFileSync: jest.fn(),
+    readdirSync: jest.fn().mockReturnValue([]),
+    unlinkSync: jest.fn(),
+    rename: jest.fn((oldPath, newPath, callback) => callback(null)),
+    readFileSync: jest.fn().mockReturnValue(''),
+    copyFileSync: jest.fn(),
+    stat: jest.fn((path, callback) => callback(null, { isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() })),
+    statSync: jest.fn().mockReturnValue({ isDirectory: () => false, size: 0, ino: 0, mtime: new Date(), ctime: new Date() }),
+    createReadStream: jest.fn().mockImplementation(() => {
+      const { Readable } = require('stream');
+      return new Readable({
+        read() {
+          this.push(null);
+        }
+      });
+    }),
+    ReadStream: class {},
+  };
+});
 
 jest.mock('express-fileupload', () => jest.fn(() => (req, res, next) => {
   req.files = {};
