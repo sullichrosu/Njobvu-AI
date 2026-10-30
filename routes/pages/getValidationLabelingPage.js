@@ -1,443 +1,289 @@
-async function getValidationLabelingPage(req, res) {
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        sortFilter = req.query.sort,
-        imageClass = req.query.class,
-        classFilter = req.query.classFilter,
-        user = req.cookies.Username;
+const path = require("path");
+const fs = require("fs");
+const queries = require("../../queries/queries");
 
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+async function getValidationLabelingPage(req, res) {
+    let idx = parseInt(req.query.IDX, 10);
+    const IName = String(req.query.IName || "");
+    let currClass = req.query.curr_class;
+    const sortFilter = req.query.sort;
+    const imageClass = req.query.class;
+    const classFilter = req.query.classFilter;
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
-    if (user == undefined) {
+    if (user === undefined) {
         return res.redirect("/");
     }
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
 
-    var num = IDX;
+    let projects, PName, admin, projectDir, relProjectPath, classNames;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
 
-    if (num >= projects.length) {
-        valid = 1;
-        return res.redirect("/home");
-    }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
-
-    // set paths
-    var public_path = currentPath,
-        main_path = public_path + "public/projects/",
-        project_path = main_path + admin + "-" + PName;
-
-    var rel_project_path = "projects/" + admin + "-" + PName;
-
-    //Connect Database
-    var ldb = new sqlite3.Database(
-        project_path + "/" + PName + ".db",
-        (err) => {
-            if (err) {
-                return global.logger.error(err.message);
-            }
-            global.logger.info("Connected to ldb.")
-        },
-    );
-
-    // create async database object functions
-    ldb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    ldb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    ldb.eachAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.each(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-
-    var results1 = await ldb.allAsync("SELECT * FROM `Classes`");
-    var Classes = [];
-    for (var i = 0; i < results1.length; i++) {
-        Classes.push(results1[i].CName);
-    }
-
-    var results2 = Array();
-    if (
-        ((imageClass == null ||
-            imageClass == "null" ||
-            !Classes.includes(imageClass)) &&
-            (sortFilter == "null" || sortFilter == null)) ||
-        (sortFilter == "Confidence" && imageClass == "null")
-    ) {
-        results2 = await ldb.allAsync("SELECT * FROM `Images`");
-    } else if (
-        sortFilter == "needs_review" &&
-        (imageClass == null ||
-            imageClass == "null" ||
-            !Classes.includes(imageClass))
-    ) {
-        results2 = await ldb.allAsync(
-            "SELECT * FROM `Images` WHERE reviewImage=1",
-        );
-    } else if (
-        sortFilter == "confidence" &&
-        (imageClass == null ||
-            imageClass == "null" ||
-            !Classes.includes(imageClass))
-    ) {
-        var images = await ldb.allAsync("SELECT * FROM `Images`");
-        var confidenceImages = await ldb.allAsync(
-            "SELECT Confidence, IName FROM `Validation`",
-        );
-        const highestConf = {};
-        confidenceImages.forEach((item) => {
-            const { Confidence, IName } = item;
-            if (!(IName in highestConf) || Confidence > highestConf[IName]) {
-                highestConf[IName] = Confidence;
-            }
-        });
-
-        images.sort((a, b) => {
-            const confidenceA = highestConf[a.IName] || 0;
-            const confidenceB = highestConf[b.IName] || 0;
-
-            if (confidenceA == confidenceB) {
-                return a.IName.localeCompare(b.IName);
-            }
-
-            return confidenceB - confidenceA;
-        });
-
-        for (var d = 0; d < images.length; d++) {
-            var imageData = await ldb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    images[d].IName +
-                    "'",
-            );
-            results2.push(imageData[0]);
+        if (idx < 0 || idx >= projects.length) {
+            return res.redirect("/home");
         }
-    } else if (
-        sortFilter == "confidence" &&
-        imageClass != null &&
-        Classes.includes(imageClass)
-    ) {
-        var imagesWithClass = await ldb.allAsync(
-            "SELECT DISTINCT IName FROM `Labels` WHERE CName = '" +
-                imageClass +
-                "'",
-        );
-        var confidenceImages = await ldb.allAsync(
-            "SELECT Confidence, IName FROM `Validation` WHERE CName = '" +
-                imageClass +
-                "'",
-        );
+
+        ({ PName, Admin: admin } = projects[idx]);
+
+        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+        relProjectPath = `projects/${admin}-${PName}`;
+
+        const { rows: classRows } = await queries.project.getAllClasses(projectDir);
+        classNames = classRows.map((c) => c.CName);
+    } catch (err) {
+        global.logger.error("Error loading validation labeling page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
+    }
+
+    let images = [];
+    const isInvalidClass = !imageClass || imageClass === "null" || !classNames.includes(imageClass);
+
+    if (isInvalidClass && (!sortFilter || sortFilter === "null" || sortFilter === "Confidence")) {
+        const imgRes = await queries.project.getAllImages(projectDir);
+        images = (imgRes && imgRes.rows) ? imgRes.rows : [];
+    } else if (sortFilter === "needs_review" && isInvalidClass) {
+        const imgRes = await queries.project.sql(projectDir, "SELECT * FROM Images WHERE reviewImage = 1", []);
+        images = (imgRes && imgRes.rows) ? imgRes.rows : [];
+    } else if (sortFilter === "confidence" && isInvalidClass) {
+        const allImgRes = await queries.project.getAllImages(projectDir);
+        const allImages = (allImgRes && allImgRes.rows) ? allImgRes.rows : [];
+
+        const valRes = await queries.project.getAllValidations(projectDir);
+        const valRows = (valRes && valRes.rows) ? valRes.rows : [];
+
         const highestConf = {};
-        confidenceImages.forEach((item) => {
-            const { Confidence, IName } = item;
-            if (!(IName in highestConf) || Confidence > highestConf[IName]) {
-                highestConf[IName] = Confidence;
+        valRows.forEach((item) => {
+            if (!(item.IName in highestConf) || item.Confidence > highestConf[item.IName]) {
+                highestConf[item.IName] = item.Confidence;
             }
         });
+
+        allImages.sort((a, b) => {
+            const confA = highestConf[a.IName] || 0;
+            const confB = highestConf[b.IName] || 0;
+            if (confA === confB) {
+                return (a.IName || "").localeCompare(b.IName || "");
+            }
+            return confB - confA;
+        });
+
+        images = allImages;
+    } else if (sortFilter === "confidence" && imageClass && classNames.includes(imageClass)) {
+        const imgClassRes = await queries.project.sql(
+            projectDir,
+            "SELECT DISTINCT IName FROM Labels WHERE CName = ?",
+            [imageClass]
+        );
+        const imagesWithClass = (imgClassRes && imgClassRes.rows) ? imgClassRes.rows : [];
+
+        const valRes = await queries.project.sql(
+            projectDir,
+            "SELECT Confidence, IName FROM Validation WHERE CName = ?",
+            [imageClass]
+        );
+        const valRows = (valRes && valRes.rows) ? valRes.rows : [];
+
+        const highestConf = {};
+        valRows.forEach((item) => {
+            if (!(item.IName in highestConf) || item.Confidence > highestConf[item.IName]) {
+                highestConf[item.IName] = item.Confidence;
+            }
+        });
+
         imagesWithClass.sort((a, b) => {
-            const confidenceA = highestConf[a.IName] || 0;
-            const confidenceB = highestConf[b.IName] || 0;
-
-            if (confidenceA == confidenceB) {
-                return a.IName.localeCompare(b.IName);
+            const confA = highestConf[a.IName] || 0;
+            const confB = highestConf[b.IName] || 0;
+            if (confA === confB) {
+                return (a.IName || "").localeCompare(b.IName || "");
             }
-
-            return confidenceB - confidenceA;
+            return confB - confA;
         });
 
-        for (var d = 0; d < imagesWithClass.length; d++) {
-            var imageData = await ldb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    imagesWithClass[d].IName +
-                    "'",
-            );
-            results2.push(imageData[0]);
+        for (const item of imagesWithClass) {
+            const imgRes = await queries.project.getImage(projectDir, item.IName);
+            if (imgRes && imgRes.row) images.push(imgRes.row);
         }
-    } else if (sortFilter == "has_class") {
-        if (imageClass != "null") {
-            var imagesWithClass;
-            imagesWithClass = await ldb.allAsync(
-                "SELECT DISTINCT IName FROM `Labels` WHERE CName = '" +
-                    imageClass +
-                    "'",
+    } else if (sortFilter === "has_class") {
+        let imgClassRes;
+        if (imageClass && imageClass !== "null") {
+            imgClassRes = await queries.project.sql(
+                projectDir,
+                "SELECT DISTINCT IName FROM Labels WHERE CName = ?",
+                [imageClass]
             );
         } else {
-            imagesWithClass = await ldb.allAsync(
-                "SELECT DISTINCT IName FROM `Labels`",
-            );
+            imgClassRes = await queries.project.sql(projectDir, "SELECT DISTINCT IName FROM Labels", []);
         }
-        imagesWithClass.sort((a, b) => {
-            if (a.IName < b.IName) {
-                return -1;
-            } else if (a.IName > b.IName) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
+        const imagesWithClass = (imgClassRes && imgClassRes.rows) ? imgClassRes.rows : [];
+        imagesWithClass.sort((a, b) => (a.IName || "").localeCompare(b.IName || ""));
 
-        for (var d = 0; d < imagesWithClass.length; d++) {
-            var imageData = await ldb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    imagesWithClass[d].IName +
-                    "'",
-            );
-            results2.push(imageData[0]);
+        for (const item of imagesWithClass) {
+            const imgRes = await queries.project.getImage(projectDir, item.IName);
+            if (imgRes && imgRes.row) images.push(imgRes.row);
         }
     } else {
-        var imagesWithClass = await ldb.allAsync(
-            "SELECT DISTINCT IName FROM `Labels` WHERE CName = '" +
-                imageClass +
-                "'",
+        const imgClassRes = await queries.project.sql(
+            projectDir,
+            "SELECT DISTINCT IName FROM Labels WHERE CName = ?",
+            [imageClass]
         );
-        imagesWithClass.sort((a, b) => {
-            if (a.IName < b.IName) {
-                return -1;
-            } else if (a.IName > b.IName) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
+        const imagesWithClass = (imgClassRes && imgClassRes.rows) ? imgClassRes.rows : [];
+        imagesWithClass.sort((a, b) => (a.IName || "").localeCompare(b.IName || ""));
 
-        for (var d = 0; d < imagesWithClass.length; d++) {
-            var imageData = await ldb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    imagesWithClass[d].IName +
-                    "'",
-            );
-            results2.push(imageData[0]);
+        for (const item of imagesWithClass) {
+            const imgRes = await queries.project.getImage(projectDir, item.IName);
+            if (imgRes && imgRes.row) images.push(imgRes.row);
         }
     }
 
-    // curr_index must be the image's position within results2 (the active
-    // filtered/sorted list), not its row position in the whole Images table —
-    // results2 can be a subset (e.g. sort=needs_review, or a single class), so
-    // a global row number doesn't line up with it and prev/next below can index
-    // out of bounds.
-    var displayIndex = results2.findIndex(
-        (img) => img && String(img.IName) === String(IName),
-    );
+    if (!currClass && classNames.length > 0) {
+        currClass = classNames[0];
+    }
 
-    var hasActiveFilter =
-        (sortFilter && sortFilter !== "null" && sortFilter !== "undefined") ||
-        (imageClass && imageClass !== "null" && imageClass !== "undefined");
-
-    if (displayIndex === -1 && hasActiveFilter) {
-        ldb.close(function (err) {
-            if (err) global.logger.error(err);
-        });
-
-        if (results2 && results2.length > 0) {
-            var targetClass = (curr_class && curr_class !== "undefined") ? curr_class : ((results1 && results1.length > 0) ? results1[0].CName : "");
-            return res.redirect(
-                "/labelingV?IDX=" +
-                    IDX +
-                    "&IName=" +
-                    results2[0].IName +
-                    "&curr_class=" +
-                    targetClass +
-                    "&sort=" +
-                    (sortFilter || "null") +
-                    "&class=" +
-                    (imageClass || "null") +
-                    "&classFilter=" +
-                    (classFilter || "false"),
-            );
-        } else {
-            return res.redirect(
-                "/projectV?IDX=" +
-                    IDX +
-                    "&page=1&perPage=10&sort=" +
-                    (sortFilter || "null") +
-                    "&class=" +
-                    (imageClass || "null"),
-            );
+    // curr_index/prev/next must be positions within `images` (the
+    // filtered/sorted navigation set for the active sort/class filter), not
+    // a ROW_NUMBER() over the entire unfiltered Images table - otherwise a
+    // filter that shrinks the set below the image's global row number sends
+    // prev/next out of bounds. If the requested image isn't in the active
+    // filtered set at all (e.g. it was just marked reviewed and no longer
+    // matches sort=needs_review), redirect to the first image still in the
+    // set, or back to the project list if the filter is now empty.
+    const requestedIndex = images.findIndex((img) => img.IName === IName);
+    if (requestedIndex === -1) {
+        const sortParam = sortFilter || "";
+        if (images.length === 0) {
+            return res.redirect(`/projectV?IDX=${idx}&page=1&perPage=10&sort=${sortParam}`);
         }
+        return res.redirect(
+            `/labelingV?IDX=${idx}&IName=${encodeURIComponent(images[0].IName)}&curr_class=${encodeURIComponent(currClass || "")}&sort=${sortParam}`
+        );
     }
 
-    var rowid = { display_id: displayIndex >= 0 ? displayIndex + 1 : 1 };
+    let labels = [];
+    try {
+        const labelRes = await queries.project.getLabelsForImageName(projectDir, IName);
+        labels = (labelRes && labelRes.rows) ? labelRes.rows : [];
+    } catch (err) {}
 
+    let imageRecord = null;
+    try {
+        const imgDetailRes = await queries.project.getImage(projectDir, IName);
+        imageRecord = (imgDetailRes && imgDetailRes.row) ? imgDetailRes.row : null;
+    } catch (err) {}
 
-    var results3 = await ldb.allAsync(
-        "SELECT * FROM `Labels` WHERE IName = '" + String(IName) + "'",
-    );
-    var results4 = await ldb.allAsync(
-        "SELECT * FROM `Images` WHERE IName = '" + String(IName) + "'",
-    );
-    var results5 = await db.getAsync(
-        "SELECT AutoSave FROM `Projects` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var results6 = await ldb.allAsync(
-        "SELECT * FROM `Validation` WHERE IName = '" + String(IName) + "'",
-    );
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-
-    if (curr_class == null) {
-        curr_class = (results1 && results1.length > 0) ? results1[0].CName : '';
+    let projRecord = null;
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
     }
 
-    for (var i = 0; i < acc.length; i++) {
-        access.push(acc[i].Username);
+    let validations = [];
+    try {
+        const valRes = await queries.project.getAllValidationsForImage(projectDir, IName);
+        validations = (valRes && valRes.rows) ? valRes.rows : [];
+    } catch (err) {}
+
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
 
-    var abs_image_path = project_path + "/images/" + IName;
-
-    if (!fs.existsSync(abs_image_path)) {
-        res.render("404", {
+    const fsObj = global.fs || fs;
+    const absImagePath = path.join(projectDir, "images", IName);
+    if (!imageRecord || !fsObj.existsSync(absImagePath)) {
+        return res.render("404", {
             title: "404",
-            user: req.cookies.Username,
-        });
-    } else {
-        // var rel_image_path = abs_image_path;
-        var rel_image_path = rel_project_path + "/images/" + results4[0].IName;
-        // get image information //there might be a race condition between rel_project_path and project_path which makes them different when bootstrapping is run
-        var img = fs.readFileSync(
-                project_path + "/images/" + results4[0].IName,
-                (err) => {
-                    if (err) {
-                        res.render("404", {
-                            title: "404",
-                            user: req.cookies.Username,
-                        });
-                    }
-                },
-            ),
-            img_data = probe.sync(img),
-            img_w = img_data.width,
-            img_h = img_data.height,
-            image_ratio = img_h / img_w,
-            image_width = img_w,
-            image_height = image_ratio * image_width,
-            prev_IName = (next_IName = -1);
-        var curr_index = 1;
-
-        var list_counter = [];
-
-        curr_index = Number(rowid.display_id);
-
-        if (displayIndex !== -1) {
-            if (displayIndex > 0 && results2[displayIndex - 1]) {
-                prev_IName = results2[displayIndex - 1]["IName"];
-            }
-            if (displayIndex < results2.length - 1 && results2[displayIndex + 1]) {
-                next_IName = results2[displayIndex + 1]["IName"];
-            }
-        }
-        // close the database
-        ldb.close(function (err) {
-            if (err) {
-                global.logger.error(err);
-            } else {
-            }
-        });
-
-        var colors = [];
-        var i = 0;
-
-        while (colors.length < Classes.length) {
-            if (i >= colorsJSON.length) {
-                i = 0;
-            }
-            colors.push(colorsJSON[i]);
-            i++;
-        }
-
-        var stats = {};
-        for (var a = 0; a < results3.length; a++) {
-            className = results3[a].CName;
-            labelID = results3[a].LID;
-            if (stats[className] == null) {
-                stats[className] = 1;
-            } else {
-                stats[className] += 1;
-            }
-        }
-        var statsO = [];
-        for (const [key, value] of Object.entries(stats)) {
-            statsO.push([key, value]);
-        }
-
-        res.render("labelingV", {
-            title: "labelingV",
-            user: user,
-            access: access,
-            image_width: image_width,
-            image_height: image_height,
-            image_path: rel_image_path,
-            image_name: results4[0].IName,
-            image_ratio: image_ratio,
-            classes: Classes,
-            images: results2,
-            labels: results3,
-            labelConf: results6,
-            colors: colors,
-            IName: IName,
-            prev_IName: prev_IName,
-            next_IName: next_IName,
-            PName: PName,
-            Admin: admin,
-            IDX: IDX,
-            images_length: results2.length,
-            curr_index: curr_index,
-            curr_class: curr_class,
-            rev_image: results4[0].reviewImage,
-            list_counter: list_counter,
-            AutoSave: results5["AutoSave"],
-            logged: req.query.logged,
-            stats: statsO,
-            sortFilter: sortFilter || "null",
-            imageClass: imageClass || "null",
-            classFilter: classFilter || "false",
+            user: req.cookies ? req.cookies.Username : undefined,
         });
     }
+
+    const relImagePath = `/${relProjectPath}/images/${imageRecord.IName}`;
+    let imgData;
+    try {
+        const imgBuffer = fsObj.readFileSync(absImagePath);
+        imgData = probe.sync(imgBuffer);
+    } catch (err) {
+        return res.render("404", {
+            title: "404",
+            user: req.cookies ? req.cookies.Username : undefined,
+        });
+    }
+
+    const imgWidth = imgData.width;
+    const imgHeight = imgData.height;
+    const imageRatio = imgHeight / imgWidth;
+    const imageDisplayWidth = imgWidth;
+    const imageDisplayHeight = imageRatio * imageDisplayWidth;
+
+    const currIndex = requestedIndex + 1;
+    const prevIName = requestedIndex > 0 ? images[requestedIndex - 1].IName : -1;
+    const nextIName = requestedIndex < images.length - 1 ? images[requestedIndex + 1].IName : -1;
+
+    const colors = [];
+    let colorIdx = 0;
+    const colorList = global.colorsJSON || [];
+    while (colors.length < classNames.length) {
+        if (colorIdx >= colorList.length) {
+            colorIdx = 0;
+        }
+        colors.push(colorList[colorIdx]);
+        colorIdx++;
+    }
+
+    const statsMap = {};
+    for (let a = 0; a < labels.length; a++) {
+        const className = labels[a].CName;
+        statsMap[className] = (statsMap[className] || 0) + 1;
+    }
+    const statsO = Object.entries(statsMap);
+
+    res.render("labelingV", {
+        title: "labelingV",
+        user,
+        access: accessUsers,
+        image_width: imageDisplayWidth,
+        image_height: imageDisplayHeight,
+        image_path: relImagePath,
+        image_name: imageRecord.IName,
+        image_ratio: imageRatio,
+        classes: classNames,
+        images,
+        labels,
+        labelConf: validations,
+        colors,
+        IName,
+        prev_IName: prevIName,
+        next_IName: nextIName,
+        PName,
+        Admin: admin,
+        IDX: idx,
+        images_length: images.length,
+        curr_index: currIndex,
+        curr_class: currClass,
+        rev_image: imageRecord.reviewImage,
+        list_counter: [],
+        AutoSave: projRecord ? projRecord.AutoSave : 0,
+        logged: req.query.logged,
+        stats: statsO,
+        sortFilter,
+        imageClass,
+        classFilter,
+    });
 }
 
 module.exports = getValidationLabelingPage;

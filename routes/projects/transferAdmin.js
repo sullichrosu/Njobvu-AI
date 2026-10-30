@@ -9,13 +9,19 @@ async function transferAdmin(req, res) {
 
     var NewAdmin = req.body.NewAdmin;
 
-    var results1 = await db.getAsync(
-        "SELECT COUNT(*) AS THING FROM Projects WHERE Admin = '" +
-            NewAdmin +
-            "' AND PName = '" +
-            PName +
-            "'",
-    );
+    let results1;
+    try {
+        results1 = await db.getAsync(
+            "SELECT COUNT(*) AS THING FROM Projects WHERE Admin = '" +
+                NewAdmin +
+                "' AND PName = '" +
+                PName +
+                "'",
+        );
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).send("Error transferring admin role");
+    }
 
     if (results1.THING != 0) {
         return res.redirect("/config?IDX=" + IDX);

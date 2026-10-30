@@ -1,349 +1,220 @@
+const path = require("path");
+const fs = require("fs");
+const queries = require("../../queries/queries");
+
 async function getValidationProjectPage(req, res) {
-    var public_path = currentPath;
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
 
-    // get URL variables
-    var IDX = parseInt(req.query.IDX),
-        page = req.query.page,
-        perPage = req.query.perPage,
-        sortFilter = req.query.sort,
-        imageClass = req.query.class,
-        user = req.cookies.Username,
-        valid = 0;
+    let idx = parseInt(req.query.IDX, 10);
+    let page = parseInt(req.query.page, 10) || 1;
+    let perPage = parseInt(req.query.perPage, 10) || 10;
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(perPage) || perPage < 1) perPage = 10;
 
-    if (IDX == undefined) {
-        IDX = 0;
-        valid = 1;
+    const sortFilter = req.query.sort;
+    const imageClass = req.query.class;
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (isNaN(idx) || idx === undefined) {
         return res.redirect("/home");
     }
 
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
+    let projects, PName, admin, projectDir, classNames;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
 
-    var num = IDX;
-
-    if (num > projects.length) {
-        valid = 1;
-        return res.redirect("/home");
-    }
-
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
-
-    var public_path = currentPath;
-    var db_path =
-        public_path +
-        "public/projects/" +
-        admin +
-        "-" +
-        PName +
-        "/" +
-        PName +
-        ".db";
-
-    if (page == undefined) {
-        page = 1;
-    }
-    if (perPage == undefined) {
-        perPage = 10;
-    }
-
-    var pdb = new sqlite3.Database(db_path, (err) => {
-        if (err) {
-            return global.logger.error(err.message);
+        if (idx < 0 || idx >= projects.length) {
+            return res.redirect("/home");
         }
-        global.logger.info("Connected to pdb.")
-    });
 
-    // create async database object functions
-    pdb.getAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    pdb.allAsync = function (sql) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, function (err, row) {
-                if (err) {
-                    global.logger.error("runAsync ERROR!", err)
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            global.logger.error(err);
-        });
-    };
-    var projectClasses = await pdb.allAsync("SELECT * FROM `Classes`");
-    var Classes = [];
-    for (var i = 0; i < projectClasses.length; i++) {
-        Classes.push(projectClasses[i].CName);
+        ({ PName, Admin: admin } = projects[idx]);
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+
+        const { rows: projectClasses } = await queries.project.getAllClasses(projectDir);
+        classNames = projectClasses.map((c) => c.CName);
+    } catch (err) {
+        global.logger.error("Error loading validation project page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
-    var results1 = Array();
-    var results2 = { "COUNT(*)": 1 };
+    let images = [];
+    let totalCount = 0;
 
-    // var results1 = await pdb.allAsync("SELECT * FROM `Images` LIMIT "+perPage+" OFFSET "+ (page-1)*perPage);
+    const isInvalidClass = !imageClass || imageClass === "null" || !classNames.includes(imageClass);
 
-    if (
-        ((imageClass == null ||
-            imageClass == "null" ||
-            !Classes.includes(imageClass)) &&
-            (sortFilter == "null" || sortFilter == null)) ||
-        (sortFilter == "Confidence" && imageClass == "null")
-    ) {
-        results1 = await pdb.allAsync(
-            "SELECT * FROM `Images` LIMIT " +
-                perPage +
-                " OFFSET " +
-                (page - 1) * perPage,
+    if (isInvalidClass && (!sortFilter || sortFilter === "null" || sortFilter === "Confidence")) {
+        const imgRes = await queries.project.sql(
+            projectDir,
+            "SELECT * FROM Images LIMIT ? OFFSET ?",
+            [perPage, (page - 1) * perPage]
         );
-        results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
-    } else if (
-        sortFilter == "needs_review" &&
-        (imageClass == null ||
-            imageClass == "null" ||
-            !Classes.includes(imageClass))
-    ) {
-        results1 = await pdb.allAsync(
-            "SELECT * FROM `Images` WHERE reviewImage=1 LIMIT " +
-                perPage +
-                " OFFSET " +
-                (page - 1) * perPage,
+        images = (imgRes && imgRes.rows) ? imgRes.rows : [];
+
+        const countRes = await queries.project.sql(projectDir, "SELECT COUNT(*) as count FROM Images", []);
+        totalCount = (countRes && countRes.rows && countRes.rows[0]) ? countRes.rows[0].count : 0;
+    } else if (sortFilter === "needs_review" && isInvalidClass) {
+        const imgRes = await queries.project.sql(
+            projectDir,
+            "SELECT * FROM Images WHERE reviewImage = 1 LIMIT ? OFFSET ?",
+            [perPage, (page - 1) * perPage]
         );
-        results2 = await pdb.getAsync(
-            "SELECT COUNT(*) FROM Images WHERE reviewImage=1",
-        );
-    } else if (
-        sortFilter == "confidence" &&
-        (imageClass == null ||
-            imageClass == "null" ||
-            !Classes.includes(imageClass))
-    ) {
-        var images = await pdb.allAsync("SELECT * FROM `Images`");
-        var confidenceImages = await pdb.allAsync(
-            "SELECT Confidence, IName FROM `Validation`",
-        );
+        images = (imgRes && imgRes.rows) ? imgRes.rows : [];
+
+        const countRes = await queries.project.sql(projectDir, "SELECT COUNT(*) as count FROM Images WHERE reviewImage = 1", []);
+        totalCount = (countRes && countRes.rows && countRes.rows[0]) ? countRes.rows[0].count : 0;
+    } else if (sortFilter === "confidence" && isInvalidClass) {
+        const allImgRes = await queries.project.getAllImages(projectDir);
+        const allImages = (allImgRes && allImgRes.rows) ? allImgRes.rows : [];
+
+        const valRes = await queries.project.getAllValidations(projectDir);
+        const valRows = (valRes && valRes.rows) ? valRes.rows : [];
+
         const highestConf = {};
-        confidenceImages.forEach((item) => {
-            const { Confidence, IName } = item;
-            if (!(IName in highestConf) || Confidence > highestConf[IName]) {
-                highestConf[IName] = Confidence;
+        valRows.forEach((item) => {
+            if (!(item.IName in highestConf) || item.Confidence > highestConf[item.IName]) {
+                highestConf[item.IName] = item.Confidence;
             }
         });
 
-        images.sort((a, b) => {
-            const confidenceA = highestConf[a.IName] || 0;
-            const confidenceB = highestConf[b.IName] || 0;
-
-            if (confidenceA == confidenceB) {
-                return a.IName.localeCompare(b.IName);
+        allImages.sort((a, b) => {
+            const confA = highestConf[a.IName] || 0;
+            const confB = highestConf[b.IName] || 0;
+            if (confA === confB) {
+                return (a.IName || "").localeCompare(b.IName || "");
             }
-
-            return confidenceB - confidenceA;
+            return confB - confA;
         });
 
-        for (var d = 0; d < images.length; d++) {
-            var imageData = await pdb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    images[d].IName +
-                    "'",
-            );
-            results1.push(imageData[0]);
-        }
-        results2 = await pdb.getAsync("SELECT COUNT(*) FROM Images");
-    } else if (
-        sortFilter == "confidence" &&
-        imageClass != null &&
-        Classes.includes(imageClass)
-    ) {
-        var imagesWithClass = await pdb.allAsync(
-            "SELECT DISTINCT IName FROM `Labels` WHERE CName = '" +
-                imageClass +
-                "'",
+        images = allImages;
+        totalCount = allImages.length;
+    } else if (sortFilter === "confidence" && imageClass && classNames.includes(imageClass)) {
+        const imgClassRes = await queries.project.sql(
+            projectDir,
+            "SELECT DISTINCT IName FROM Labels WHERE CName = ?",
+            [imageClass]
         );
-        var confidenceImages = await pdb.allAsync(
-            "SELECT Confidence, IName FROM `Validation` WHERE CName = '" +
-                imageClass +
-                "'",
+        const imagesWithClass = (imgClassRes && imgClassRes.rows) ? imgClassRes.rows : [];
+
+        const valRes = await queries.project.sql(
+            projectDir,
+            "SELECT Confidence, IName FROM Validation WHERE CName = ?",
+            [imageClass]
         );
+        const valRows = (valRes && valRes.rows) ? valRes.rows : [];
+
         const highestConf = {};
-        confidenceImages.forEach((item) => {
-            const { Confidence, IName } = item;
-            if (!(IName in highestConf) || Confidence > highestConf[IName]) {
-                highestConf[IName] = Confidence;
+        valRows.forEach((item) => {
+            if (!(item.IName in highestConf) || item.Confidence > highestConf[item.IName]) {
+                highestConf[item.IName] = item.Confidence;
             }
         });
+
         imagesWithClass.sort((a, b) => {
-            const confidenceA = highestConf[a.IName] || 0;
-            const confidenceB = highestConf[b.IName] || 0;
-
-            if (confidenceA == confidenceB) {
-                return a.IName.localeCompare(b.IName);
+            const confA = highestConf[a.IName] || 0;
+            const confB = highestConf[b.IName] || 0;
+            if (confA === confB) {
+                return (a.IName || "").localeCompare(b.IName || "");
             }
-
-            return confidenceB - confidenceA;
+            return confB - confA;
         });
 
-        for (var d = 0; d < imagesWithClass.length; d++) {
-            var imageData = await pdb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    imagesWithClass[d].IName +
-                    "'",
-            );
-            results1.push(imageData[0]);
+        for (const item of imagesWithClass) {
+            const imgRes = await queries.project.getImage(projectDir, item.IName);
+            if (imgRes && imgRes.row) images.push(imgRes.row);
         }
-    } else if (sortFilter == "has_class") {
-        if (imageClass != "null") {
-            var imagesWithClass;
-            imagesWithClass = await pdb.allAsync(
-                "SELECT DISTINCT IName FROM `Labels` WHERE CName = '" +
-                    imageClass +
-                    "'",
+        totalCount = images.length;
+    } else if (sortFilter === "has_class") {
+        let imgClassRes;
+        if (imageClass && imageClass !== "null") {
+            imgClassRes = await queries.project.sql(
+                projectDir,
+                "SELECT DISTINCT IName FROM Labels WHERE CName = ?",
+                [imageClass]
             );
         } else {
-            imagesWithClass = await pdb.allAsync(
-                "SELECT DISTINCT IName FROM `Labels`",
-            );
+            imgClassRes = await queries.project.sql(projectDir, "SELECT DISTINCT IName FROM Labels", []);
         }
-        imagesWithClass.sort((a, b) => {
-            if (a.IName < b.IName) {
-                return -1;
-            } else if (a.IName > b.IName) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
+        const imagesWithClass = (imgClassRes && imgClassRes.rows) ? imgClassRes.rows : [];
+        imagesWithClass.sort((a, b) => (a.IName || "").localeCompare(b.IName || ""));
 
-        for (var d = 0; d < imagesWithClass.length; d++) {
-            var imageData = await pdb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    imagesWithClass[d].IName +
-                    "'",
-            );
-            results1.push(imageData[0]);
+        for (const item of imagesWithClass) {
+            const imgRes = await queries.project.getImage(projectDir, item.IName);
+            if (imgRes && imgRes.row) images.push(imgRes.row);
         }
+        totalCount = images.length;
     } else {
-        var imagesWithClass = await pdb.allAsync(
-            "SELECT DISTINCT IName FROM `Labels` WHERE CName = '" +
-                imageClass +
-                "'",
+        const imgClassRes = await queries.project.sql(
+            projectDir,
+            "SELECT DISTINCT IName FROM Labels WHERE CName = ?",
+            [imageClass]
         );
-        imagesWithClass.sort((a, b) => {
-            if (a.IName < b.IName) {
-                return -1;
-            } else if (a.IName > b.IName) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
+        const imagesWithClass = (imgClassRes && imgClassRes.rows) ? imgClassRes.rows : [];
+        imagesWithClass.sort((a, b) => (a.IName || "").localeCompare(b.IName || ""));
 
-        for (var d = 0; d < imagesWithClass.length; d++) {
-            var imageData = await pdb.allAsync(
-                "SELECT * FROM `Images` WHERE IName = '" +
-                    imagesWithClass[d].IName +
-                    "'",
-            );
-            results1.push(imageData[0]);
+        for (const item of imagesWithClass) {
+            const imgRes = await queries.project.getImage(projectDir, item.IName);
+            if (imgRes && imgRes.row) images.push(imgRes.row);
         }
+        totalCount = images.length;
     }
 
-    var imageLabels = [];
-    var list_counter = [];
-    var imageConf = [];
-    // console.log(results1);
-    for (var i = 0; i < results1.length; i++) {
-        labelList = await pdb.allAsync(
-            "SELECT CName FROM `Labels` WHERE IName = '" +
-                results1[i].IName +
-                "'",
-        );
-        var usedLabels = new Set();
-        for (var f = 0; f < labelList.length; f++) {
-            usedLabels.add(labelList[f].CName);
-        }
+    const imageLabels = [];
+    const listCounter = [];
+    const imageConf = [];
 
-        var results3 = await pdb.getAsync(
-            "SELECT COUNT(*) FROM `Labels` WHERE IName = '" +
-                results1[i].IName +
-                "'",
-        );
-        list_counter.push(results3["COUNT(*)"]);
+    for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const labelsRes = await queries.project.getLabelsForImageName(projectDir, img.IName);
+        const labelRows = (labelsRes && labelsRes.rows) ? labelsRes.rows : [];
 
+        const usedLabels = new Set(labelRows.map((l) => l.CName));
+        listCounter.push(labelRows.length);
         imageLabels.push(Array.from(usedLabels));
 
-        var imageList = await pdb.allAsync(
-            "SELECT Confidence FROM `Validation` WHERE IName = '" +
-                results1[i].IName +
-                "'",
-        );
-        if (imageList.length == 0) {
+        const valRes = await queries.project.getAllValidationsForImage(projectDir, img.IName);
+        const valRows = (valRes && valRes.rows) ? valRes.rows : [];
+
+        if (valRows.length === 0) {
             imageConf.push(0);
         } else {
-            var high = 0;
-            var idx = 0;
-            for (var x = 0; x < imageList.length; x++) {
-                if (imageList[x].Confidence > high) {
-                    high = imageList[x].Confidence;
-                    idx = x;
+            let maxConf = 0;
+            for (const val of valRows) {
+                if (typeof val.Confidence === "number" && val.Confidence > maxConf) {
+                    maxConf = val.Confidence;
                 }
             }
-            if (typeof imageList[idx].Confidence != "number") {
-                imageConf.push(0);
-            } else {
-                imageConf.push(imageList[idx].Confidence);
-            }
+            imageConf.push(maxConf);
         }
-
-        // console.log(imageConf + ' ' + results1[i].IName);
     }
 
-    // var acc = await db.allAsync("SELECT * FROM `Access` WHERE PName = '" + PName + "'");
-    var acc = await db.allAsync(
-        "SELECT * FROM `Access` WHERE PName = '" +
-            PName +
-            "' AND Admin = '" +
-            admin +
-            "'",
-    );
-    var access = [];
-    for (var i = 0; i < acc.length; i++) {
-        access.push(acc[i].Username);
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
     }
-    pdb.close(function (err) {
-        if (err) {
-            global.logger.error(err);
-        } else {
-        }
-    });
 
     res.render("projectV", {
         title: "projectV",
-        user: user,
-        PName: PName,
+        user,
+        PName,
         Admin: admin,
-        IDX: IDX,
-        access: access,
-        images: results1,
+        IDX: idx,
+        access: accessUsers,
+        images,
         classes: imageLabels,
-        list_counter: list_counter,
+        list_counter: listCounter,
         current: page,
-        pages: Math.ceil(results2["COUNT(*)"] / perPage),
-        perPage: perPage,
+        pages: Math.ceil(totalCount / perPage) || 1,
+        perPage,
         logged: req.query.logged,
-        sortFilter: sortFilter,
-        imageClass: imageClass,
-        projectClasses: Classes,
-        imageConf: imageConf,
+        sortFilter,
+        imageClass,
+        projectClasses: classNames,
+        imageConf,
         activePage: "ProjectV",
     });
 }

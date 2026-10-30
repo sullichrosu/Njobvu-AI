@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const archiver = require("archiver");
 
 async function downloadWeights(req, res) {
     var PName = req.body ? req.body.PName : undefined,
@@ -32,6 +31,7 @@ async function downloadWeights(req, res) {
 
     var zipFilePath = path.join(downloadsPath, "weights.zip");
     var output = fs.createWriteStream(zipFilePath);
+    const archiver = require("archiver");
     var archive = archiver("zip");
 
     output.on("close", function () {

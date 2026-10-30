@@ -397,7 +397,13 @@ async function mergeLocal(req, res) {
     if (existingLabels.rows.length == 0) {
         newMax = 1;
     } else {
-        const oldMax = await queries.project.getMaxLabelId(projectPath);
+        let oldMax;
+        try {
+            oldMax = await queries.project.getMaxLabelId(projectPath);
+        } catch (err) {
+            global.logger.error(err);
+            return res.status(500).send("Error fetching max label id");
+        }
 
         newMax = oldMax.rows[0].LID + 1;
     }
@@ -470,29 +476,34 @@ async function mergeLocal(req, res) {
         currentLabels.push(candidate);
         newLabels.push(candidate);
 
-        await queries.project.createLabel(
-            projectPath,
-            Number(newMax),
-            candidate.CName,
-            Number(candidate.X),
-            Number(candidate.Y),
-            Number(candidate.W),
-            Number(candidate.H),
-            candidate.IName,
-        );
+        try {
+            await queries.project.createLabel(
+                projectPath,
+                Number(newMax),
+                candidate.CName,
+                Number(candidate.X),
+                Number(candidate.Y),
+                Number(candidate.W),
+                Number(candidate.H),
+                candidate.IName,
+            );
 
-        for (var v = 0; v < newValidations.length; v++) {
-            if (incomingLabels.rows[i].LID == newValidations[v][1]) {
-                await queries.project.createValidation(
-                    projectPath,
-                    newValidations[v][0],
-                    Number(newMax),
-                    newValidations[v][2],
-                    newValidations[v][3],
-                );
+            for (var v = 0; v < newValidations.length; v++) {
+                if (incomingLabels.rows[i].LID == newValidations[v][1]) {
+                    await queries.project.createValidation(
+                        projectPath,
+                        newValidations[v][0],
+                        Number(newMax),
+                        newValidations[v][2],
+                        newValidations[v][3],
+                    );
 
-                break;
+                    break;
+                }
             }
+        } catch (err) {
+            global.logger.error(err);
+            continue;
         }
 
         newMax++;

@@ -1,15 +1,15 @@
 </div>
 		<!-- Scripts -->
-		<script src="js/jquery.min.js"></script>
-		<script src="js/jquery.scrolly.min.js"></script>
-		<script src="js/jquery.scrollex.min.js"></script>
-		<script src="libraries/bootstrap-4.0.0-dist/js/bootstrap.bundle.min.js"></script>
+		<script src="/js/jquery.min.js"></script>
+		<script src="/js/jquery.scrolly.min.js"></script>
+		<script src="/js/jquery.scrollex.min.js"></script>
+		<script src="/libraries/bootstrap-4.0.0-dist/js/bootstrap.bundle.min.js"></script>
 		<% if(title != "annotate" && title != "labelingV") { %>
-		<script src="js/home.js"></script>
+		<script src="/js/home.js"></script>
 		<% } %>
 		<% if(title == "annotate" || title == "labelingV") { %>
-		<script src="libraries/tiffjs/tiff.min.js"></script>
-		<script src="js/flabeling.js"></script>
+		<script src="/libraries/tiffjs/tiff.min.js"></script>
+		<script src="/js/flabeling.js"></script>
 		<% } %>
 		<%- include('chatWindow') %>
 	</body>

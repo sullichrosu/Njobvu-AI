@@ -1,259 +1,241 @@
+const path = require("path");
+const fs = require("fs");
+const probe = require("probe-image-size");
 const queries = require("../../queries/queries");
 const { buildS3Client, getObjectStream } = require("../../utils/s3Client");
 
 async function getAnnotatePage(req, res) {
-    var path = global.path || require("path");
-    var fs = global.fs || require("fs");
-    var sqlite3 = global.sqlite3 || require("sqlite3").verbose();
-    var probe = global.probe || require("probe-image-size");
-    var IDX = parseInt(req.query.IDX),
-        IName = String(req.query.IName),
-        curr_class = req.query.curr_class,
-        reviewFilter = req.query.reviewFilter || req.query.review || "all",
-        user = req.cookies.Username;
+    let idx = parseInt(req.query.IDX, 10);
+    const IName = String(req.query.IName || "");
+    let currClass = req.query.curr_class;
+    const reviewFilter = req.query.reviewFilter || req.query.review || "all";
+    const user = req.cookies ? req.cookies.Username : undefined;
 
-    if (isNaN(IDX) || IDX === undefined) {
-        IDX = 0;
+    if (isNaN(idx) || idx === undefined) {
+        idx = 0;
         return res.redirect("/home");
     }
+
     if (user === undefined) {
         return res.redirect("/");
     }
 
-    var projects = [];
-    if (global.managedDbClient && global.managedDbClient.all) {
-        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
-        projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
-    } else if (global.db && global.db.allAsync) {
-        projects = await global.db.allAsync("SELECT * FROM Access WHERE Username = '" + user + "'");
-    }
+    let projects, PName, admin, projectDir, relProjectPath, classNames;
 
-    var num = IDX;
+    try {
+        ({ rows: projects } = await queries.managed.getUserProjects(user));
 
-    if (!projects || num >= projects.length) {
-        return res.redirect("/home");
-    }
-    var PName = projects[num].PName;
-    var admin = projects[num].Admin;
-
-    // set paths
-    var public_path = typeof currentPath !== "undefined" ? currentPath : process.cwd(),
-        main_path = path.join(public_path, "public", "projects"),
-        project_path = path.join(main_path, admin + "-" + PName);
-
-    var rel_project_path = "projects/" + admin + "-" + PName;
-
-    var ldb = new sqlite3.Database(
-        path.join(project_path, PName + ".db"),
-        (err) => {
-            if (err && global.logger) {
-                return global.logger.error(err.message);
-            }
-            if (global.logger) global.logger.info("Connected to ldb.");
-        },
-    );
-
-    ldb.getAsync = function (sql, params) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, params || [], function (err, row) {
-                if (err) {
-                    if (global.logger) global.logger.error("runAsync ERROR!", err);
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            if (global.logger) global.logger.error(err);
-            return null;
-        });
-    };
-    ldb.allAsync = function (sql, params) {
-        var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, params || [], function (err, row) {
-                if (err) {
-                    if (global.logger) global.logger.error("runAsync ERROR!", err);
-                    reject(err);
-                } else resolve(row);
-            });
-        }).catch((err) => {
-            if (global.logger) global.logger.error(err);
-            return [];
-        });
-    };
-
-    var results1 = await ldb.allAsync("SELECT * FROM `Classes`");
-    var Classes = [];
-    if (results1) {
-        for (var i = 0; i < results1.length; i++) {
-            Classes.push(results1[i].CName);
+        if (idx < 0 || idx >= projects.length) {
+            return res.redirect("/home");
         }
+
+        ({ PName, Admin: admin } = projects[idx]);
+
+        const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+
+        projectDir = path.join(publicPath, "public", "projects", `${admin}-${PName}`);
+        relProjectPath = `projects/${admin}-${PName}`;
+
+        const { rows: classRows } = await queries.project.getAllClasses(projectDir);
+
+        classNames = classRows.map((c) => c.CName);
+    } catch (err) {
+        global.logger.error("Error loading annotate page:", err);
+
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    var results2 = [];
-    if (reviewFilter === "true" || reviewFilter === "1" || reviewFilter === 1 || reviewFilter === "needs_review" || reviewFilter === "needsReview") {
-        results2 = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage != 0");
-    } else if (reviewFilter === "false" || reviewFilter === "0" || reviewFilter === 0) {
-        results2 = await ldb.allAsync("SELECT * FROM `Images` WHERE reviewImage = 0");
-    } else {
-        results2 = await ldb.allAsync("SELECT * FROM `Images`");
+    let allImages = [];
+    try {
+        const imgRes = await queries.project.getAllImages(projectDir);
+
+        allImages = (imgRes && imgRes.rows) ? imgRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error fetching images for annotate page:", err);
     }
 
-    var results3 = await ldb.allAsync(
-        "SELECT * FROM `Labels` WHERE IName = ?",
-        [IName]
-    );
-    var results4 = await ldb.allAsync(
-        "SELECT * FROM `Images` WHERE IName = ?",
-        [IName]
-    );
-
-    var results5 = null;
-    if (global.managedDbClient && global.managedDbClient.get) {
-        const dbRes = await global.managedDbClient.get("SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?", [PName, admin]);
-        results5 = (dbRes && dbRes.row) ? dbRes.row : null;
-    } else if (global.db && global.db.getAsync) {
-        results5 = await global.db.getAsync("SELECT AutoSave FROM Projects WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
+    // Nav (prev/next scrolling + the "x/y" counter) walks navImages, which is
+    // allImages filtered by reviewFilter - not the full unfiltered project.
+    // Positions come from this array directly rather than a global rowid, so
+    // a filter that shrinks the set can never index past its own bounds.
+    let navImages = allImages;
+    if (reviewFilter === "true" || reviewFilter === "1") {
+        navImages = allImages.filter((img) => Number(img.reviewImage) !== 0);
+    } else if (reviewFilter === "false" || reviewFilter === "0") {
+        navImages = allImages.filter((img) => Number(img.reviewImage) === 0);
     }
 
-    var acc = [];
-    if (global.managedDbClient && global.managedDbClient.all) {
-        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE PName = ? AND Admin = ?", [PName, admin]);
-        acc = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
-    } else if (global.db && global.db.allAsync) {
-        acc = await global.db.allAsync("SELECT * FROM Access WHERE PName = '" + PName + "' AND Admin = '" + admin + "'");
-    }
-    var access = [];
+    let labels = [];
+    try {
+        const labelRes = await queries.project.getLabelsForImageName(projectDir, IName);
 
-    if (curr_class == null && results1 && results1.length > 0) {
-        curr_class = results1[0].CName;
+        labels = (labelRes && labelRes.rows) ? labelRes.rows : [];
+    } catch (err) {
+        global.logger.error("Error querying image labels:", err);
     }
 
-    if (acc) {
-        for (var i = 0; i < acc.length; i++) {
-            access.push(acc[i].Username);
-        }
+    let imageRecord = null;
+    try {
+        const imgDetailRes = await queries.project.getImage(projectDir, IName);
+
+        imageRecord = (imgDetailRes && imgDetailRes.row) ? imgDetailRes.row : null;
+    } catch (err) {
+        global.logger.error("Error querying image record:", err);
     }
 
-    var abs_image_path = project_path + "/images/" + IName;
-    var imageExistsLocally = fs.existsSync(abs_image_path);
-    var imageRow = results4 && results4[0];
+    let projRecord = null;
+    try {
+        const projRes = await queries.managed.sql(
+            "SELECT AutoSave FROM Projects WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
 
-    // A "download"-mode (or local-import) image is a real file at
-    // abs_image_path, same as always. A "stream"-mode S3 image never has
-    // one - it's only ever fetched live, on view, via the on-demand proxy
-    // below - so only 404 here if neither a local file nor an S3-backed row
-    // exists for this name.
-    if (!imageRow || (!imageExistsLocally && imageRow.Source !== "s3")) {
-        ldb.close();
-        res.render("404", {
+        projRecord = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+    } catch (err) {
+        global.logger.error("Error querying project record:", err);
+    }
+
+    let accessUsers = [];
+    try {
+        const accRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE PName = ? AND Admin = ?",
+            [PName, admin]
+        );
+
+        accessUsers = (accRes.rows || []).map((r) => r.Username);
+    } catch (err) {
+        global.logger.error("Error querying project access list:", err);
+    }
+
+    if (!currClass && classNames.length > 0) {
+        currClass = classNames[0];
+    }
+
+    const fsObj = global.fs || fs;
+    const probeObj = global.probe || probe;
+    const absImagePath = path.join(projectDir, "images", IName);
+
+    if (!imageRecord) {
+        return res.render("404", {
             title: "404",
-            user: req.cookies.Username,
-        });
-    } else {
-        var rel_image_path;
-        var img_w, img_h;
-
-        if (imageExistsLocally) {
-            rel_image_path = rel_project_path + "/images/" + imageRow.IName;
-            var img = fs.readFileSync(project_path + "/images/" + imageRow.IName);
-            var img_data = probe.sync(img);
-            img_w = img_data.width;
-            img_h = img_data.height;
-        } else {
-            // Point the browser at the on-demand proxy instead of a static
-            // path that doesn't exist. Probe just enough of the object's
-            // header (over that same live fetch, aborted by probe() once it
-            // has what it needs) to lay out the page, rather than pulling
-            // the whole image server-side just to measure it.
-            rel_image_path = `api/v2/projects/${admin}/${PName}/images/${imageRow.IName}`;
-
-            try {
-                var bucketResult = await queries.managed.getBucket(PName, admin);
-                var bucket = bucketResult && bucketResult.row;
-                var s3Client = buildS3Client({
-                    region: bucket.Region,
-                    accessKeyId: bucket.AccessKeyId,
-                    secretAccessKey: bucket.SecretAccessKey,
-                    endpoint: bucket.Endpoint,
-                });
-                var objectStream = await getObjectStream(s3Client, bucket.BucketName, imageRow.SourceKey);
-                var probed = await probe(objectStream.body);
-                img_w = probed.width;
-                img_h = probed.height;
-            } catch (err) {
-                global.logger.error(err);
-                img_w = 0;
-                img_h = 0;
-            }
-        }
-
-        var image_ratio = img_w ? img_h / img_w : 1,
-            image_width = img_w || 0,
-            image_height = image_ratio * image_width,
-            prev_IName = -1,
-            next_IName = -1;
-        var curr_index = 1;
-
-        var list_counter = [];
-
-        var imgIdx = (results2 || []).findIndex((item) => item.IName === IName);
-        if (imgIdx !== -1) {
-            curr_index = imgIdx + 1;
-            prev_IName = imgIdx > 0 ? results2[imgIdx - 1].IName : -1;
-            next_IName = imgIdx < results2.length - 1 ? results2[imgIdx + 1].IName : -1;
-        } else {
-            curr_index = 1;
-            prev_IName = -1;
-            next_IName = (results2 && results2.length > 0) ? results2[0].IName : -1;
-        }
-
-        ldb.close(function (err) {
-            if (err && global.logger) {
-                global.logger.error(err);
-            }
-        });
-
-        var colors = [];
-        var i = 0;
-        while (colors.length < Classes.length) {
-            if (typeof colorsJSON !== 'undefined' && i >= colorsJSON.length) {
-                i = 0;
-            }
-            colors.push(typeof colorsJSON !== 'undefined' ? colorsJSON[i] : "#FF0000");
-            i++;
-        }
-
-        res.render("annotate", {
-            title: "annotate",
-            user: user,
-            access: access,
-            image_width: image_width,
-            image_height: image_height,
-            image_path: rel_image_path,
-            image_name: results4[0].IName,
-            image_ratio: image_ratio,
-            classes: Classes,
-            images: results2 || [],
-            labels: results3 || [],
-            colors: colors,
-            IName: IName,
-            prev_IName: prev_IName,
-            next_IName: next_IName,
-            PName: PName,
-            Admin: admin,
-            IDX: IDX,
-            images_length: results2 ? results2.length : 0,
-            curr_index: curr_index,
-            curr_class: curr_class,
-            rev_image: results4[0].reviewImage,
-            list_counter: list_counter,
-            AutoSave: results5 ? (results5.AutoSave !== undefined ? results5.AutoSave : 0) : 0,
-            logged: req.query.logged,
-            reviewFilter: reviewFilter,
-            activePage: "project",
+            user: req.cookies ? req.cookies.Username : undefined,
         });
     }
+
+    let relImagePath;
+    let imgData;
+    try {
+        if (fsObj.existsSync(absImagePath)) {
+            const imgBuffer = fsObj.readFileSync(absImagePath);
+            imgData = probeObj.sync(imgBuffer);
+            relImagePath = `${relProjectPath}/images/${imageRecord.IName}`;
+        } else if (imageRecord.Source === "s3" && imageRecord.SourceKey) {
+            const bucketRes = await queries.managed.getBucket(PName, admin);
+            const bucket = bucketRes && bucketRes.row;
+
+            if (!bucket) {
+                throw new Error("No bucket attached");
+            }
+
+            const s3Client = buildS3Client({
+                region: bucket.Region,
+                accessKeyId: bucket.AccessKeyId,
+                secretAccessKey: bucket.SecretAccessKey,
+                endpoint: bucket.Endpoint,
+            });
+            const { body } = await getObjectStream(
+                s3Client,
+                bucket.BucketName,
+                imageRecord.SourceKey,
+            );
+
+            const imageBytes = await new Promise((resolve, reject) => {
+                if (!body) {
+                    return reject(new Error("Empty S3 response"));
+                }
+                if (Buffer.isBuffer(body)) {
+                    return resolve(body);
+                }
+                if (typeof body === "string") {
+                    return resolve(Buffer.from(body));
+                }
+                if (typeof body[Symbol.asyncIterator] !== "function" && typeof body.on !== "function") {
+                    return resolve(Buffer.from(body));
+                }
+
+                const chunks = [];
+                body.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+                body.on("end", () => resolve(Buffer.concat(chunks)));
+                body.on("error", reject);
+            });
+
+            imgData = await probeObj(imageBytes);
+            relImagePath = `api/v2/projects/${admin}/${PName}/images/${imageRecord.IName}`;
+        } else {
+            throw new Error("Image not found");
+        }
+    } catch (err) {
+        return res.render("404", {
+            title: "404",
+            user: req.cookies ? req.cookies.Username : undefined,
+        });
+    }
+
+    const imgWidth = imgData.width;
+    const imgHeight = imgData.height;
+    const imageRatio = imgHeight / imgWidth;
+    const imageDisplayWidth = imgWidth;
+    const imageDisplayHeight = imageRatio * imageDisplayWidth;
+
+    const requestedIndex = navImages.findIndex((img) => img.IName === IName);
+    const currIndex = requestedIndex === -1 ? 1 : requestedIndex + 1;
+    const prevIName = requestedIndex > 0 ? navImages[requestedIndex - 1].IName : -1;
+    const nextIName = requestedIndex !== -1 && requestedIndex < navImages.length - 1
+        ? navImages[requestedIndex + 1].IName
+        : -1;
+
+    const colors = [];
+    let colorIdx = 0;
+    const colorList = global.colorsJSON || [];
+
+    while (colors.length < classNames.length) {
+        if (colorIdx >= colorList.length) {
+            colorIdx = 0;
+        }
+
+        colors.push(colorList[colorIdx]);
+        colorIdx++;
+    }
+
+    res.render("annotate", {
+        title: "annotate",
+        user,
+        access: accessUsers,
+        image_width: imageDisplayWidth,
+        image_height: imageDisplayHeight,
+        image_path: relImagePath,
+        image_name: imageRecord.IName,
+        image_ratio: imageRatio,
+        classes: classNames,
+        images: navImages,
+        labels: labels || [],
+        colors,
+        IName,
+        prev_IName: prevIName,
+        next_IName: nextIName,
+        PName,
+        Admin: admin,
+        IDX: idx,
+        images_length: navImages.length,
+        curr_index: currIndex,
+        curr_class: currClass,
+        rev_image: imageRecord.reviewImage,
+        list_counter: [],
+        AutoSave: projRecord ? projRecord.AutoSave : 0,
+        logged: req.query.logged,
+        reviewFilter,
+        activePage: "project",
+    });
 }
 
 module.exports = getAnnotatePage;

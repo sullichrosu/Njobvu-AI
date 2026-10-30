@@ -1,47 +1,48 @@
-async function getMergeSettingsPage(req, res) {
-    var user = req.cookies.Username;
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    if (req.query.IDX == undefined) {
-        return res.redirect("/home");
-    }
+const queries = require("../../queries/queries");
 
-    if (user == undefined) {
+async function getMergeSettingsPage(req, res) {
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var IDX = parseInt(req.query.IDX, 10);
-
-    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
-        return res.redirect("/home?error=project_not_found");
+    if (req.query.IDX === undefined) {
+        return res.redirect("/home");
     }
 
-    var PName = projects[IDX].PName;
-    var admin = projects[IDX].Admin;
-    var mergeProjects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" +
-            user +
-            "' AND NOT PName = '" +
-            PName +
-            "'",
-    );
+    const idx = parseInt(req.query.IDX, 10);
 
-    global.logger.debug("username: ", user);
     try {
+        const { rows: projects } = await queries.managed.getUserProjects(user);
+
+        if (!Number.isInteger(idx) || idx < 0 || idx >= projects.length) {
+            return res.redirect("/home?error=project_not_found");
+        }
+
+        const { PName, Admin: admin } = projects[idx];
+
+        const mergeRes = await queries.managed.sql(
+            "SELECT * FROM Access WHERE Username = ? AND NOT PName = ?",
+            [user, PName]
+        );
+
+        const mergeProjects = mergeRes.rows || [];
+
         res.render("settings/mergeSettings", {
             title: "mergeSettings",
             logged: req.query.logged,
-            user: user,
-            PName: PName,
+            user,
+            PName,
             Admin: admin,
-            IDX: IDX,
+            IDX: idx,
             activePage: "mergeSettings",
-            mergeProjects: mergeProjects,
+            mergeProjects,
         });
-    } catch (error) {
-        global.logger.error("Error rendering projSettings:", error);
-        res.status(500).send("Error loading page");
+    } catch (err) {
+        global.logger.error("Error loading mergeSettings page:", err);
+
+        res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 }
 

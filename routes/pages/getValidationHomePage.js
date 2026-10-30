@@ -1,178 +1,109 @@
-const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 const fs = require("fs");
 const queries = require("../../queries/queries");
 
 async function getValidationHomePage(req, res) {
-    var page = req.query.page,
-        perPage = req.query.perPage,
-        user = req.cookies.Username;
+    const user = req.cookies ? req.cookies.Username : undefined;
+    let page = req.query.page ? parseInt(req.query.page, 10) : 1;
+    let perPage = req.query.perPage ? parseInt(req.query.perPage, 10) : 10;
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(perPage) || perPage < 1) perPage = 10;
 
-    var search = req.query.search || "";
-    var sortBy = req.query.sortBy || "name";
-    var sortOrder = req.query.sortOrder || "asc";
-    var needsReview = req.query.needsReview || "all";
+    const search = req.query.search || "";
+    const sortBy = req.query.sortBy || "name";
+    const sortOrder = req.query.sortOrder || "asc";
+    const needsReview = req.query.needsReview || "all";
 
-    var public_path = typeof currentPath !== "undefined" ? currentPath : process.cwd();
-    var project_path = path.join(public_path, "public", "projects");
+    const publicPath = typeof currentPath !== "undefined" ? currentPath : process.cwd();
+    const projectsBaseDir = path.join(publicPath, "public", "projects");
 
-    if (page == undefined) {
-        page = 1;
-    }
-    if (perPage == undefined) {
-        perPage = 10;
-    }
-
-    var projects = [];
-    if (global.managedDbClient && global.managedDbClient.all) {
-        const dbRes = await global.managedDbClient.all("SELECT * FROM Access WHERE Username = ?", [user]);
-        projects = (dbRes && dbRes.rows) ? dbRes.rows : (Array.isArray(dbRes) ? dbRes : []);
-    } else if (global.db && global.db.allAsync) {
-        projects = await global.db.allAsync("SELECT * FROM `Access` WHERE Username = '" + user + "'");
+    let accessRows;
+    try {
+        ({ rows: accessRows } = await queries.managed.getUserProjects(user));
+    } catch (err) {
+        global.logger.error("Error loading validation home page:", err);
+        return res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 
-    var results1 = [];
-    var PNames = [];
-
-    if (projects && projects.length > 0) {
-        for (var i = 0; i < projects.length; i++) {
-            var Proj = null;
-            if (global.managedDbClient && global.managedDbClient.get) {
-                const dbRes = await global.managedDbClient.get(
+    const results = [];
+    if (accessRows && accessRows.length > 0) {
+        for (let i = 0; i < accessRows.length; i++) {
+            const acc = accessRows[i];
+            let projRow = null;
+            try {
+                const projRes = await queries.managed.sql(
                     "SELECT * FROM Projects WHERE PName = ? AND Admin = ? AND (Validate = ? OR Validate = ?)",
-                    [projects[i].PName, projects[i].Admin, 1, '1']
+                    [acc.PName, acc.Admin, 1, "1"]
                 );
-                Proj = (dbRes && dbRes.row !== undefined) ? dbRes.row : null;
-            } else if (global.db && global.db.getAsync) {
-                Proj = await global.db.getAsync(
-                    "SELECT * FROM `Projects` WHERE PName = '" +
-                        projects[i].PName +
-                        "' AND Admin = '" +
-                        projects[i].Admin +
-                        "' AND (Validate = '1' OR Validate = 1)",
-                );
+                projRow = (projRes.rows && projRes.rows.length > 0) ? projRes.rows[0] : (projRes.row || null);
+            } catch (err) {
+                global.logger.error(`Error querying validation status for ${acc.PName}:`, err);
             }
 
-            if (Proj != null) {
-                results1.push([Proj, i, 0, 0, 0, 0]);
+            if (projRow) {
+                results.push([projRow, i, 0, 0, 0, 0]);
             }
         }
 
-        if (results1.length != 0) {
-            for (var i = 0; i < results1.length; i++) {
-                var dbpath = path.join(
-                    project_path,
-                    results1[i][0].Admin + "-" + results1[i][0].PName,
-                    results1[i][0].PName + ".db"
-                );
+        for (let i = 0; i < results.length; i++) {
+            const proj = results[i][0];
+            const projectDir = path.join(projectsBaseDir, `${proj.Admin}-${proj.PName}`);
 
-                if (!fs.existsSync(dbpath)) {
-                    results1[i][2] = 0;
-                    results1[i][3] = 0;
-                    results1[i][4] = 0;
-                    results1[i][5] = 0;
-                    continue;
+            try {
+                const imgRes = await queries.project.sql(projectDir, "SELECT COUNT(*) as count FROM Images", []);
+                const numImages = (imgRes && imgRes.rows && imgRes.rows[0]) ? Number(imgRes.rows[0].count) : 0;
+
+                const labeledRes = await queries.project.sql(projectDir, "SELECT COUNT(DISTINCT IName) as count FROM Labels", []);
+                const numLabeled = (labeledRes && labeledRes.rows && labeledRes.rows[0]) ? Number(labeledRes.rows[0].count) : 0;
+
+                const reviewRes = await queries.project.sql(projectDir, "SELECT COUNT(*) as count FROM Images WHERE reviewImage = 1", []);
+                const numReview = (reviewRes && reviewRes.rows && reviewRes.rows[0]) ? Number(reviewRes.rows[0].count) : 0;
+
+                const totalLabelsRes = await queries.project.sql(projectDir, "SELECT COUNT(*) as count FROM Labels", []);
+                const totalLabels = (totalLabelsRes && totalLabelsRes.rows && totalLabelsRes.rows[0]) ? Number(totalLabelsRes.rows[0].count) : 0;
+
+                let completePercent = 0;
+                if (numLabeled > 0 && numImages > 0) {
+                    completePercent = Math.trunc(100 * (numLabeled / numImages));
                 }
 
-                var hdb = new sqlite3.Database(dbpath, (err) => {
-                    if (err) {
-                        return console.error(
-                            "hdb connect error: ",
-                            err.message,
-                        );
-                    }
-                    global.logger.info("Connected to hdb.")
-                });
-
-                hdb.getAsync = function (sql) {
-                    var that = this;
-                    return new Promise(function (resolve, reject) {
-                        that.get(sql, function (err, row) {
-                            if (err) {
-                                global.logger.error("runAsync ERROR!", err)
-                                reject(err);
-                            } else resolve(row);
-                        });
-                    }).catch((err) => {
-                        global.logger.error(err);
-                        return null;
-                    });
-                };
-                hdb.allAsync = function (sql) {
-                    var that = this;
-                    return new Promise(function (resolve, reject) {
-                        that.all(sql, function (err, row) {
-                            if (err) {
-                                global.logger.error("runAsync ERROR!", err)
-                                reject(err);
-                            } else resolve(row);
-                        });
-                    }).catch((err) => {
-                        global.logger.error(err);
-                        return [];
-                    });
-                };
-
-                var numimg = await hdb.getAsync("SELECT COUNT(*) FROM Images");
-                var numLabeled = await hdb.allAsync(
-                    "SELECT DISTINCT IName FROM Labels",
-                );
-                var complete = 0;
-                if (numLabeled && numLabeled.length > 0 && numimg && numimg["COUNT(*)"] > 0) {
-                    complete = Math.trunc(
-                        100 * (numLabeled.length / numimg["COUNT(*)"]),
-                    );
-                }
-                var found_review = await hdb.getAsync(
-                    "SELECT COUNT(*) FROM Images WHERE reviewImage = 1",
-                );
-                var counter = await hdb.getAsync("SELECT COUNT(*) FROM Labels");
-
-                if (!found_review || Number(found_review["COUNT(*)"]) == 0) {
-                    results1[i][2] = 0;
-                } else {
-                    results1[i][2] = 1;
-                }
-                results1[i][3] = numimg ? Number(numimg["COUNT(*)"]) : 0;
-                results1[i][4] = complete;
-                results1[i][5] = counter ? Number(counter["COUNT(*)"]) : 0;
-
-                hdb.close(function (err) {
-                    if (err) {
-                        global.logger.error(err);
-                    }
-                });
+                results[i][2] = numReview > 0 ? 1 : 0;
+                results[i][3] = numImages;
+                results[i][4] = completePercent;
+                results[i][5] = totalLabels;
+            } catch (err) {
+                global.logger.error(`Error querying validation project stats for ${proj.PName}:`, err);
             }
         }
     }
 
-    results1 = queries.managed.filterProjects(results1, {
-        search: search,
-        needsReview: needsReview,
-        sortBy: sortBy,
-        sortOrder: sortOrder,
+    const filteredProjects = queries.managed.filterProjects(results, {
+        search,
+        needsReview,
+        sortBy,
+        sortOrder,
     });
 
-    PNames = results1.map((item) => item[0].PName);
-    var list_counter = results1.map((item) => item[5] || 0);
-    var review_counter = results1.map((item) => item[2] || 0);
+    const projectNames = filteredProjects.map((item) => item[0].PName);
+    const labelCounters = filteredProjects.map((item) => item[5] || 0);
+    const reviewCounters = filteredProjects.map((item) => item[2] || 0);
 
     res.render("homeV", {
         title: "homeV",
-        user: user,
-        projects: results1,
-        PNames: PNames,
-        list_counter: list_counter,
-        page: page,
+        user,
+        projects: filteredProjects,
+        PNames: projectNames,
+        list_counter: labelCounters,
+        page,
         current: page,
-        pages: Math.ceil(results1.length / perPage),
-        perPage: perPage,
+        pages: Math.ceil(filteredProjects.length / perPage) || 1,
+        perPage,
         logged: req.query.logged,
-        needs_review: review_counter,
-        search: search,
-        sortBy: sortBy,
-        sortOrder: sortOrder,
-        needsReview: needsReview,
+        needs_review: reviewCounters,
+        search,
+        sortBy,
+        sortOrder,
+        needsReview,
         activePage: "HomeV",
         IDX: null,
     });

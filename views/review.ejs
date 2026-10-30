@@ -75,9 +75,7 @@
                                     class="badCheckbox" name="bad_<%= image.IName %>"
                                     value="<%= image.IName %>">
                             </td>
-                            <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= image.IName %>" />
-                                <%= image.IName %>
-                            </td>
+                            <td><a href="/project/annotate?IDX=<%=IDX%>&IName=<%= encodeURIComponent(image.IName) %>"><%= image.IName %></a></td>
                             <td>
                                 <img class="Image"
                                     src="/projects/<%= admin %>-<%= PName %>/images/<%= image.IName %>"
@@ -118,9 +116,7 @@
                                                             class="badCheckbox" name="bad_<%= label.LID %>"
                                                             value="<%= label.LID %>">
                                                     </td>
-                                                    <td><a href="/annotate?IDX=<%=IDX%>&IName=<%= label.IName %>" />
-                                                        <%= label.IName %>
-                                                    </td>
+                                                    <td><a href="/project/annotate?IDX=<%=IDX%>&IName=<%= encodeURIComponent(label.IName) %>"><%= label.IName %></a></td>
                                                     <td>
                                                         <img class="Image"
                                                             src="/projects/<%= admin %>-<%= PName %>/images/<%= label.IName %>"

@@ -1,38 +1,39 @@
-async function getImageSettingsPage(req, res) {
-    var user = req.cookies.Username;
-    var projects = await db.allAsync(
-        "SELECT * FROM Access WHERE Username = '" + user + "'",
-    );
-    if (req.query.IDX == undefined) {
-        return res.redirect("/home");
-    }
+const queries = require("../../queries/queries");
 
-    if (user == undefined) {
+async function getImageSettingsPage(req, res) {
+    const user = req.cookies ? req.cookies.Username : undefined;
+
+    if (user === undefined) {
         return res.redirect("/");
     }
 
-    var IDX = parseInt(req.query.IDX, 10);
-
-    if (!Number.isInteger(IDX) || IDX < 0 || IDX >= projects.length) {
-        return res.redirect("/home?error=project_not_found");
+    if (req.query.IDX === undefined) {
+        return res.redirect("/home");
     }
 
-    var PName = projects[IDX].PName;
-    var admin = projects[IDX].Admin;
+    const idx = parseInt(req.query.IDX, 10);
 
     try {
+        const { rows: projects } = await queries.managed.getUserProjects(user);
+
+        if (!Number.isInteger(idx) || idx < 0 || idx >= projects.length) {
+            return res.redirect("/home?error=project_not_found");
+        }
+
+        const { PName, Admin: admin } = projects[idx];
+
         res.render("settings/imagesSettings", {
             title: "imageSettings",
             logged: req.query.logged,
-            user: user,
-            PName: PName,
+            user,
+            PName,
             Admin: admin,
-            IDX: IDX,
+            IDX: idx,
             activePage: "imageSettings",
         });
-    } catch (error) {
-        global.logger.error("Error rendering imageSettings:", error);
-        res.status(500).send("Error loading page");
+    } catch (err) {
+        global.logger.error("Error loading imageSettings page:", err);
+        res.redirect(`/error?error=${encodeURIComponent(err.message)}`);
     }
 }
 

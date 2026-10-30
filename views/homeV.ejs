@@ -75,7 +75,7 @@
                 </li>
                 <% } else { %>
                 <li class="page-item">
-                  <a class="page-link" href="/homeV?page=1&perPage=<%= perPage %>" tabindex="-1">First</a>
+                  <a class="page-link" href="/validation/home?page=1&perPage=<%= perPage %>" tabindex="-1">First</a>
                 </li>
                 <% } %>
                 <% var i = (Number(current) > 6 ? Number(current) - 5 : 1) %>
@@ -92,7 +92,7 @@
                         </li>
                     <% } else { %>
                         <li class="page-item">
-                            <a class="page-link" href="/homeV?page=<%= i %>&perPage=<%= perPage %>"><%= i %></a>
+                            <a class="page-link" href="/validation/home?page=<%= i %>&perPage=<%= perPage %>"><%= i %></a>
                         </li>
                     <% } %>
                     <% if (i == j && i < pages) { %>
@@ -107,7 +107,7 @@
                     </li>
                 <% } else { %>
                     <li class="page-item">
-                        <a class="page-link" href="/homeV?page=<%= pages %>&perPage=<%= perPage %>">Last</a>
+                        <a class="page-link" href="/validation/home?page=<%= pages %>&perPage=<%= perPage %>">Last</a>
                     </li>
                 <% } %>
             </ul>
@@ -257,7 +257,7 @@
 		if(pgnum.value > 0 && pgnum.value <= "<%=pages%>")
 		{
 			
-			window.location.href = `/homeV?page=${pgnum.value}&perPage=<%=perPage%>`;
+			window.location.href = `/validation/home?page=${pgnum.value}&perPage=<%=perPage%>`;
 		}
 	}
 </script>
@@ -266,13 +266,13 @@
 	perpage.oninput = function(){
 		if(perpage.value > 0)
 		{
-			window.location.href = `/homeV?page=<%=page%>&perPage=${perpage.value}`;
+			window.location.href = `/validation/home?page=<%=page%>&perPage=${perpage.value}`;
 		}
 	}
 </script>
 <script>
 	function createpage(){
-		window.location.href = "/create"
+		window.location.href = "/projects/create"
 	}
 	function homePage(){
 		window.location.href = "/home"
