@@ -36,6 +36,10 @@ const {
     applyPreprocessingPipeline,
     getPreprocessingJobStatus,
     downloadExampleScript,
+    listPreprocessingBatches,
+    renamePreprocessingBatch,
+    listPreprocessingBatchImages,
+    getPreprocessingBatchImage,
 } = require('../../routes/api/v2/preprocessing');
 const { sanitizeCode } = require('../../utils/sandboxedPythonRunner');
 
@@ -56,6 +60,10 @@ function buildTestApp() {
     app.delete('/api/v2/projects/:admin/:projectName/preprocessing/scripts/:scriptId', deleteCustomScript);
     app.post('/api/v2/projects/:admin/:projectName/preprocessing/apply', applyPreprocessingPipeline);
     app.get('/api/v2/projects/:admin/:projectName/preprocessing/jobs/:jobId', getPreprocessingJobStatus);
+    app.get('/api/v2/projects/:admin/:projectName/preprocessing/batches', listPreprocessingBatches);
+    app.put('/api/v2/projects/:admin/:projectName/preprocessing/batches/:jobId', renamePreprocessingBatch);
+    app.get('/api/v2/projects/:admin/:projectName/preprocessing/batches/:jobId/images', listPreprocessingBatchImages);
+    app.get('/api/v2/projects/:admin/:projectName/preprocessing/batches/:jobId/images/:name', getPreprocessingBatchImage);
 
     return app;
 }
@@ -553,6 +561,135 @@ describe('Pre-processing Pipeline Routes', () => {
         it('rejects requests from a non-owner', async () => {
             const res = await request(app).get(url('123')).set('Cookie', ['Username=someone-else']);
             expect(res.statusCode).toBe(403);
+        });
+    });
+    describe('processed batches', () => {
+        const base = '/api/v2/projects/testuser/test-project/preprocessing/batches';
+        const cookie = ['Username=testuser'];
+        const PNG = Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            'base64',
+        );
+
+        beforeAll(() => {
+            const pre = path.join(projectPath, 'preprocessing');
+            fs.mkdirSync(path.join(pre, 'jobs'), { recursive: true });
+            fs.mkdirSync(path.join(pre, 'output', '900'), { recursive: true });
+            fs.mkdirSync(path.join(projectPath, 'images'), { recursive: true });
+            fs.writeFileSync(path.join(pre, 'jobs', '900-status.json'), JSON.stringify({ state: 'completed', processed: 1, finishedAt: '2026-01-01T00:00:00Z' }));
+            fs.writeFileSync(path.join(pre, 'jobs', '900-manifest.json'), JSON.stringify({ steps: [{ type: 'crop' }] }));
+            fs.writeFileSync(path.join(pre, 'jobs', '901-status.json'), JSON.stringify({ state: 'failed' }));
+            fs.writeFileSync(path.join(pre, 'output', '900', 'a.png'), PNG);
+            fs.writeFileSync(path.join(pre, 'output', '900', 'transforms.json'), '{}');
+            fs.writeFileSync(path.join(projectPath, 'images', 'a.png'), PNG);
+        });
+
+        it('lists only completed batches that still have output', async () => {
+            const res = await request(app).get(base).set('Cookie', cookie);
+            expect(res.statusCode).toBe(200);
+            expect(res.body.batches).toHaveLength(1);
+            expect(res.body.batches[0]).toMatchObject({ jobId: '900', processed: 1, steps: ['crop'], hasTransforms: true });
+        });
+
+        it('lists image names for a batch and for the originals', async () => {
+            const batch = await request(app).get(`${base}/900/images`).set('Cookie', cookie);
+            expect(batch.body.images).toEqual(['a.png']);
+            const original = await request(app).get(`${base}/original/images`).set('Cookie', cookie);
+            expect(original.body.images).toEqual(['a.png']);
+        });
+
+        it('serves a batch image and the matching original', async () => {
+            const batch = await request(app).get(`${base}/900/images/a.png`).set('Cookie', cookie);
+            expect(batch.statusCode).toBe(200);
+            expect(batch.headers['content-type']).toMatch(/image\/png/);
+            const original = await request(app).get(`${base}/original/images/a.png`).set('Cookie', cookie);
+            expect(original.statusCode).toBe(200);
+        });
+
+        it('refuses non-image files and path traversal', async () => {
+            const json = await request(app).get(`${base}/900/images/transforms.json`).set('Cookie', cookie);
+            expect(json.statusCode).toBe(400);
+            const traversal = await request(app).get(`${base}/900/images/..%2F..%2Fjobs%2F900-status.json`).set('Cookie', cookie);
+            expect([400, 404]).toContain(traversal.statusCode);
+            const badId = await request(app).get(`${base}/abc/images/a.png`).set('Cookie', cookie);
+            expect(badId.statusCode).toBe(400);
+        });
+
+        it('404s for a batch that does not exist and rejects non-owners', async () => {
+            const missing = await request(app).get(`${base}/12345/images`).set('Cookie', cookie);
+            expect(missing.statusCode).toBe(404);
+            const other = await request(app).get(base).set('Cookie', ['Username=someone-else']);
+            expect(other.statusCode).toBe(403);
+        });
+    });
+    describe('batch names and image counts', () => {
+        const base = '/api/v2/projects/testuser/test-project/preprocessing';
+        const cookie = ['Username=testuser'];
+
+        it('counts only real images in the progress total (not label .txt or "._" files)', async () => {
+            const imagesDir = path.join(projectPath, 'images');
+            fs.mkdirSync(imagesDir, { recursive: true });
+            for (const name of ['p1.jpg', 'p2.PNG', 'p1.txt', '._p1.jpg', 'notes.md']) {
+                fs.writeFileSync(path.join(imagesDir, name), 'x');
+            }
+            fs.mkdirSync(path.join(imagesDir, '__MACOSX'), { recursive: true });
+            queries.project.getPipeline.mockResolvedValueOnce({
+                success: true,
+                rows: [{ StepType: 'crop', StepOrder: 0, Enabled: 1, Params: '{}' }],
+            });
+
+            const res = await request(app).post(`${base}/apply`).set('Cookie', cookie).send({});
+            expect(res.statusCode).toBe(200);
+            const status = JSON.parse(
+                fs.readFileSync(path.join(projectPath, 'preprocessing', 'jobs', `${res.body.jobId}-status.json`), 'utf8'),
+            );
+            // a.png (from the batch tests, if they ran first) may also be present; the label/._ files must not be.
+            const expected = fs.readdirSync(imagesDir).filter((n) => /^[^.].*\.(jpe?g|png)$/i.test(n)).length;
+            expect(status.total).toBe(expected);
+            expect(status.total).toBeGreaterThanOrEqual(2);
+        });
+
+        it('stores a name given at apply time and lists it with the batch', async () => {
+            queries.project.getPipeline.mockResolvedValueOnce({
+                success: true,
+                rows: [{ StepType: 'crop', StepOrder: 0, Enabled: 1, Params: '{}' }],
+            });
+            const res = await request(app).post(`${base}/apply`).set('Cookie', cookie).send({ name: '  Greyscale run \n ' });
+            expect(res.statusCode).toBe(200);
+
+            // The mocked execFile "finishes" immediately, but only a completed job with output is listed.
+            const pre = path.join(projectPath, 'preprocessing');
+            fs.mkdirSync(path.join(pre, 'output', res.body.jobId), { recursive: true });
+            fs.writeFileSync(
+                path.join(pre, 'jobs', `${res.body.jobId}-status.json`),
+                JSON.stringify({ state: 'completed', processed: 1 }),
+            );
+            const list = await request(app).get(`${base}/batches`).set('Cookie', cookie);
+            const batch = list.body.batches.find((b) => b.jobId === res.body.jobId);
+            expect(batch.name).toBe('Greyscale run');
+        });
+
+        it('renames a batch, clears the name, and validates input', async () => {
+            const ok = await request(app).put(`${base}/batches/900`).set('Cookie', cookie).send({ name: 'Cropped' });
+            expect(ok.statusCode).toBe(200);
+            expect(ok.body.name).toBe('Cropped');
+            let list = await request(app).get(`${base}/batches`).set('Cookie', cookie);
+            expect(list.body.batches.find((b) => b.jobId === '900').name).toBe('Cropped');
+
+            await request(app).put(`${base}/batches/900`).set('Cookie', cookie).send({ name: '' });
+            list = await request(app).get(`${base}/batches`).set('Cookie', cookie);
+            expect(list.body.batches.find((b) => b.jobId === '900').name).toBe('');
+
+            const tooLong = await request(app).put(`${base}/batches/900`).set('Cookie', cookie).send({ name: 'x'.repeat(101) });
+            expect(tooLong.statusCode).toBe(400);
+            const notString = await request(app).put(`${base}/batches/900`).set('Cookie', cookie).send({ name: 5 });
+            expect(notString.statusCode).toBe(400);
+            const missing = await request(app).put(`${base}/batches/424242`).set('Cookie', cookie).send({ name: 'a' });
+            expect(missing.statusCode).toBe(404);
+            const badId = await request(app).put(`${base}/batches/abc`).set('Cookie', cookie).send({ name: 'a' });
+            expect(badId.statusCode).toBe(400);
+            const other = await request(app).put(`${base}/batches/900`).set('Cookie', ['Username=someone-else']).send({ name: 'a' });
+            expect(other.statusCode).toBe(403);
         });
     });
 });

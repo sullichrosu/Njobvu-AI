@@ -5,6 +5,7 @@ const { execFile } = require("child_process");
 const queries = require("../../../queries/queries");
 const config = require("../../../utils/config");
 const { sanitizeCode } = require("../../../utils/sandboxedPythonRunner");
+const batches = require("../../../utils/preprocessingBatches");
 
 const BUILTIN_STEP_TYPES = new Set([
     "illumination_normalization",
@@ -410,10 +411,19 @@ async function applyPreprocessingPipeline(req, res) {
             return res.status(400).json({ success: false, error: "Pipeline has no enabled steps to apply" });
         }
 
+        const nameResult = batches.normalizeBatchName(req.body && req.body.name);
+        if (nameResult.error) {
+            return res.status(400).json({ success: false, error: nameResult.error });
+        }
+
         const jobId = `${Date.now()}`;
         const jobsDir = path.join(projectPath, "preprocessing", "jobs");
         if (!fs.existsSync(jobsDir)) {
             fs.mkdirSync(jobsDir, { recursive: true });
+        }
+
+        if (nameResult.value) {
+            batches.writeBatchName(projectPath, jobId, nameResult.value);
         }
 
         const manifestPath = path.join(jobsDir, `${jobId}-manifest.json`);
@@ -428,9 +438,7 @@ async function applyPreprocessingPipeline(req, res) {
 
         let totalImages = 0;
         try {
-            totalImages = fs
-                .readdirSync(imagesPath, { withFileTypes: true })
-                .filter((entry) => entry.isFile()).length;
+            totalImages = batches.listImageFiles(imagesPath).length;
         } catch (err) {
             totalImages = 0;
         }
@@ -528,6 +536,109 @@ async function getPreprocessingJobStatus(req, res) {
     return res.status(200).json({ success: true, jobId, ...status });
 }
 
+function authorizeProject(req, res) {
+    const { admin, projectName } = req.params;
+    if (!isOwner(req, admin)) {
+        res.status(403).json({ success: false, error: "Not authorized for this project" });
+        return null;
+    }
+    const projectPath = getProjectPath(admin, projectName);
+    if (!fs.existsSync(projectPath)) {
+        res.status(404).json({ success: false, error: "Project not found" });
+        return null;
+    }
+    return projectPath;
+}
+
+/**
+ * GET /api/v2/projects/:admin/:projectName/preprocessing/batches
+ *
+ * Completed /apply runs ("batches") that still have their output on disk, newest first.
+ */
+async function listPreprocessingBatches(req, res) {
+    const projectPath = authorizeProject(req, res);
+    if (!projectPath) return;
+
+    return res.status(200).json({ success: true, batches: batches.listBatches(projectPath) });
+}
+
+/**
+ * PUT /api/v2/projects/:admin/:projectName/preprocessing/batches/:jobId
+ *
+ * Body { name } names (or, with an empty name, un-names) a batch.
+ */
+async function renamePreprocessingBatch(req, res) {
+    const projectPath = authorizeProject(req, res);
+    if (!projectPath) return;
+
+    const { jobId } = req.params;
+    if (!batches.JOB_ID_PATTERN.test(jobId)) {
+        return res.status(400).json({ success: false, error: "Invalid job id" });
+    }
+    if (!batches.listBatches(projectPath).some((batch) => batch.jobId === jobId)) {
+        return res.status(404).json({ success: false, error: "Batch not found" });
+    }
+
+    const nameResult = batches.normalizeBatchName(req.body && req.body.name);
+    if (nameResult.error) {
+        return res.status(400).json({ success: false, error: nameResult.error });
+    }
+
+    try {
+        batches.writeBatchName(projectPath, jobId, nameResult.value);
+        return res.status(200).json({ success: true, name: nameResult.value });
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).json({ success: false, error: "Error saving batch name" });
+    }
+}
+
+/**
+ * GET /api/v2/projects/:admin/:projectName/preprocessing/batches/:jobId/images
+ *
+ * File names in a batch; `jobId` may be "original" for the project's unprocessed images.
+ */
+async function listPreprocessingBatchImages(req, res) {
+    const projectPath = authorizeProject(req, res);
+    if (!projectPath) return;
+
+    const { jobId } = req.params;
+    const images = jobId === "original"
+        ? batches.listImageFiles(path.join(projectPath, "images"))
+        : batches.listBatchImages(projectPath, jobId);
+
+    if (!images) {
+        return res.status(404).json({ success: false, error: "Batch not found" });
+    }
+    return res.status(200).json({ success: true, images });
+}
+
+/**
+ * GET /api/v2/projects/:admin/:projectName/preprocessing/batches/:jobId/images/:name
+ *
+ * Streams one image from a batch (or from the originals when `jobId` is "original").
+ */
+async function getPreprocessingBatchImage(req, res) {
+    const projectPath = authorizeProject(req, res);
+    if (!projectPath) return;
+
+    const { jobId, name } = req.params;
+    const dir = jobId === "original" ? path.join(projectPath, "images") : batches.batchDir(projectPath, jobId);
+    if (
+        !dir ||
+        name !== path.basename(name) ||
+        !batches.IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase())
+    ) {
+        return res.status(400).json({ success: false, error: "Invalid batch or image name" });
+    }
+
+    const filePath = path.join(dir, name);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: "Image not found" });
+    }
+    return res.sendFile(filePath);
+}
+
 /**
  * GET /api/v2/projects/preprocessing/example-script
  *
@@ -555,4 +666,8 @@ module.exports = {
     deleteCustomScript,
     applyPreprocessingPipeline,
     getPreprocessingJobStatus,
+    listPreprocessingBatches,
+    renamePreprocessingBatch,
+    listPreprocessingBatchImages,
+    getPreprocessingBatchImage,
 };

@@ -37,7 +37,7 @@ class TestRunPipeline(unittest.TestCase):
             {"type": "noise", "order": 5, "params": {"type": "gaussian", "amount": 0.05}},
         ]
 
-        result = run_pipeline.process_image(self.img.copy(), steps)
+        result, _ = run_pipeline.process_image(self.img.copy(), steps)
 
         self.assertIsNotNone(result)
         self.assertEqual(result.shape[2], 3)
@@ -48,7 +48,7 @@ class TestRunPipeline(unittest.TestCase):
             f.write("import cv2\n\ndef process(img):\n    return cv2.flip(img, 1)\n")
 
         steps = [{"type": "custom", "order": 0, "params": {}, "scriptPath": custom_script}]
-        result = run_pipeline.process_image(self.img.copy(), steps)
+        result, _ = run_pipeline.process_image(self.img.copy(), steps)
 
         np.testing.assert_array_equal(result, cv2.flip(self.img, 1))
 
@@ -60,8 +60,8 @@ class TestRunPipeline(unittest.TestCase):
         steps = [{"type": "custom", "order": 0, "params": {}, "scriptPath": custom_script, "pythonPath": sys.executable}]
         external = run_pipeline.ExternalStepWorkers()
         try:
-            first = run_pipeline.process_image(self.img.copy(), steps, external)
-            second = run_pipeline.process_image(self.img.copy(), steps, external)
+            first, _ = run_pipeline.process_image(self.img.copy(), steps, external)
+            second, _ = run_pipeline.process_image(self.img.copy(), steps, external)
         finally:
             external.close()
 
@@ -97,7 +97,7 @@ class TestRunPipeline(unittest.TestCase):
         sys.argv = ["run_pipeline.py", "--images", images_dir, "--manifest", manifest_path, "--output", output_dir]
         run_pipeline.main()
 
-        self.assertEqual(sorted(os.listdir(output_dir)), ["a.png", "b.png"])
+        self.assertEqual(sorted(os.listdir(output_dir)), ["a.png", "b.png", "transforms.json"])
         out_img = cv2.imread(os.path.join(output_dir, "a.png"))
         self.assertEqual(out_img.shape[:2], (20, 20))
 
@@ -107,8 +107,10 @@ class TestRunPipeline(unittest.TestCase):
         os.makedirs(images_dir)
         cv2.imwrite(os.path.join(images_dir, "a.png"), self.img)
         cv2.imwrite(os.path.join(images_dir, "b.png"), self.img)
-        with open(os.path.join(images_dir, "notes.txt"), "w") as f:
-            f.write("not an image")
+        with open(os.path.join(images_dir, "corrupt.png"), "w") as f:
+            f.write("named like an image but not decodable")
+        with open(os.path.join(images_dir, "a.txt"), "w") as f:
+            f.write("label file: not counted at all")
 
         manifest_path = os.path.join(self.test_dir, "manifest.json")
         with open(manifest_path, "w") as f:
@@ -152,3 +154,53 @@ class TestRunPipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_transform_maps_original_pixels_to_final_pixels(self):
+        steps = [
+            {"type": "crop", "order": 0, "params": {"top": 10, "bottom": 0, "left": 25, "right": 0}},
+            {"type": "pad", "order": 1, "params": {"top": 3, "left": 7}},
+            {"type": "resize", "order": 2, "params": {"width": 140, "height": 100}},
+        ]
+        out, m = run_pipeline.process_image(self.img.copy(), steps)  # 50x80 -> crop 45x60 -> pad 48x67 -> 100x140
+        self.assertEqual(out.shape[:2], (100, 140))
+
+        # Original (x=40, y=25) -> crop (-20, -5) => (20, 20) -> pad (+7, +3) => (27, 23) -> scale
+        x, y, _ = m @ np.array([40.0, 25.0, 1.0])
+        self.assertAlmostEqual(x, 27 * 140 / 67)
+        self.assertAlmostEqual(y, 23 * 100 / 48)
+
+    def test_rotate_transform_matches_cv2_warp(self):
+        params = {"angle": 90, "expand": True}
+        out, m = run_pipeline.process_image(self.img.copy(), [{"type": "rotate", "order": 0, "params": params}])
+        self.assertEqual(out.shape[:2], (80, 50))
+        x, y, _ = m @ np.array([0.0, 0.0, 1.0])  # top-left corner of the source
+        # Counter-clockwise 90 degrees: the top-left corner ends up at the bottom-left.
+        self.assertAlmostEqual(x, 0.0, places=5)
+        self.assertAlmostEqual(y, 80.0, places=5)
+
+    def test_main_writes_transforms_for_each_image(self):
+        images_dir = os.path.join(self.test_dir, "images")
+        output_dir = os.path.join(self.test_dir, "output")
+        os.makedirs(images_dir)
+        cv2.imwrite(os.path.join(images_dir, "a.png"), self.img)
+        manifest_path = os.path.join(self.test_dir, "manifest.json")
+        with open(manifest_path, "w") as f:
+            json.dump({"steps": [{"type": "resize", "order": 0, "params": {"width": 20, "height": 20}}]}, f)
+
+        sys.argv = ["run_pipeline.py", "--images", images_dir, "--manifest", manifest_path, "--output", output_dir]
+        run_pipeline.main()
+
+        with open(os.path.join(output_dir, "transforms.json")) as f:
+            entry = json.load(f)["a.png"]
+        self.assertEqual((entry["srcWidth"], entry["srcHeight"], entry["width"], entry["height"]), (80, 50, 20, 20))
+        self.assertAlmostEqual(entry["matrix"][0], 20 / 80)
+        self.assertAlmostEqual(entry["matrix"][4], 20 / 50)
+
+    def test_list_images_ignores_labels_and_hidden_files(self):
+        for name in ["a.jpg", "B.PNG", "a.txt", "._a.jpg", ".DS_Store", "notes.md"]:
+            with open(os.path.join(self.test_dir, name), "w") as f:
+                f.write("x")
+        os.makedirs(os.path.join(self.test_dir, "sub.jpg"))
+
+        self.assertEqual(run_pipeline.list_images(self.test_dir), ["B.PNG", "a.jpg"])

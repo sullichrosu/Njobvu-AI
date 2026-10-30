@@ -11,6 +11,7 @@ const {
     cleanupJitTrainingImages,
 } = require("../../utils/jitTrainingImages");
 const { generateModelCard } = require("../../utils/runSummaryGenerator");
+const { loadBatch, transformLabelRow } = require("../../utils/preprocessingBatches");
 const config = require("../../config.json");
 
 // Function to detect the best available device for YOLO training
@@ -488,6 +489,34 @@ async function yoloRun(req, res) {
     // Parse maximum image clamping
     let maxImages = parseInt(req.body.max_images || req.body.maxImages, 10);
     let targetImages = existingImages.rows;
+
+    // Optionally train on a pre-processed batch: its images replace the originals and the
+    // labels are remapped through each image's recorded transform.
+    const preprocessingBatchId = String(req.body.preprocessing_batch || "").trim();
+    let ppBatch = null;
+    if (preprocessingBatchId) {
+        ppBatch = loadBatch(projectPath, preprocessingBatchId);
+        if (!ppBatch) {
+            return res
+                .status(400)
+                .send("Pre-processing batch not found, or it was made before label remapping existed. Re-apply the pipeline.");
+        }
+        targetImages = targetImages.filter((image) => ppBatch.transforms[image.IName]);
+        if (targetImages.length === 0) {
+            return res.status(400).send("The selected pre-processing batch has none of this project's images.");
+        }
+    }
+    const sourceImagesPath = ppBatch ? ppBatch.dir : imagesPath;
+    // Original label files live next to the originals; batch labels must not overwrite those.
+    const labelFilesPath = ppBatch ? path.join(runPath, "batch_labels") : imagesPath;
+    if (ppBatch) {
+        fs.mkdirSync(labelFilesPath, { recursive: true });
+    }
+    const labelRowsFor = (imageName, rows) =>
+        ppBatch
+            ? rows.map((row) => transformLabelRow(row, ppBatch.transforms[imageName])).filter(Boolean)
+            : rows;
+
     if (Number.isFinite(maxImages) && maxImages > 0 && maxImages < targetImages.length) {
         targetImages = targetImages.slice(0, maxImages);
     }
@@ -555,7 +584,7 @@ async function yoloRun(req, res) {
 
         for (var i = 0; i < targetImages.length; i++) {
             var img = fs.readFileSync(
-                `${imagesPath}/${targetImages[i].IName}`,
+                `${sourceImagesPath}/${targetImages[i].IName}`,
             ),
                 imgData = probe.sync(img),
                 imgW = imgData.width,
@@ -566,14 +595,16 @@ async function yoloRun(req, res) {
                 targetImages[i].IName,
             );
 
-            for (var j = 0; j < imageLabels.rows.length; j++) {
-                const classId = cnames.indexOf(imageLabels.rows[j].CName);
+            const labelRows = labelRowsFor(targetImages[i].IName, imageLabels.rows);
+
+            for (var j = 0; j < labelRows.length; j++) {
+                const classId = cnames.indexOf(labelRows[j].CName);
                 if (classId < 0) {
                     continue;
                 }
 
                 const labelLine = formatYoloLabelForTask(
-                    imageLabels.rows[j],
+                    labelRows[j],
                     classId,
                     imgW,
                     imgH,
@@ -582,7 +613,7 @@ async function yoloRun(req, res) {
 
                 if (!labelLine) {
                     console.warn(
-                        `Skipping unsupported ${yoloTask} label ${imageLabels.rows[j].LID} for ${targetImages[i].IName}`,
+                        `Skipping unsupported ${yoloTask} label ${labelRows[j].LID} for ${targetImages[i].IName}`,
                     );
                     continue;
                 }
@@ -597,7 +628,7 @@ async function yoloRun(req, res) {
                         `${labelLine}\n`;
                 }
             }
-            if (imageLabels.rows.length == 0) {
+            if (labelRows.length == 0) {
                 dictImagesLabels[targetImages[i].IName] = "";
             }
         }
@@ -605,7 +636,7 @@ async function yoloRun(req, res) {
         for (var key in dictImagesLabels) {
             removeDotExt = path.parse(key).name;
             fs.writeFileSync(
-                `${imagesPath}/${removeDotExt}.txt`,
+                `${labelFilesPath}/${removeDotExt}.txt`,
                 dictImagesLabels[key],
                 (err) => {
                     if (err) throw err;
@@ -622,11 +653,11 @@ async function yoloRun(req, res) {
             var labelFile = filename + ".txt";
 
             let absDarknetOrgImagesPath = path.join(
-                imagesPath,
+                sourceImagesPath,
                 targetImages[i].IName,
             );
 
-            let absDarknetOrgLabelsPath = path.join(imagesPath, labelFile);
+            let absDarknetOrgLabelsPath = path.join(labelFilesPath, labelFile);
 
             let targetImgDir, targetLblDir;
             if (i < trainDataImageSplit) {
@@ -765,7 +796,7 @@ async function yoloRun(req, res) {
 
         for (let i = 0; i < shuffledImages.length; i++) {
             const image = shuffledImages[i];
-            const sourceImagePath = path.join(imagesPath, image.IName);
+            const sourceImagePath = path.join(sourceImagesPath, image.IName);
 
             let targetBaseDir;
             if (i < trainDataImageSplit) {
@@ -787,7 +818,7 @@ async function yoloRun(req, res) {
                 }
 
                 const imageLabelsResult = await queries.project.getLabelsForImageName(projectPath, image.IName);
-                const imageLabels = imageLabelsResult.rows;
+                const imageLabels = labelRowsFor(image.IName, imageLabelsResult.rows);
 
                 if (imageLabels.length === 0) {
                     console.warn(`Image ${image.IName} has no labels, skipping for classification training.`);
@@ -903,6 +934,7 @@ async function yoloRun(req, res) {
         test_percent: testPct,
         selected_classes: selectedClassesList ? selectedClassesList.join(", ") : null,
         max_images: Number.isFinite(maxImages) ? maxImages : null,
+        preprocessing_batch: preprocessingBatchId || null,
         batch,
         subdiv,
         width,

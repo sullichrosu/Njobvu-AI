@@ -61,9 +61,9 @@ def apply_resize(img, params):
     return cv2.resize(img, (width, height), interpolation=interpolation)
 
 
-def apply_rotate(img, params):
+def rotation_matrix(h, w, params):
+    """2x3 affine (source px -> output px) and output (width, height) for a rotate step."""
     angle = float(params.get("angle", 0))
-    h, w = img.shape[:2]
     center = (w / 2, h / 2)
     matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
 
@@ -74,17 +74,22 @@ def apply_rotate(img, params):
         new_h = int((h * cos) + (w * sin))
         matrix[0, 2] += (new_w / 2) - center[0]
         matrix[1, 2] += (new_h / 2) - center[1]
-        return cv2.warpAffine(img, matrix, (new_w, new_h))
+        return matrix, (new_w, new_h)
 
-    return cv2.warpAffine(img, matrix, (w, h))
+    return matrix, (w, h)
 
 
-def apply_crop(img, params):
+def apply_rotate(img, params):
+    h, w = img.shape[:2]
+    matrix, size = rotation_matrix(h, w, params)
+    return cv2.warpAffine(img, matrix, size)
+
+
+def crop_box(h, w, params):
     top = float(params.get("top", 0))
     bottom = float(params.get("bottom", 0))
     left = float(params.get("left", 0))
     right = float(params.get("right", 0))
-    h, w = img.shape[:2]
 
     y0 = int(h * top / 100)
     y1 = h - int(h * bottom / 100)
@@ -93,7 +98,12 @@ def apply_crop(img, params):
 
     y0, y1 = max(0, y0), max(y0 + 1, y1)
     x0, x1 = max(0, x0), max(x0 + 1, x1)
+    return x0, y0, x1, y1
 
+
+def apply_crop(img, params):
+    h, w = img.shape[:2]
+    x0, y0, x1, y1 = crop_box(h, w, params)
     return img[y0:y1, x0:x1]
 
 
@@ -249,9 +259,37 @@ class ExternalStepWorkers:
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
 
+def step_transform(step, params, before_shape, after_shape):
+    """3x3 affine mapping the step's input pixel coordinates to its output's.
+
+    Steps that do not move pixels return the identity. A custom step is assumed
+    not to move content either, apart from a plain rescale if it changed the
+    image size.
+    """
+    bh, bw = before_shape[:2]
+    ah, aw = after_shape[:2]
+    step_type = step.get("type")
+    m = np.eye(3)
+
+    if step_type == "crop":
+        x0, y0, _, _ = crop_box(bh, bw, params)
+        m[0, 2], m[1, 2] = -x0, -y0
+    elif step_type == "pad":
+        m[0, 2], m[1, 2] = max(0, int(params.get("left", 0))), max(0, int(params.get("top", 0)))
+    elif step_type == "rotate":
+        m[:2, :] = rotation_matrix(bh, bw, params)[0]
+    elif (bh, bw) != (ah, aw):  # resize, or a custom step that rescaled
+        m[0, 0], m[1, 1] = aw / bw, ah / bh
+
+    return m
+
+
 def process_image(img, steps, external=None):
+    """Runs every step; returns (image, 3x3 affine from original to final pixel coordinates)."""
+    transform = np.eye(3)
     for step in steps:
         step_type = step.get("type")
+        before = img.shape
 
         if step_type == "custom":
             script_path = step.get("scriptPath")
@@ -261,21 +299,34 @@ def process_image(img, steps, external=None):
                     img = external.run(script_path, python_path, img)
                 else:
                     img = run_custom_script(script_path, img)
+                transform = step_transform(step, {}, before, img.shape) @ transform
             continue
 
         handler = BUILTIN_STEPS.get(step_type)
         if handler:
-            img = handler(img, step.get("params") or {})
+            params = step.get("params") or {}
+            img = handler(img, params)
+            transform = step_transform(step, params, before, img.shape) @ transform
 
-    return img
+    return img, transform
+
+
+TRANSFORMS_FILE = "transforms.json"
+
+
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 
 def list_images(images_dir):
-    """Every regular file in the directory; ones cv2 cannot decode count as skipped."""
+    """Image files in the directory (not label .txt files or macOS "._" files).
+
+    Ones cv2 still cannot decode count as skipped."""
     return [
         name
         for name in sorted(os.listdir(images_dir))
-        if os.path.isfile(os.path.join(images_dir, name))
+        if not name.startswith(".")
+        and os.path.splitext(name)[1].lower() in IMAGE_EXTENSIONS
+        and os.path.isfile(os.path.join(images_dir, name))
     ]
 
 
@@ -310,6 +361,9 @@ def main():
     skipped = 0
     write_status(args.status, state="running", total=total, processed=0, skipped=0)
 
+    # Where each original pixel landed, so labels can be remapped at training time.
+    transforms = {}
+
     external = ExternalStepWorkers()
     try:
         for name in names:
@@ -317,12 +371,23 @@ def main():
             if img is None:
                 skipped += 1
             else:
-                img = process_image(img, steps, external)
+                src_h, src_w = img.shape[:2]
+                img, transform = process_image(img, steps, external)
                 cv2.imwrite(os.path.join(args.output, name), img)
+                transforms[name] = {
+                    "matrix": transform[:2, :].flatten().tolist(),
+                    "srcWidth": src_w,
+                    "srcHeight": src_h,
+                    "width": img.shape[1],
+                    "height": img.shape[0],
+                }
                 processed += 1
             write_status(args.status, state="running", total=total, processed=processed, skipped=skipped)
     finally:
         external.close()
+
+    with open(os.path.join(args.output, TRANSFORMS_FILE), "w") as f:
+        json.dump(transforms, f)
 
     write_status(args.status, state="completed", total=total, processed=processed, skipped=skipped)
     print(f"Processed {processed} image(s)")

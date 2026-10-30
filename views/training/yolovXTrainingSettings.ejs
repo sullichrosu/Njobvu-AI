@@ -187,6 +187,13 @@
 												<input type="number" id="max_images" name="max_images" min="0" placeholder="Unlimited (all images)" class="form-control" style="width: 100%;">
 												<small class="form-text text-muted">Limit max total images (0 or empty = all)</small>
 											</div>
+											<div class="form-group col-md-6">
+												<h5><label for="preprocessing_batch">Image Source:</label></h5>
+												<select id="preprocessing_batch" name="preprocessing_batch" class="form-control" style="width: 100%;">
+													<option value="">Original images</option>
+												</select>
+												<small class="form-text text-muted">Train on a pre-processed batch instead. Labels are remapped to match crops, padding, resizes and rotations.</small>
+											</div>
 										</div>
 
 										<!-- Train : Validate : Test Split Ratio Controls -->
@@ -410,6 +417,7 @@
 						formData.append("ValPercent", document.getElementById("ValRange").value);
 						formData.append("TestPercent", document.getElementById("TestRange").value);
 						formData.append("max_images", document.getElementById("max_images").value);
+						formData.append("preprocessing_batch", document.getElementById("preprocessing_batch").value);
 						formData.append("selected_classes", JSON.stringify(selectedClasses));
 						formData.append("batch", document.getElementById("batch").value);
 						formData.append("subdiv", document.getElementById("subdiv").value);
@@ -445,5 +453,23 @@
 						});
 					});
 
-				</script>
+				
+				(function loadPreprocessingBatches() {
+					var select = document.getElementById("preprocessing_batch");
+					if (!select) return;
+					fetch("/api/v2/projects/<%= Admin %>/<%= PName %>/preprocessing/batches")
+						.then(function (res) { return res.json(); })
+						.then(function (data) {
+							if (!data.success) return;
+							data.batches.filter(function (b) { return b.hasTransforms; }).forEach(function (b) {
+								var option = document.createElement("option");
+								option.value = b.jobId;
+								option.textContent = (b.name || new Date(b.finishedAt || Number(b.jobId)).toLocaleString()) +
+									" - " + (b.steps.join(" > ") || "no steps") + " (" + b.processed + " images)";
+								select.appendChild(option);
+							});
+						})
+						.catch(function () { /* the selector just stays on "Original images" */ });
+				})();
+</script>
 		<%- include('../includes/footer') %>
