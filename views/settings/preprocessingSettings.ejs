@@ -1,0 +1,713 @@
+<%- include('../includes/header') %>
+<%- include('../includes/processingNav', { activePage }) %>
+
+<div class="container pb-5">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Pre-processing</h1>
+            <p>
+                Build a pre-processing pipeline that runs against project images. Add built-in steps or upload
+                your own custom script, drag to reorder, and toggle steps on or off without removing them.
+            </p>
+            <hr>
+        </div>
+    </div>
+
+    <div id="preprocessingLoadError" class="alert alert-danger d-none"></div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">Add a Step</div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="stepTypeSelect">Built-in options</label>
+                        <select id="stepTypeSelect" class="form-control">
+                            <option value="illumination_normalization">Illumination Normalization</option>
+                            <option value="resize">Resize</option>
+                            <option value="rotate">Rotate</option>
+                            <option value="crop">Crop</option>
+                            <option value="pad">Pad</option>
+                            <option value="noise">Noise</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block" id="addStepBtn" style="border-radius: 0">Add Step</button>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <label for="customScriptSelect">Custom scripts</label>
+                        <select id="customScriptSelect" class="form-control">
+                            <option value="" disabled selected>No custom scripts uploaded</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block mb-3" id="addCustomStepBtn" style="border-radius: 0" disabled>Add Custom Step</button>
+
+                    <div class="form-group">
+                        <label for="customScriptUpload">Upload custom pipeline script (.py)</label>
+                        <input type="file" id="customScriptUpload" class="form-control-file" accept=".py">
+                    </div>
+                    <button type="button" class="btn btn-outline-dark btn-block" id="uploadScriptBtn" style="border-radius: 0">Upload Script</button>
+                    <a class="btn btn-link btn-sm btn-block" id="downloadExampleScriptLink"
+                        href="/api/v2/projects/preprocessing/example-script" download="example_custom_script.py">
+                        Download example script
+                    </a>
+                    <label id="uploadProgress" class="mt-2 text-info d-block" aria-live="polite" aria-atomic="true"></label>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span>Pipeline</span>
+                    <span class="text-muted" style="font-size: 0.8rem;">Drag <i class="fa fa-arrows"></i> to reorder</span>
+                </div>
+                <div class="card-body">
+                    <ul id="pipelineList" class="list-group mb-3"></ul>
+                    <p id="pipelineEmptyMsg" class="text-muted d-none">No steps in this pipeline yet. Add one from the left panel.</p>
+
+                    <div class="form-group">
+                        <label for="batchNameInput" class="mb-1">Batch name <span class="text-muted">(optional)</span></label>
+                        <input type="text" id="batchNameInput" class="form-control" maxlength="100"
+                            placeholder="e.g. Greyscale + 640px resize">
+                        <small class="form-text text-muted">Names the processed images from this run so you can find them later.</small>
+                    </div>
+                    <div class="d-flex">
+                        <button type="button" class="btn btn-success mr-2" id="savePipelineBtn" style="border-radius: 0">Save Pipeline</button>
+                        <button type="button" class="btn btn-warning" id="applyAllBtn" style="border-radius: 0">Apply to All Images</button>
+                    </div>
+                    <label id="pipelineStatus" class="mt-2 d-block" aria-live="polite" aria-atomic="true"></label>
+                    <div id="jobProgressWrap" class="d-none mt-2">
+                        <div class="progress" style="height: 1.5rem; border-radius: 0;">
+                            <div id="jobProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar" style="width: 0%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</div>
+                        </div>
+                        <small id="jobProgressText" class="form-text text-muted" aria-live="polite"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">Processed Batches</div>
+                <div class="card-body">
+                    <p class="text-muted mb-2">
+                        Every time you apply a pipeline the result is kept as a batch. Pick one to compare it with the
+                        original images; you can train on a batch from the training page.
+                    </p>
+                    <div class="form-inline mb-3">
+                        <label for="batchSelect" class="mr-2">Batch</label>
+                        <select id="batchSelect" class="form-control mr-2" style="min-width: 22rem;"></select>
+                        <button type="button" class="btn btn-outline-dark" id="refreshBatchesBtn" style="border-radius: 0">Refresh</button>
+                    </div>
+                    <form id="renameBatchForm" class="form-inline mb-2 d-none">
+                        <label for="renameBatchInput" class="mr-2">Name</label>
+                        <input type="text" id="renameBatchInput" class="form-control mr-2" maxlength="100"
+                            placeholder="Give this batch a name" style="min-width: 22rem;">
+                        <button type="submit" class="btn btn-outline-dark" style="border-radius: 0">Save Name</button>
+                    </form>
+                    <small id="batchInfo" class="form-text text-muted mb-3" aria-live="polite"></small>
+                    <p id="batchEmptyMsg" class="text-muted d-none">No processed batches yet. Apply the pipeline to create one.</p>
+                    <div id="batchGrid" class="row"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const PREPROCESSING_API = "/api/v2/projects/<%= Admin %>/<%= PName %>/preprocessing";
+
+    // Param schema per built-in step type: drives the sliders/inputs rendered for each step.
+    const STEP_TYPES = {
+        illumination_normalization: {
+            label: "Illumination Normalization",
+            fields: [
+                { key: "method", label: "Method", type: "select", options: ["clahe", "histogram_equalization"], default: "clahe" },
+                { key: "clipLimit", label: "Clip Limit", type: "range", min: 1, max: 10, step: 0.1, default: 2.0 },
+                { key: "tileGridSize", label: "Tile Grid Size", type: "range", min: 2, max: 16, step: 1, default: 8 },
+            ],
+        },
+        resize: {
+            label: "Resize",
+            fields: [
+                { key: "width", label: "Width (px)", type: "number", min: 1, max: 8192, default: 640 },
+                { key: "height", label: "Height (px)", type: "number", min: 1, max: 8192, default: 640 },
+                { key: "keepAspectRatio", label: "Keep Aspect Ratio", type: "checkbox", default: true },
+                { key: "interpolation", label: "Interpolation", type: "select", options: ["linear", "nearest", "cubic"], default: "linear" },
+            ],
+        },
+        rotate: {
+            label: "Rotate",
+            fields: [
+                { key: "angle", label: "Angle (degrees)", type: "range", min: -180, max: 180, step: 1, default: 0 },
+                { key: "expand", label: "Expand Canvas to Fit", type: "checkbox", default: false },
+            ],
+        },
+        crop: {
+            label: "Crop",
+            fields: [
+                { key: "top", label: "Top (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+                { key: "bottom", label: "Bottom (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+                { key: "left", label: "Left (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+                { key: "right", label: "Right (%)", type: "range", min: 0, max: 45, step: 1, default: 0 },
+            ],
+        },
+        pad: {
+            label: "Pad",
+            fields: [
+                { key: "top", label: "Top (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "bottom", label: "Bottom (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "left", label: "Left (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "right", label: "Right (px)", type: "number", min: 0, max: 2048, default: 0 },
+                { key: "mode", label: "Mode", type: "select", options: ["constant", "reflect", "replicate"], default: "constant" },
+                { key: "color", label: "Fill Color", type: "color", default: "#000000" },
+            ],
+        },
+        noise: {
+            label: "Noise",
+            fields: [
+                { key: "type", label: "Type", type: "select", options: ["gaussian", "salt_pepper"], default: "gaussian" },
+                { key: "amount", label: "Amount", type: "range", min: 0, max: 1, step: 0.01, default: 0.05 },
+            ],
+        },
+    };
+
+    let pipeline = [];
+    let customScripts = [];
+    let stepCounter = 0;
+
+    function defaultParams(type) {
+        const params = {};
+        (STEP_TYPES[type] ? STEP_TYPES[type].fields : []).forEach((f) => { params[f.key] = f.default; });
+        return params;
+    }
+
+    function fieldControlHtml(stepId, field, value) {
+        const inputId = `step-${stepId}-${field.key}`;
+        if (field.type === "select") {
+            const opts = field.options.map((o) => `<option value="${o}" ${o === value ? "selected" : ""}>${o}</option>`).join("");
+            return `<select class="form-control form-control-sm step-param" id="${inputId}" data-key="${field.key}">${opts}</select>`;
+        }
+        if (field.type === "checkbox") {
+            return `<input type="checkbox" class="step-param" id="${inputId}" data-key="${field.key}" ${value ? "checked" : ""}>`;
+        }
+        if (field.type === "range") {
+            // Slider plus a typed-value box kept in sync with it (see the step-param handler).
+            return `
+                <input type="range" class="custom-range step-param" id="${inputId}" data-key="${field.key}"
+                    min="${field.min}" max="${field.max}" step="${field.step}" value="${value}">
+                <input type="number" class="form-control form-control-sm mt-1 step-param-number" id="${inputId}-num"
+                    data-key="${field.key}" data-slider-id="${inputId}"
+                    min="${field.min}" max="${field.max}" step="${field.step}" value="${value}"
+                    aria-label="${field.label} value">`;
+        }
+        if (field.type === "color") {
+            return `<input type="color" class="step-param" id="${inputId}" data-key="${field.key}" value="${value}">`;
+        }
+        return `<input type="number" class="form-control form-control-sm step-param" id="${inputId}" data-key="${field.key}"
+            min="${field.min}" max="${field.max}" value="${value}">`;
+    }
+
+    function stepFieldsHtml(step) {
+        if (step.type === "custom") {
+            const script = customScripts.find((s) => s.id === step.scriptId);
+            const pythonPath = script && script.pythonPath ? script.pythonPath : "";
+            return `
+                <div class="text-muted small mb-1">Custom script: ${script ? script.name : step.scriptId}</div>
+                <div class="form-group mb-0">
+                    <label class="small mb-0" for="python-path-${step.id}">Python path</label>
+                    <input type="text" class="form-control form-control-sm step-python-path" id="python-path-${step.id}"
+                        data-script-id="${step.scriptId}" maxlength="1024" value="${pythonPath.replace(/"/g, "&quot;")}"
+                        placeholder="Server default (e.g. /usr/bin/python3)">
+                    <small class="form-text text-muted step-python-path-status" aria-live="polite"></small>
+                </div>`;
+        }
+        const def = STEP_TYPES[step.type];
+        if (!def) return "";
+        return def.fields.map((field) => `
+            <div class="form-group row align-items-center mb-1">
+                <label class="col-6 col-form-label col-form-label-sm mb-0">${field.label}</label>
+                <div class="col-6">${fieldControlHtml(step.id, field, step.params[field.key])}</div>
+            </div>
+        `).join("");
+    }
+
+    function stepLabel(step) {
+        if (step.type === "custom") {
+            const script = customScripts.find((s) => s.id === step.scriptId);
+            return script ? script.name : "Custom Script";
+        }
+        return STEP_TYPES[step.type] ? STEP_TYPES[step.type].label : step.type;
+    }
+
+    function renderPipeline() {
+        const list = document.getElementById("pipelineList");
+        const emptyMsg = document.getElementById("pipelineEmptyMsg");
+        list.innerHTML = "";
+
+        if (pipeline.length === 0) {
+            emptyMsg.classList.remove("d-none");
+        } else {
+            emptyMsg.classList.add("d-none");
+        }
+
+        pipeline
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .forEach((step) => {
+                const li = document.createElement("li");
+                li.className = "list-group-item";
+                li.draggable = true;
+                li.dataset.stepId = step.id;
+                li.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="d-flex align-items-center">
+                            <span class="mr-2" style="cursor: grab;" title="Drag to reorder">&#9776;</span>
+                            <input type="checkbox" class="mr-2 step-enabled" data-toggle="toggle" data-onstyle="success" data-size="sm" ${step.enabled ? "checked" : ""}>
+                            <strong>${stepLabel(step)}</strong>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-step-btn" style="border-radius: 0">Remove</button>
+                    </div>
+                    <div class="mt-2 step-fields">${stepFieldsHtml(step)}</div>
+                `;
+
+                li.querySelector(".step-enabled").addEventListener("change", (e) => {
+                    step.enabled = e.target.checked;
+                });
+
+                const pathInput = li.querySelector(".step-python-path");
+                if (pathInput) {
+                    pathInput.addEventListener("change", () => {
+                        saveScriptPythonPath(pathInput.dataset.scriptId, pathInput.value.trim(), li);
+                    });
+                }
+
+                li.querySelector(".remove-step-btn").addEventListener("click", () => {
+                    pipeline = pipeline.filter((s) => s.id !== step.id);
+                    renderPipeline();
+                });
+
+                li.querySelectorAll(".step-param").forEach((input) => {
+                    const key = input.dataset.key;
+                    const eventName = input.type === "checkbox" ? "change" : "input";
+                    const numberBox = li.querySelector(`#${input.id}-num`);
+                    input.addEventListener(eventName, (e) => {
+                        let value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+                        if (e.target.type === "range" || e.target.type === "number") {
+                            value = parseFloat(value);
+                            if (input.type === "range" && numberBox) numberBox.value = value;
+                        }
+                        step.params[key] = value;
+                    });
+                });
+
+                // Typed values for sliders: update the slider live while typing (when the number
+                // is in range), and clamp/snap to min/max on commit so out-of-range or empty text
+                // can never reach the saved pipeline.
+                li.querySelectorAll(".step-param-number").forEach((numberBox) => {
+                    const slider = li.querySelector(`#${numberBox.dataset.sliderId}`);
+                    const key = numberBox.dataset.key;
+                    const min = parseFloat(numberBox.min);
+                    const max = parseFloat(numberBox.max);
+
+                    numberBox.addEventListener("input", () => {
+                        const typed = parseFloat(numberBox.value);
+                        if (Number.isNaN(typed) || typed < min || typed > max) return;
+                        slider.value = typed;
+                        step.params[key] = typed;
+                    });
+                    numberBox.addEventListener("change", () => {
+                        let typed = parseFloat(numberBox.value);
+                        if (Number.isNaN(typed)) typed = parseFloat(slider.value);
+                        typed = Math.min(max, Math.max(min, typed));
+                        numberBox.value = typed;
+                        slider.value = typed;
+                        step.params[key] = typed;
+                    });
+                });
+
+                li.addEventListener("dragstart", (e) => {
+                    e.dataTransfer.setData("text/plain", step.id);
+                    e.dataTransfer.effectAllowed = "move";
+                });
+                li.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                });
+                li.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    const draggedId = e.dataTransfer.getData("text/plain");
+                    if (draggedId === step.id) return;
+                    reorderPipeline(draggedId, step.id);
+                });
+
+                list.appendChild(li);
+            });
+
+        if (window.jQuery && jQuery.fn.bootstrapToggle) {
+            jQuery('input[data-toggle="toggle"]').bootstrapToggle();
+        }
+    }
+
+    function reorderPipeline(draggedId, targetId) {
+        const ordered = pipeline.slice().sort((a, b) => a.order - b.order);
+        const fromIdx = ordered.findIndex((s) => s.id === draggedId);
+        const toIdx = ordered.findIndex((s) => s.id === targetId);
+        if (fromIdx === -1 || toIdx === -1) return;
+        const [moved] = ordered.splice(fromIdx, 1);
+        ordered.splice(toIdx, 0, moved);
+        ordered.forEach((s, i) => { s.order = i; });
+        pipeline = ordered;
+        renderPipeline();
+    }
+
+    function addStep(type) {
+        stepCounter += 1;
+        pipeline.push({
+            id: `new-${Date.now()}-${stepCounter}`,
+            type: type,
+            enabled: true,
+            order: pipeline.length,
+            params: defaultParams(type),
+        });
+        renderPipeline();
+    }
+
+    function addCustomStep(scriptId) {
+        stepCounter += 1;
+        pipeline.push({
+            id: `new-${Date.now()}-${stepCounter}`,
+            type: "custom",
+            scriptId: scriptId,
+            enabled: true,
+            order: pipeline.length,
+            params: {},
+        });
+        renderPipeline();
+    }
+
+    // The interpreter belongs to the script, so steps that share a script share its path;
+    // saving one re-renders the rest with the stored value.
+    async function saveScriptPythonPath(scriptId, pythonPath, li) {
+        const script = customScripts.find((s) => s.id === scriptId);
+        if (!script) return;
+        const statusEl = li.querySelector(".step-python-path-status");
+        statusEl.textContent = "Saving...";
+
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/scripts/${encodeURIComponent(scriptId)}/python-path`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pythonPath }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to save Python path");
+            script.pythonPath = data.pythonPath;
+            renderPipeline();
+        } catch (err) {
+            statusEl.textContent = "";
+            alert("Could not save Python path.\nReason: " + err.message);
+            const input = li.querySelector(".step-python-path");
+            input.value = script.pythonPath || "";
+        }
+    }
+
+    function renderCustomScriptOptions() {
+        const select = document.getElementById("customScriptSelect");
+        const addBtn = document.getElementById("addCustomStepBtn");
+        if (customScripts.length === 0) {
+            select.innerHTML = '<option value="" disabled selected>No custom scripts uploaded</option>';
+            addBtn.disabled = true;
+            return;
+        }
+        select.innerHTML = customScripts.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+        addBtn.disabled = false;
+    }
+
+    function serializePipeline() {
+        return pipeline
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((step, index) => ({
+                id: step.id.startsWith("new-") ? undefined : step.id,
+                type: step.type,
+                scriptId: step.type === "custom" ? step.scriptId : undefined,
+                enabled: step.enabled,
+                order: index,
+                params: step.params,
+            }));
+    }
+
+    async function loadPipeline() {
+        try {
+            const res = await fetch(PREPROCESSING_API);
+            if (!res.ok) throw new Error(`Failed to load pipeline (status ${res.status})`);
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || "Failed to load pipeline");
+
+            pipeline = (data.pipeline || []).map((step) => ({
+                id: step.id,
+                type: step.type,
+                scriptId: step.scriptId,
+                enabled: !!step.enabled,
+                order: step.order,
+                params: Object.assign(defaultParams(step.type), step.params || {}),
+            }));
+            customScripts = data.customScripts || [];
+            renderCustomScriptOptions();
+            renderPipeline();
+        } catch (err) {
+            const errBox = document.getElementById("preprocessingLoadError");
+            errBox.classList.remove("d-none");
+            errBox.textContent = "Could not load the saved pipeline (starting from an empty pipeline). " + err.message;
+            renderPipeline();
+        }
+    }
+
+    async function savePipeline() {
+        const status = document.getElementById("pipelineStatus");
+        status.textContent = "Saving...";
+        try {
+            const res = await fetch(PREPROCESSING_API, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pipeline: serializePipeline() }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to save pipeline");
+            status.textContent = "Pipeline saved.";
+            await loadPipeline();
+        } catch (err) {
+            status.textContent = "";
+            alert("Could not save pipeline.\nReason: " + err.message);
+        }
+    }
+
+    function showJobProgress(job) {
+        const wrap = document.getElementById("jobProgressWrap");
+        const bar = document.getElementById("jobProgressBar");
+        const text = document.getElementById("jobProgressText");
+        const percent = job.total > 0
+            ? Math.min(100, Math.round(((job.processed + (job.skipped || 0)) / job.total) * 100))
+            : (job.state === "completed" ? 100 : 0);
+
+        wrap.classList.remove("d-none");
+        bar.style.width = percent + "%";
+        bar.setAttribute("aria-valuenow", percent);
+        bar.textContent = percent + "%";
+        bar.classList.toggle("progress-bar-animated", job.state === "running");
+        bar.classList.toggle("progress-bar-striped", job.state === "running");
+        bar.classList.toggle("bg-success", job.state === "completed");
+        bar.classList.toggle("bg-danger", job.state === "failed");
+
+        if (job.state === "failed") {
+            text.textContent = "Pre-processing failed" + (job.error ? ": " + job.error : ".");
+        } else if (job.state === "completed") {
+            text.textContent = `Done: ${job.processed} of ${job.total} image(s) processed` +
+                (job.skipped ? `, ${job.skipped} skipped.` : ".");
+        } else {
+            text.textContent = `Processing ${job.processed} of ${job.total} image(s)...`;
+        }
+    }
+
+    async function pollJob(jobId) {
+        const status = document.getElementById("pipelineStatus");
+        const btn = document.getElementById("applyAllBtn");
+        try {
+            for (;;) {
+                const res = await fetch(`${PREPROCESSING_API}/jobs/${encodeURIComponent(jobId)}`);
+                const job = await res.json();
+                if (!res.ok || !job.success) throw new Error(job.error || "Could not read job status");
+                showJobProgress(job);
+                if (job.state !== "running") {
+                    status.textContent = job.state === "completed" ? "Pre-processing finished." : "Pre-processing failed.";
+                    if (job.state === "completed") {
+                        loadBatches().then(() => {
+                            const select = document.getElementById("batchSelect");
+                            select.value = jobId;
+                            showBatch(batchList.find((b) => b.jobId === jobId));
+                        });
+                    }
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+        } catch (err) {
+            status.textContent = "Lost track of the job: " + err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function applyToAll() {
+        if (!confirm("Apply this pipeline to every image in the project? This may take a while.")) return;
+        const status = document.getElementById("pipelineStatus");
+        const btn = document.getElementById("applyAllBtn");
+        btn.disabled = true;
+        status.textContent = "Starting pre-processing job...";
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/apply`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: document.getElementById("batchNameInput").value }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to apply pipeline");
+            status.textContent = `Pipeline job started (job ${data.jobId}).`;
+            document.getElementById("batchNameInput").value = "";
+            showJobProgress({ state: "running", total: 0, processed: 0, skipped: 0 });
+            await pollJob(data.jobId);
+        } catch (err) {
+            status.textContent = "";
+            btn.disabled = false;
+            alert("Could not apply pipeline to all images.\nReason: " + err.message);
+        }
+    }
+
+    async function uploadCustomScript() {
+        const fileInput = document.getElementById("customScriptUpload");
+        const file = fileInput.files[0];
+        const progress = document.getElementById("uploadProgress");
+        if (!file) {
+            alert("Choose a .py file to upload first.");
+            return;
+        }
+        const formData = new FormData();
+        formData.append("script", file);
+
+        progress.textContent = "Uploading...";
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/scripts`, { method: "POST", body: formData });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Failed to upload script");
+            customScripts.push(data.script);
+            renderCustomScriptOptions();
+            fileInput.value = "";
+            progress.textContent = "Uploaded " + data.script.name;
+        } catch (err) {
+            progress.textContent = "";
+            alert("Could not upload custom script.\nReason: " + err.message);
+        }
+    }
+
+    document.getElementById("addStepBtn").addEventListener("click", () => {
+        addStep(document.getElementById("stepTypeSelect").value);
+    });
+    document.getElementById("addCustomStepBtn").addEventListener("click", () => {
+        const scriptId = document.getElementById("customScriptSelect").value;
+        if (scriptId) addCustomStep(scriptId);
+    });
+    document.getElementById("uploadScriptBtn").addEventListener("click", uploadCustomScript);
+    document.getElementById("savePipelineBtn").addEventListener("click", savePipeline);
+    document.getElementById("applyAllBtn").addEventListener("click", applyToAll);
+
+
+    // ---- Processed batches -------------------------------------------------------------
+
+    function batchImageUrl(jobId, name) {
+        return `${PREPROCESSING_API}/batches/${encodeURIComponent(jobId)}/images/${encodeURIComponent(name)}`;
+    }
+
+    function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    function batchLabel(b) {
+        const when = b.finishedAt ? new Date(b.finishedAt).toLocaleString() : b.jobId;
+        return `${b.name || when} - ${b.steps.join(" > ") || "no steps"} (${b.processed} images)`;
+    }
+
+    async function showBatch(batch) {
+        const grid = document.getElementById("batchGrid");
+        const info = document.getElementById("batchInfo");
+        const renameForm = document.getElementById("renameBatchForm");
+        grid.innerHTML = "";
+        renameForm.classList.toggle("d-none", !batch);
+        if (!batch) {
+            info.textContent = "";
+            return;
+        }
+        document.getElementById("renameBatchInput").value = batch.name || "";
+        info.textContent = `${batch.processed} image(s) processed with: ${batch.steps.join(" > ") || "no steps"}` +
+            (batch.hasTransforms ? "" : ". This batch predates label remapping and cannot be used for training.");
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/batches/${encodeURIComponent(batch.jobId)}/images`);
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Could not list batch images");
+            grid.innerHTML = data.images.map((name) => `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header py-1 small text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                        <div class="card-body p-2 d-flex">
+                            <a class="w-50 pr-1" href="${batchImageUrl("original", name)}" target="_blank" rel="noopener">
+                                <img class="img-fluid" loading="lazy" alt="Original ${escapeHtml(name)}" src="${batchImageUrl("original", name)}">
+                                <small class="text-muted d-block text-center">Original</small>
+                            </a>
+                            <a class="w-50 pl-1" href="${batchImageUrl(batch.jobId, name)}" target="_blank" rel="noopener">
+                                <img class="img-fluid" loading="lazy" alt="Processed ${escapeHtml(name)}" src="${batchImageUrl(batch.jobId, name)}">
+                                <small class="text-muted d-block text-center">Processed</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>`).join("");
+        } catch (err) {
+            info.textContent = "Could not load batch: " + err.message;
+        }
+    }
+
+    let batchList = [];
+
+    async function loadBatches() {
+        const select = document.getElementById("batchSelect");
+        const empty = document.getElementById("batchEmptyMsg");
+        const previous = select.value;
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/batches`);
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Could not list batches");
+            batchList = data.batches;
+        } catch (err) {
+            batchList = [];
+            document.getElementById("batchInfo").textContent = "Could not load batches: " + err.message;
+        }
+        select.innerHTML = batchList.map((b) => `<option value="${b.jobId}">${escapeHtml(batchLabel(b))}</option>`).join("");
+        empty.classList.toggle("d-none", batchList.length > 0);
+        if (batchList.some((b) => b.jobId === previous)) select.value = previous;
+        showBatch(batchList.find((b) => b.jobId === select.value));
+    }
+
+    document.getElementById("batchSelect").addEventListener("change", (e) => {
+        showBatch(batchList.find((b) => b.jobId === e.target.value));
+    });
+    document.getElementById("refreshBatchesBtn").addEventListener("click", loadBatches);
+    document.getElementById("renameBatchForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const jobId = document.getElementById("batchSelect").value;
+        const info = document.getElementById("batchInfo");
+        try {
+            const res = await fetch(`${PREPROCESSING_API}/batches/${encodeURIComponent(jobId)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: document.getElementById("renameBatchInput").value }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Could not save the name");
+            const batch = batchList.find((b) => b.jobId === jobId);
+            if (batch) batch.name = data.name;
+            document.querySelector(`#batchSelect option[value="${jobId}"]`).textContent = batchLabel(batch);
+            info.textContent = data.name ? `Saved name "${data.name}".` : "Name cleared.";
+        } catch (err) {
+            info.textContent = "Could not save name: " + err.message;
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+        loadPipeline();
+        loadBatches();
+    });
+</script>
