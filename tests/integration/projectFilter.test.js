@@ -159,6 +159,45 @@ describe("Project & Image Sorting / Filtering API & Page Integration Tests", () 
             expect(res.statusCode).toBe(200);
             expect(res.headers["content-type"]).toMatch(/html/);
         }, 15000);
+
+        it("renders the requested page when project metadata is paginated in the database", async () => {
+            const accessRows = Array.from({ length: 10 }, (_, index) => ({
+                Username: testUsername,
+                PName: `project-${index + 1}`,
+                Admin: testAdmin,
+            })).concat([
+                { Username: testUsername, PName: "only-page-two-A", Admin: testAdmin },
+                { Username: testUsername, PName: "only-page-two-B", Admin: testAdmin },
+            ]);
+            const pageTwoRows = [
+                { PName: "only-page-two-A", Admin: testAdmin, AutoSave: 0, Validate: 0, total_count: 12 },
+                { PName: "only-page-two-B", Admin: testAdmin, AutoSave: 0, Validate: 0, total_count: 12 },
+            ];
+
+            global.managedDbClient = {
+                all: jest.fn().mockImplementation((sql) => {
+                    if (sql.includes("INNER JOIN Projects")) {
+                        return Promise.resolve({ success: true, rows: pageTwoRows });
+                    }
+                    if (sql.includes("FROM Access")) {
+                        return Promise.resolve({ success: true, rows: accessRows });
+                    }
+                    return Promise.resolve({ success: true, rows: [] });
+                }),
+                get: jest.fn().mockResolvedValue({ success: true, row: null }),
+                run: jest.fn().mockResolvedValue({ success: true, changes: 1 }),
+            };
+
+            const res = await request(app)
+                .get("/home?page=2&perPage=10&sortBy=name&sortOrder=asc&needsReview=all")
+                .set("Cookie", [`Username=${testUsername}`]);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.text).toContain("only-page-two-A");
+            expect(res.text).toContain("only-page-two-B");
+            expect(res.text).toContain("/project?IDX=10&page=1&perPage=10");
+            expect(res.text).toContain("/project?IDX=11&page=1&perPage=10");
+        }, 15000);
     });
 
     describe("GET /homeV only lists projects switched to validation mode (regression)", () => {
