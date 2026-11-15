@@ -445,5 +445,51 @@
 						});
 					});
 
+					// Additive "Launch on HPC" option (strangler-fig): submits the same
+					// fields as the local /yolo-run above, but to the Slurm endpoint
+					// (training_type: "yolo" routes to utils/slurmYoloTrainingJob.js).
+					// Hidden entirely when the user has no Slurm access.
+					HpcLaunch.init({
+						formId: "yolo-run",
+						endpoint: "/api/v2/slurm/training-jobs",
+						redirectUrl: "/hpc/jobs?IDX=<%= IDX %>",
+						collectFields: function () {
+							var weights_file = document.getElementById("Weights").value;
+							if (weights_file == "") {
+								alert("Must select a weights file");
+								return false;
+							}
+
+							var selectedClasses = [];
+							document.querySelectorAll(".class-checkbox:checked").forEach(function (cb) {
+								selectedClasses.push(cb.value);
+							});
+
+							return {
+								PName: "<%= PName %>",
+								Admin: "<%= Admin %>",
+								training_type: "yolo",
+								TrainingPercent: document.getElementById("TrainingRange").value,
+								ValPercent: document.getElementById("ValRange").value,
+								TestPercent: document.getElementById("TestRange").value,
+								max_images: document.getElementById("max_images").value,
+								selected_classes: JSON.stringify(selectedClasses),
+								batch: document.getElementById("batch").value,
+								subdiv: document.getElementById("subdiv").value,
+								yolovx_path: document.getElementById("Yolo").value,
+								weights: weights_file,
+								width: document.getElementById("width").value,
+								height: document.getElementById("height").value,
+								yolo_version: document.getElementById("yolo_version").value,
+								yolo_task: document.getElementById("yolo_task").value,
+								yolo_mode: document.getElementById("yolo_mode").value,
+								epochs: document.getElementById("epochs").value,
+								options: document.getElementById("options").value,
+								imgsz: document.getElementById("imgsz").value,
+								device: document.getElementById("device").value,
+							};
+						},
+					});
+
 				</script>
 		<%- include('../includes/footer') %>
