@@ -2,6 +2,7 @@ const queries = require("../../../queries/queries");
 const { hasSlurmAccess, isSlurmConfigured, getSlurmPartitions, isValidSlurmPartition } = require("../../../utils/slurmAccess");
 const { submitSbatchJob, getSlurmJobRuntimeStatus } = require("../../../utils/slurmSubmit");
 const { prepareTrainingSubmission } = require("../../../utils/slurmTrainingJob");
+const { prepareYoloTrainingSubmission } = require("../../../utils/slurmYoloTrainingJob");
 const { prepareInferenceSubmission } = require("../../../utils/slurmInferenceJob");
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL", "OUT_OF_MEMORY"]);
@@ -106,9 +107,10 @@ async function getSlurmJobStatus(req, res) {
 }
 
 // POST /api/v2/slurm/training-jobs - submit a training run to the HPC via
-// `sbatch` instead of the local `exec` path in routes/training/run.js.
-// Additive: routes/training/run.js is untouched and keeps working exactly
-// as before for users who don't opt into the HPC launch option.
+// `sbatch` instead of the local `exec` path in routes/training/run.js (or,
+// for `training_type: "yolo"`, routes/training/yoloRun.js). Additive: both
+// local-exec routes are untouched and keep working exactly as before for
+// users who don't opt into the HPC launch option.
 async function submitTrainingJob(req, res) {
     const username = req.cookies && req.cookies.Username;
 
@@ -131,9 +133,13 @@ async function submitTrainingJob(req, res) {
         return res.status(err.statusCode || 500).json({ success: false, error: err.message });
     }
 
+    const trainingType = req.body.training_type;
+
     let submission;
     try {
-        submission = await prepareTrainingSubmission(req);
+        submission = trainingType === "yolo"
+            ? await prepareYoloTrainingSubmission(req)
+            : await prepareTrainingSubmission(req);
     } catch (err) {
         global.logger.error("Error preparing Slurm training job:", err);
         return res.status(err.statusCode || 500).json({ success: false, error: err.message });

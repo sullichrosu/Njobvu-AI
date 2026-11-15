@@ -16,6 +16,10 @@ jest.mock('../../utils/slurmTrainingJob', () => ({
     prepareTrainingSubmission: jest.fn(),
 }));
 
+jest.mock('../../utils/slurmYoloTrainingJob', () => ({
+    prepareYoloTrainingSubmission: jest.fn(),
+}));
+
 jest.mock('../../utils/slurmInferenceJob', () => ({
     prepareInferenceSubmission: jest.fn(),
 }));
@@ -26,6 +30,7 @@ const cookieParser = require('cookie-parser');
 const queries = require('../../queries/queries');
 const { submitSbatchJob, getSlurmJobRuntimeStatus } = require('../../utils/slurmSubmit');
 const { prepareTrainingSubmission } = require('../../utils/slurmTrainingJob');
+const { prepareYoloTrainingSubmission } = require('../../utils/slurmYoloTrainingJob');
 const { prepareInferenceSubmission } = require('../../utils/slurmInferenceJob');
 const {
     getSlurmAccess,
@@ -355,6 +360,49 @@ describe('Slurm job routes', () => {
 
             expect(res.statusCode).toBe(500);
             expect(queries.managed.recordSlurmJob).not.toHaveBeenCalled();
+        });
+
+        it('dispatches to the YOLO builder when training_type is "yolo", leaving the generic builder untouched', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
+            prepareYoloTrainingSubmission.mockResolvedValue({
+                command: 'python3 datatovalues.py -d /run -t detect -m train -o "EMPTY"',
+                runPath: '/proj/training/logs/456',
+                jobName: 'train_yolo_proj_456',
+                logFile: '/proj/training/logs/456/sbatch.out',
+                errFile: '/proj/training/logs/456/456-error.log',
+                PName: 'proj',
+                Admin: 'admin',
+            });
+            submitSbatchJob.mockResolvedValue({ slurmJobId: '777' });
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ PName: 'proj', Admin: 'admin', training_type: 'yolo', yolovx_path: '/usr/local/bin/yolo', weights: 'yolov8n.pt' });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toEqual({ success: true, slurmJobId: '777', runPath: '/proj/training/logs/456' });
+            expect(prepareYoloTrainingSubmission).toHaveBeenCalledTimes(1);
+            expect(prepareTrainingSubmission).not.toHaveBeenCalled();
+            expect(queries.managed.recordSlurmJob).toHaveBeenCalledWith(
+                '777', 'testuser', 'proj', 'admin', 'training', '/proj/training/logs/456', expect.any(String), undefined,
+            );
+        });
+
+        it('propagates validation errors from the YOLO builder', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
+            const err = new Error('Missing required YOLO training job parameters (PName, Admin, yolovx_path, weights)');
+            err.statusCode = 400;
+            prepareYoloTrainingSubmission.mockRejectedValue(err);
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ training_type: 'yolo' });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.success).toBe(false);
+            expect(submitSbatchJob).not.toHaveBeenCalled();
         });
     });
 
