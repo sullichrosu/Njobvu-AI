@@ -1,12 +1,23 @@
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
+const slurmStaging = require("./slurmStaging");
 
 // Submits a shell command to the HPC scheduler via `sbatch` instead of
 // running it in-process with `exec`. Uses execFile (argv array, no shell)
 // so job names / paths built from user-influenced project data can't be
 // interpreted as shell metacharacters.
-function submitSbatchJob({ jobName, command, runPath, logFile, errFile, partition }) {
+async function submitSbatchJob({ jobName, command, runPath, logFile, errFile, partition }) {
+    if (slurmStaging.isStagingEnabled()) {
+        // Mirror public/projects onto the submission host *before* writing
+        // and submitting the script below, so every absolute path baked
+        // into `command`/`logFile`/`errFile` (all rooted at
+        // global.currentPath, same as the remote root - see
+        // utils/slurmStaging.js) already resolves there by the time sbatch
+        // runs.
+        await slurmStaging.stageProjectsToRemote();
+    }
+
     return new Promise((resolve, reject) => {
         const slurmBinPath = (global.configFile && global.configFile.slurm_bin_path) || "";
 

@@ -1,6 +1,7 @@
 const queries = require("../../../queries/queries");
 const { hasSlurmAccess, isSlurmConfigured, getSlurmPartitions, isValidSlurmPartition } = require("../../../utils/slurmAccess");
 const { submitSbatchJob, getSlurmJobRuntimeStatus } = require("../../../utils/slurmSubmit");
+const slurmStaging = require("../../../utils/slurmStaging");
 const { prepareTrainingSubmission } = require("../../../utils/slurmTrainingJob");
 const { prepareYoloTrainingSubmission } = require("../../../utils/slurmYoloTrainingJob");
 const { prepareInferenceSubmission } = require("../../../utils/slurmInferenceJob");
@@ -96,6 +97,20 @@ async function getSlurmJobStatus(req, res) {
                 const updatedAt = new Date().toISOString();
                 await queries.managed.updateSlurmJobStatus(slurmJobId, runtimeStatus, updatedAt);
                 job = { ...job, Status: runtimeStatus, UpdatedAt: updatedAt };
+
+                // Just transitioned into a terminal state - pull results
+                // (weights, logs) back from the submission host so they're
+                // on local disk same as a locally-run job. Best-effort: a
+                // failed fetch shouldn't turn a successful job into an
+                // error response, and the next status poll will retry it
+                // since nothing here marks the fetch itself as done.
+                if (TERMINAL_STATUSES.has(runtimeStatus) && slurmStaging.isStagingEnabled()) {
+                    try {
+                        await slurmStaging.fetchProjectsFromRemote();
+                    } catch (fetchErr) {
+                        global.logger.error("Error fetching Slurm job results from remote:", fetchErr);
+                    }
+                }
             }
         }
 

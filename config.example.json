@@ -13,5 +13,11 @@
     "ssl_cert_path": "",
     "slurm_bin_path": "",
     "slurm_allowed_users": [],
-    "slurm_partitions": []
+    "slurm_partitions": [],
+    "slurm_staging": {
+        "enabled": false,
+        "ssh_destination": "",
+        "ssh_key": "",
+        "remote_root": ""
+    }
 }

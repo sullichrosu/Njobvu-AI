@@ -16,11 +16,13 @@ describe('utils/slurmSubmit', () => {
         jest.clearAllMocks();
         runPath = fs.mkdtempSync(path.join(os.tmpdir(), 'slurm-submit-test-'));
         global.configFile = { slurm_bin_path: '/opt/slurm/bin' };
+        global.currentPath = '/home/fc/code/njobvu-ai/';
     });
 
     afterEach(() => {
         fs.rmSync(runPath, { recursive: true, force: true });
         global.configFile = undefined;
+        global.currentPath = undefined;
     });
 
     describe('submitSbatchJob', () => {
@@ -89,6 +91,41 @@ describe('utils/slurmSubmit', () => {
             await expect(submitSbatchJob({
                 jobName: 'job', command: 'echo hi', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`,
             })).rejects.toThrow(/Could not parse Slurm job id/);
+        });
+
+        it('stages the project tree to the remote host before calling sbatch when staging is enabled', async () => {
+            global.configFile.slurm_staging = {
+                enabled: true,
+                ssh_destination: 'fc@frrt-space-1',
+                ssh_key: '/home/svc/.ssh/njobvu_slurm',
+                remote_root: '/home/fc/code/njobvu-ai',
+            };
+
+            const calls = [];
+            execFile.mockImplementation((bin, args, cb) => {
+                calls.push(bin);
+                if (bin === 'rsync') {
+                    return cb(null, '', '');
+                }
+                cb(null, 'Submitted batch job 4242\n', '');
+            });
+
+            await submitSbatchJob({
+                jobName: 'my_job', command: 'python3 train.py', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`,
+            });
+
+            expect(calls).toEqual(['rsync', path.join('/opt/slurm/bin', 'sbatch')]);
+        });
+
+        it('does not stage when staging is not configured', async () => {
+            execFile.mockImplementation((bin, args, cb) => cb(null, 'Submitted batch job 4242\n', ''));
+
+            await submitSbatchJob({
+                jobName: 'my_job', command: 'python3 train.py', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`,
+            });
+
+            expect(execFile).toHaveBeenCalledTimes(1);
+            expect(execFile).toHaveBeenCalledWith(path.join('/opt/slurm/bin', 'sbatch'), expect.anything(), expect.any(Function));
         });
     });
 
