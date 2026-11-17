@@ -142,7 +142,11 @@ async function buildYoloSubmission(req) {
 
     const inferenceFilePath = await resolveInferenceFilePath(ctx, req);
 
-    const cmd = `${config["default_python_path"] || "python3"} ${yoloScript} -d ${ctx.runPath} -i ${inferenceFilePath} -n ${classesPath} -l ${ctx.runPath}/${log} -f ${yolovxPath} -w ${weightPath} -t ${yoloTask}`;
+    // slurm_python_path (an interpreter provisioned on the HPC cluster
+    // itself) wins over default_python_path when set - see
+    // buildMegadetectorSubmission below for the same override.
+    const yoloPythonBin = config["slurm_python_path"] || config["default_python_path"] || "python3";
+    const cmd = `${yoloPythonBin} ${yoloScript} -d ${ctx.runPath} -i ${inferenceFilePath} -n ${classesPath} -l ${ctx.runPath}/${log} -f ${yolovxPath} -w ${weightPath} -t ${yoloTask}`;
 
     const runOptionsHeader = formatRunOptionsHeader({
         project: ctx.PName,
@@ -179,7 +183,13 @@ async function buildMegadetectorSubmission(req) {
 
     const inferenceFilePath = await resolveInferenceFilePath(ctx, req);
 
-    const pythonPath = path.resolve(ctx.publicPath, config["default_python_path"]);
+    // slurm_python_path is an absolute path on the HPC submission host
+    // itself, so unlike default_python_path it's used as-is rather than
+    // resolved against the local app root - resolving it locally would be
+    // meaningless for a path that's only ever meant to be read remotely.
+    const pythonPath = (config["slurm_python_path"] && config["slurm_python_path"].trim())
+        ? config["slurm_python_path"]
+        : path.resolve(ctx.publicPath, config["default_python_path"]);
     const cmd = `"${pythonPath}" ${megadetectorScript} -i ${inferenceFilePath} -m ${model} -o ${ctx.runPath} -t ${threshold} -f ${fps}`;
 
     const runOptionsHeader = formatRunOptionsHeader({
@@ -229,7 +239,10 @@ async function buildInceptionSubmission(req) {
         fs.appendFileSync(`${ctx.runPath}/classes.txt`, `${cls.CName}\n`);
     }
 
-    const cmd = `python3 ${inferenceScript} -i ${inferenceFilePath} -n ${ctx.runPath}/classes.txt -w ${usingImageNetClasses ? "imagenet" : weightPath} -o ${ctx.runPath}/output -k ${topK}`;
+    // slurm_python_path wins over the hardcoded "python3" fallback when
+    // set - same override as the other two inference builders.
+    const inceptionPythonBin = config["slurm_python_path"] || "python3";
+    const cmd = `${inceptionPythonBin} ${inferenceScript} -i ${inferenceFilePath} -n ${ctx.runPath}/classes.txt -w ${usingImageNetClasses ? "imagenet" : weightPath} -o ${ctx.runPath}/output -k ${topK}`;
 
     const runOptionsHeader = formatRunOptionsHeader({
         project: ctx.PName,

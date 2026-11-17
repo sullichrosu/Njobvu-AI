@@ -14,6 +14,7 @@
     "slurm_bin_path": "",
     "slurm_allowed_users": [],
     "slurm_partitions": [],
+    "slurm_python_path": "",
     "slurm_staging": {
         "mode": "none",
         "ssh_destination": "",

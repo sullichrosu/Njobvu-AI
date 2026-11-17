@@ -28,6 +28,7 @@ jest.mock('../../utils/config', () => ({
 
 const fs = require('fs');
 const queries = require('../../queries/queries');
+const config = require('../../utils/config');
 const { ensureTrainingImagesLocal } = require('../../utils/jitTrainingImages');
 const { prepareYoloTrainingSubmission } = require('../../utils/slurmYoloTrainingJob');
 
@@ -121,6 +122,18 @@ describe('utils/slurmYoloTrainingJob', () => {
         expect(submission.runPath).toContain('/training/logs/');
 
         expect(ensureTrainingImagesLocal).toHaveBeenCalledWith('testproj', 'testuser', expect.any(String), expect.any(Array));
+    });
+
+    it('uses slurm_python_path over default_python_path when set', async () => {
+        config.slurm_python_path = '/opt/hpc-envs/njobvu/bin/python3';
+
+        try {
+            const submission = await prepareYoloTrainingSubmission(buildReq());
+
+            expect(submission.command.startsWith('/opt/hpc-envs/njobvu/bin/python3 ')).toBe(true);
+        } finally {
+            delete config.slurm_python_path;
+        }
     });
 
     it('derives yolo_task from a -seg weight name, overriding yolo_task', async () => {

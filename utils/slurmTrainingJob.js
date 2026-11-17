@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const queries = require("../queries/queries");
+const config = require("./config");
 const formatRunOptionsHeader = require("./formatRunOptionsHeader");
 const { ensureTrainingImagesLocal } = require("./jitTrainingImages");
 
@@ -31,7 +32,13 @@ function buildCsv(rows, imagesPath) {
 async function prepareTrainingSubmission(req) {
     const PName = req.body.PName,
         Admin = req.body.Admin,
-        pythonPath = req.body.python_path,
+        // slurm_python_path (an interpreter provisioned on the HPC cluster
+        // itself - see utils/slurmAccess.js's companion key) always wins
+        // over the local launch's python_path when set, since the two
+        // sides almost never share one: the local path is wherever the
+        // workstation's own venv/toolchain lives, which has no reason to
+        // exist at that same path on a compute node.
+        pythonPath = (config.slurm_python_path && config.slurm_python_path.trim()) || req.body.python_path,
         script = req.body.script,
         weights = req.body.weights;
 

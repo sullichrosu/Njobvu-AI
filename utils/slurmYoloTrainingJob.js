@@ -632,7 +632,12 @@ async function prepareYoloTrainingSubmission(req) {
     const darknetProjectRun = runPath;
     const darknetImagesPath = path.join(runPath, "images");
 
-    const cmd = `${config["default_python_path"] || "python3"} ${yoloScript} -d ${runPath} -t ${yoloTask} -m ${yoloMode} -i ${darknetImagesPath} -n ${classesPath} -p ${trainDataPer} -l ${darknetProjectRun}/${log} -f ${darknetPath} -w ${weightPath} -b ${batch} -s ${subdiv} -x ${width} -y ${height} -v ${yoloVersion} -e ${epochs} -I ${imgsz} -D ${device} -o "${options}"`;
+    // slurm_python_path (an interpreter provisioned on the HPC cluster
+    // itself) wins over default_python_path when set - the local
+    // workstation's interpreter has no reason to exist at that same path
+    // on a compute node.
+    const pythonBin = config["slurm_python_path"] || config["default_python_path"] || "python3";
+    const cmd = `${pythonBin} ${yoloScript} -d ${runPath} -t ${yoloTask} -m ${yoloMode} -i ${darknetImagesPath} -n ${classesPath} -p ${trainDataPer} -l ${darknetProjectRun}/${log} -f ${darknetPath} -w ${weightPath} -b ${batch} -s ${subdiv} -x ${width} -y ${height} -v ${yoloVersion} -e ${epochs} -I ${imgsz} -D ${device} -o "${options}"`;
 
     const runOptionsHeader = formatRunOptionsHeader({
         project: PName,

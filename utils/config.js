@@ -19,6 +19,7 @@ const defaultConfig = {
     slurm_bin_path: "",
     slurm_allowed_users: [],
     slurm_partitions: [],
+    slurm_python_path: "",
     admin: ""
 };
 
