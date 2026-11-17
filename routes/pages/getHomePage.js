@@ -47,10 +47,10 @@ async function getHomePage(req, res) {
             } else if (global.db && global.db.getAsync) {
                 Proj = await global.db.getAsync(
                     "SELECT * FROM `Projects` WHERE PName = '" +
-                        projects[i].PName +
-                        "' AND Admin = '" +
-                        projects[i].Admin +
-                        "' AND (Validate = '0' OR Validate = 0 OR Validate IS NULL)",
+                    projects[i].PName +
+                    "' AND Admin = '" +
+                    projects[i].Admin +
+                    "' AND (Validate = '0' OR Validate = 0 OR Validate IS NULL)",
                 );
             }
 
@@ -71,7 +71,7 @@ async function getHomePage(req, res) {
                 );
 
                 global.logger.debug("Attempting to connect to database:", dbpath);
-                
+
                 if (!fs.existsSync(dbpath)) {
                     global.logger.debug("Database file does not exist:", dbpath);
                     results1[i][2] = 0;
@@ -91,10 +91,10 @@ async function getHomePage(req, res) {
                     global.logger.info("Connected to hdb.")
                 });
 
-                hdb.getAsync = function (sql) {
+                hdb.getAsync = function(sql) {
                     var that = this;
-                    return new Promise(function (resolve, reject) {
-                        that.get(sql, function (err, row) {
+                    return new Promise(function(resolve, reject) {
+                        that.get(sql, function(err, row) {
                             if (err) {
                                 global.logger.error("runAsync ERROR!", err)
                                 reject(err);
@@ -105,10 +105,10 @@ async function getHomePage(req, res) {
                         return null;
                     });
                 };
-                hdb.allAsync = function (sql) {
+                hdb.allAsync = function(sql) {
                     var that = this;
-                    return new Promise(function (resolve, reject) {
-                        that.all(sql, function (err, row) {
+                    return new Promise(function(resolve, reject) {
+                        that.all(sql, function(err, row) {
                             if (err) {
                                 global.logger.error("runAsync ERROR!", err)
                                 reject(err);
@@ -146,7 +146,7 @@ async function getHomePage(req, res) {
                 results1[i][4] = complete;
                 results1[i][5] = counter ? Number(counter["COUNT(*)"]) : 0;
 
-                hdb.close(function (err) {
+                hdb.close(function(err) {
                     if (err) {
                         global.logger.error(err);
                     }
@@ -184,6 +184,7 @@ async function getHomePage(req, res) {
         needsReview: needsReview,
         activePage: null,
         IDX: null,
+        isAdmin: global.configFile && global.configFile.admin == user
     });
 }
 

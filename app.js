@@ -47,6 +47,8 @@ const {
     getHelpPage,
     getMegadetectorSettingsPage,
     getHpcJobsPage,
+    getAdminPartitionsPage,
+    getAdminDirectoryPage,
 } = require("./routes/pages");
 const { getHelpApi } = require("./routes/api/help");
 
@@ -93,6 +95,8 @@ app.get("/yolo/yolovXTrainingSettings", getYoloXTrainingSettingsPage);
 app.get("/inference/inceptionSettings", getInceptionSettingsPage);
 app.get("/megadetector/settings", getMegadetectorSettingsPage);
 app.get("/hpc/jobs", getHpcJobsPage);
+app.get("/admin/partitions", getAdminPartitionsPage);
+app.get("/admin/directory", getAdminDirectoryPage);
 app.get("/user", getUserPage);
 app.get("/servstats", getServerStatsPage);
 app.get("/homeV", getValidationHomePage);

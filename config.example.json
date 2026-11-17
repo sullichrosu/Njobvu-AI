@@ -19,5 +19,6 @@
         "ssh_destination": "",
         "ssh_key": "",
         "remote_root": ""
-    }
+    },
+    "admin": ""
 }

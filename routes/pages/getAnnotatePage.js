@@ -53,10 +53,10 @@ async function getAnnotatePage(req, res) {
         },
     );
 
-    ldb.getAsync = function (sql, params) {
+    ldb.getAsync = function(sql, params) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.get(sql, params || [], function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.get(sql, params || [], function(err, row) {
                 if (err) {
                     if (global.logger) global.logger.error("runAsync ERROR!", err);
                     reject(err);
@@ -67,10 +67,10 @@ async function getAnnotatePage(req, res) {
             return null;
         });
     };
-    ldb.allAsync = function (sql, params) {
+    ldb.allAsync = function(sql, params) {
         var that = this;
-        return new Promise(function (resolve, reject) {
-            that.all(sql, params || [], function (err, row) {
+        return new Promise(function(resolve, reject) {
+            that.all(sql, params || [], function(err, row) {
                 if (err) {
                     if (global.logger) global.logger.error("runAsync ERROR!", err);
                     reject(err);
@@ -208,7 +208,7 @@ async function getAnnotatePage(req, res) {
             next_IName = (results2 && results2.length > 0) ? results2[0].IName : -1;
         }
 
-        ldb.close(function (err) {
+        ldb.close(function(err) {
             if (err && global.logger) {
                 global.logger.error(err);
             }

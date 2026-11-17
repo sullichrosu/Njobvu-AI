@@ -55,6 +55,14 @@
                     return;
                 }
 
+                // Partitions are gated per-user via the admin's Partition
+                // Access page now, not just the admin-curated list - a user
+                // with zero grants has nothing valid to submit to, so don't
+                // offer a button that can only ever fail.
+                if (access.partitionsRequired && (!access.partitions || access.partitions.length === 0)) {
+                    return;
+                }
+
                 var form = document.getElementById(opts.formId);
                 if (!form) {
                     return;

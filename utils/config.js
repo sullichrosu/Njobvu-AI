@@ -18,7 +18,8 @@ const defaultConfig = {
     chat_required_role: "user",
     slurm_bin_path: "",
     slurm_allowed_users: [],
-    slurm_partitions: []
+    slurm_partitions: [],
+    admin: ""
 };
 
 // Numeric fields that should be parsed as integers

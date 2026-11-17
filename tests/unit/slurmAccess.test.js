@@ -1,13 +1,22 @@
+jest.mock('../../queries/queries', () => ({
+    managed: {
+        listPartitionsForUser: jest.fn(),
+    },
+}));
+
+const queries = require('../../queries/queries');
 const {
     hasSlurmAccess,
     isSlurmConfigured,
     getSlurmPartitions,
     isValidSlurmPartition,
+    getPartitionsForUser,
 } = require('../../utils/slurmAccess');
 
 describe('utils/slurmAccess', () => {
     afterEach(() => {
         global.configFile = undefined;
+        jest.clearAllMocks();
     });
 
     describe('getSlurmPartitions', () => {
@@ -47,6 +56,55 @@ describe('utils/slurmAccess', () => {
             global.configFile = { slurm_partitions: [] };
 
             expect(isValidSlurmPartition('gpu')).toBe(false);
+        });
+    });
+
+    describe('getPartitionsForUser', () => {
+        it('returns an empty array without hitting the DB when no partitions are configured', async () => {
+            global.configFile = { slurm_partitions: [] };
+
+            expect(await getPartitionsForUser('alice')).toEqual([]);
+            expect(queries.managed.listPartitionsForUser).not.toHaveBeenCalled();
+        });
+
+        it('returns an empty array for a missing username', async () => {
+            global.configFile = { slurm_partitions: ['gpu', 'cpu'] };
+
+            expect(await getPartitionsForUser(undefined)).toEqual([]);
+            expect(queries.managed.listPartitionsForUser).not.toHaveBeenCalled();
+        });
+
+        it('narrows the configured list down to this user\'s PartitionAccess grants', async () => {
+            global.configFile = { slurm_partitions: ['gpu', 'cpu', 'debug'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({
+                rows: [{ Partition: 'cpu' }, { Partition: 'debug' }],
+            });
+
+            expect(await getPartitionsForUser('alice')).toEqual(['cpu', 'debug']);
+            expect(queries.managed.listPartitionsForUser).toHaveBeenCalledWith('alice');
+        });
+
+        it('drops a grant for a partition that has since been removed from the configured list', async () => {
+            global.configFile = { slurm_partitions: ['gpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({
+                rows: [{ Partition: 'gpu' }, { Partition: 'retired-partition' }],
+            });
+
+            expect(await getPartitionsForUser('alice')).toEqual(['gpu']);
+        });
+
+        it('returns an empty array when the user has no grants at all', async () => {
+            global.configFile = { slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [] });
+
+            expect(await getPartitionsForUser('alice')).toEqual([]);
+        });
+
+        it('fails safe to an empty array when the DB lookup errors', async () => {
+            global.configFile = { slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockRejectedValue(new Error('db unavailable'));
+
+            expect(await getPartitionsForUser('alice')).toEqual([]);
         });
     });
 

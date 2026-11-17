@@ -1,5 +1,5 @@
 const queries = require("../../../queries/queries");
-const { hasSlurmAccess, isSlurmConfigured, getSlurmPartitions, isValidSlurmPartition } = require("../../../utils/slurmAccess");
+const { hasSlurmAccess, isSlurmConfigured, getSlurmPartitions, getPartitionsForUser } = require("../../../utils/slurmAccess");
 const { submitSbatchJob, getSlurmJobRuntimeStatus } = require("../../../utils/slurmSubmit");
 const slurmStaging = require("../../../utils/slurmStaging");
 const { prepareTrainingSubmission } = require("../../../utils/slurmTrainingJob");
@@ -10,8 +10,11 @@ const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"
 
 // GET /api/v2/slurm/access - lets the front end decide whether to offer an
 // "HPC" launch option at all, and why not when it can't. `partitions` drives
-// a plain <select> on the client - an empty list means the cluster has no
-// partition concept worth exposing, so the client skips the selector.
+// a plain <select> on the client, scoped down to this user's PartitionAccess
+// grants (see routes/admin/updatePartitionAccess.js) rather than the full
+// admin-curated list - an empty list means either the cluster has no
+// partition concept worth exposing, or this user hasn't been granted one,
+// which `partitionsRequired` lets the client tell apart.
 async function getSlurmAccess(req, res) {
     const username = req.cookies && req.cookies.Username;
 
@@ -19,31 +22,47 @@ async function getSlurmAccess(req, res) {
         return res.status(403).json({ success: false, error: "Not authorized" });
     }
 
-    return res.status(200).json({
-        success: true,
-        configured: isSlurmConfigured(),
-        allowed: hasSlurmAccess(username),
-        partitions: getSlurmPartitions(),
-    });
+    try {
+        return res.status(200).json({
+            success: true,
+            configured: isSlurmConfigured(),
+            allowed: hasSlurmAccess(username),
+            partitions: await getPartitionsForUser(username),
+            partitionsRequired: getSlurmPartitions().length > 0,
+        });
+    } catch (err) {
+        global.logger.error(err);
+        return res.status(500).json({ success: false, error: "Error checking Slurm access" });
+    }
 }
 
-// Resolves and validates req.body.partition against the admin-curated
-// slurm_partitions list. When the list is empty, partition selection isn't
-// offered at all, so no partition is required or forwarded to sbatch. When
-// it's non-empty, a partition is required and must be on the list - this is
-// the server-side half of "foolproof": the frontend only ever offers a
-// <select> built from this same list, but the backend can't trust that.
-function resolvePartition(req) {
-    const partitions = getSlurmPartitions();
+// Resolves and validates req.body.partition against this user's
+// PartitionAccess grants (narrowed to the admin-curated slurm_partitions
+// list - see getPartitionsForUser). When the configured list is empty,
+// partition selection isn't offered at all, so no partition is required or
+// forwarded to sbatch. Otherwise a partition is required and must be one
+// this specific user has been granted - this is the server-side half of
+// "foolproof": the frontend only ever offers a <select> built from this
+// same per-user list, but the backend can't trust that.
+async function resolvePartition(username, req) {
+    const configuredPartitions = getSlurmPartitions();
 
-    if (partitions.length === 0) {
+    if (configuredPartitions.length === 0) {
         return undefined;
+    }
+
+    const allowedPartitions = await getPartitionsForUser(username);
+
+    if (allowedPartitions.length === 0) {
+        const err = new Error("You do not have access to any Slurm partition. Contact an admin to request access.");
+        err.statusCode = 403;
+        throw err;
     }
 
     const partition = req.body.partition;
 
-    if (!partition || !isValidSlurmPartition(partition)) {
-        const err = new Error(`Invalid or missing Slurm partition - expected one of: ${partitions.join(", ")}`);
+    if (!partition || !allowedPartitions.includes(partition)) {
+        const err = new Error(`Invalid or missing Slurm partition - expected one of: ${allowedPartitions.join(", ")}`);
         err.statusCode = 400;
         throw err;
     }
@@ -143,7 +162,7 @@ async function submitTrainingJob(req, res) {
 
     let partition;
     try {
-        partition = resolvePartition(req);
+        partition = await resolvePartition(username, req);
     } catch (err) {
         return res.status(err.statusCode || 500).json({ success: false, error: err.message });
     }
@@ -203,7 +222,7 @@ async function submitInferenceJob(req, res) {
 
     let partition;
     try {
-        partition = resolvePartition(req);
+        partition = await resolvePartition(username, req);
     } catch (err) {
         return res.status(err.statusCode || 500).json({ success: false, error: err.message });
     }

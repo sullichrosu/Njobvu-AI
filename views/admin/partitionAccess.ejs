@@ -1,0 +1,169 @@
+<%- include('../includes/header', { activePage: null, isAdmin }) %>
+
+<style>
+    .partition-chip {
+        display: inline-flex;
+        align-items: center;
+        margin: 2px 4px 2px 0;
+        padding: 4px 6px 4px 10px;
+        font-size: 0.85rem;
+    }
+
+    .partition-chip .chip-remove {
+        background: none;
+        border: none;
+        color: inherit;
+        margin-left: 6px;
+        padding: 0 2px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .partition-add-cell {
+        white-space: nowrap;
+    }
+
+    .partition-add-cell select {
+        display: inline-block;
+        width: auto;
+        max-width: 220px;
+    }
+
+    .partition-chips-empty {
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+</style>
+
+<div id="admin-partition-access">
+    <div class="container">
+        <div class="col-md-12">
+            <h1>Partition Access</h1>
+            <p>
+                Manage which Njobvu-AI user accounts are allowed to submit jobs to each configured Slurm partition.
+            </p>
+            <hr>
+        </div>
+
+        <% if (!partitions || partitions.length === 0) { %>
+            <div class="alert alert-secondary">
+                No Slurm partitions are configured. Add entries to <code>slurm_partitions</code> in <code>config.json</code>
+                before managing per-user access.
+            </div>
+        <% } else if (!users || users.length === 0) { %>
+            <div class="alert alert-secondary">No user accounts exist yet.</div>
+        <% } else { %>
+            <div class="form-row align-items-center mb-3">
+                <div class="col-auto">
+                    <input type="text" class="form-control" id="userFilter" placeholder="Filter by username&hellip;" aria-label="Filter users">
+                </div>
+            </div>
+            <form action="/api/v2/admin/partitions" method="POST" id="partitionAccessForm">
+                <div class="col-12">
+                    <table class="table table-striped" id="partitionAccessTable">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col" style="width: 20%;">Username</th>
+                                <th scope="col">Granted Partitions</th>
+                                <th scope="col" style="width: 25%;">Add Partition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% for (var u = 0; u < users.length; u++) {
+                                var username = users[u];
+                                var userPartitions = (accessByUser && accessByUser[username]) || [];
+                            %>
+                                <tr data-username="<%= username %>">
+                                    <td scope="row">
+                                        <input type="hidden" name="usernames" value="<%= username %>">
+                                        <%= username %>
+                                    </td>
+                                    <td class="partition-chips">
+                                        <% if (userPartitions.length === 0) { %>
+                                            <span class="partition-chips-empty">No partitions granted</span>
+                                        <% } %>
+                                        <% for (var p = 0; p < userPartitions.length; p++) {
+                                            var partition = userPartitions[p];
+                                        %>
+                                            <span class="badge badge-primary partition-chip" data-partition="<%= partition %>">
+                                                <%= partition %>
+                                                <button type="button" class="chip-remove" aria-label="Remove <%= username %> access to partition <%= partition %>">&times;</button>
+                                                <input type="checkbox" class="d-none" name="access" value="<%= username %>:<%= partition %>" checked>
+                                            </span>
+                                        <% } %>
+                                    </td>
+                                    <td class="partition-add-cell">
+                                        <select class="form-control form-control-sm partition-select" aria-label="Choose a partition to grant to <%= username %>">
+                                            <% for (var p2 = 0; p2 < partitions.length; p2++) {
+                                                var candidate = partitions[p2];
+                                                if (userPartitions.includes(candidate)) continue;
+                                            %>
+                                                <option value="<%= candidate %>"><%= candidate %></option>
+                                            <% } %>
+                                        </select>
+                                        <button type="button" class="btn btn-sm btn-outline-primary add-partition-btn">Add</button>
+                                    </td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+                <button type="submit" class="btn btn-primary mb-3">Save Changes</button>
+            </form>
+        <% } %>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var table = document.getElementById("partitionAccessTable");
+        if (!table) return;
+
+        table.addEventListener("click", function (event) {
+            if (event.target.classList.contains("chip-remove")) {
+                event.target.closest(".partition-chip").remove();
+                return;
+            }
+
+            if (event.target.classList.contains("add-partition-btn")) {
+                var row = event.target.closest("tr");
+                var username = row.getAttribute("data-username");
+                var select = row.querySelector(".partition-select");
+                var option = select.options[select.selectedIndex];
+
+                if (!option) return;
+
+                var partition = option.value;
+                var chipsCell = row.querySelector(".partition-chips");
+                var emptyLabel = chipsCell.querySelector(".partition-chips-empty");
+                if (emptyLabel) emptyLabel.remove();
+
+                var chip = document.createElement("span");
+                chip.className = "badge badge-primary partition-chip";
+                chip.setAttribute("data-partition", partition);
+                chip.innerHTML =
+                    partition +
+                    '<button type="button" class="chip-remove" aria-label="Remove ' + username + ' access to partition ' + partition + '">&times;</button>' +
+                    '<input type="checkbox" class="d-none" name="access" value="' + username + ':' + partition + '" checked>';
+                chipsCell.appendChild(chip);
+
+                option.remove();
+            }
+        });
+
+        var userFilter = document.getElementById("userFilter");
+        if (userFilter) {
+            userFilter.addEventListener("input", function () {
+                var query = userFilter.value.trim().toLowerCase();
+                var rows = table.querySelectorAll("tbody tr");
+
+                rows.forEach(function (row) {
+                    var username = (row.getAttribute("data-username") || "").toLowerCase();
+                    row.style.display = username.includes(query) ? "" : "none";
+                });
+            });
+        }
+    })();
+</script>
+
+<%- include('../includes/footer') %>

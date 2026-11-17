@@ -7,6 +7,7 @@ const labelling = require("./labelling/labelling");
 const validation = require("./validation/validation");
 const s3 = require("./s3/s3");
 const slurm = require("./slurm/slurm");
+const partitionAccess = require("./partitionAccess/partitionAccess");
 const getDbClient = require("./getDbClient");
 
 module.exports = {
@@ -16,6 +17,7 @@ module.exports = {
         ...projects.managed,
         ...s3.managed,
         ...slurm.managed,
+        ...partitionAccess.managed,
         sql: async function (sql, params) {
             try {
                 const result = await global.managedDbClient.run(sql, params);

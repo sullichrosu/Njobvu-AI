@@ -37,6 +37,8 @@ const getInceptionSettingsPage = require("./pages/getInceptionSettingsPage");
 const getHelpPage = require("./pages/getHelpPage");
 const getMegadetectorSettingsPage = require("./pages/getMegadetectorSettingsPage");
 const getHpcJobsPage = require("./pages/getHpcJobsPage");
+const getAdminPartitionsPage = require("./pages/getAdminPartitionsPage");
+const getAdminDirectoryPage = require("./pages/getAdminDirectoryPage");
 
 module.exports = {
     getLoginPage: getLoginPage,
@@ -78,4 +80,6 @@ module.exports = {
     getHelpPage: getHelpPage,
     getMegadetectorSettingsPage: getMegadetectorSettingsPage,
     getHpcJobsPage: getHpcJobsPage,
+    getAdminPartitionsPage: getAdminPartitionsPage,
+    getAdminDirectoryPage: getAdminDirectoryPage,
 };

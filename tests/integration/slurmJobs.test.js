@@ -4,6 +4,7 @@ jest.mock('../../queries/queries', () => ({
         getSlurmJob: jest.fn(),
         recordSlurmJob: jest.fn(),
         updateSlurmJobStatus: jest.fn(),
+        listPartitionsForUser: jest.fn(),
     },
 }));
 
@@ -83,7 +84,7 @@ describe('Slurm job routes', () => {
                 .set('Cookie', ['Username=testuser']);
 
             expect(res.statusCode).toBe(200);
-            expect(res.body).toEqual({ success: true, configured: false, allowed: false, partitions: [] });
+            expect(res.body).toEqual({ success: true, configured: false, allowed: false, partitions: [], partitionsRequired: false });
         });
 
         it('allows any logged-in user once configured, when the allowlist is empty', async () => {
@@ -93,7 +94,7 @@ describe('Slurm job routes', () => {
                 .get('/api/v2/slurm/access')
                 .set('Cookie', ['Username=testuser']);
 
-            expect(res.body).toEqual({ success: true, configured: true, allowed: true, partitions: [] });
+            expect(res.body).toEqual({ success: true, configured: true, allowed: true, partitions: [], partitionsRequired: false });
         });
 
         it('restricts access to users on a non-empty allowlist', async () => {
@@ -110,18 +111,49 @@ describe('Slurm job routes', () => {
             expect(allowed.body.allowed).toBe(true);
         });
 
-        it('surfaces the admin-curated partition list for the frontend <select>', async () => {
+        it('surfaces only this user\'s PartitionAccess grants for the frontend <select>', async () => {
             global.configFile = {
                 slurm_bin_path: '/opt/slurm/bin',
                 slurm_allowed_users: [],
-                slurm_partitions: ['gpu', 'cpu'],
+                slurm_partitions: ['gpu', 'cpu', 'debug'],
             };
+            queries.managed.listPartitionsForUser.mockResolvedValue({
+                rows: [{ Partition: 'cpu' }, { Partition: 'debug' }],
+            });
 
             const res = await request(app)
                 .get('/api/v2/slurm/access')
                 .set('Cookie', ['Username=testuser']);
 
-            expect(res.body.partitions).toEqual(['gpu', 'cpu']);
+            expect(res.body.partitions).toEqual(['cpu', 'debug']);
+            expect(res.body.partitionsRequired).toBe(true);
+            expect(queries.managed.listPartitionsForUser).toHaveBeenCalledWith('testuser');
+        });
+
+        it('returns no partitions for a user with no grants, even though the cluster has some configured', async () => {
+            global.configFile = {
+                slurm_bin_path: '/opt/slurm/bin',
+                slurm_allowed_users: [],
+                slurm_partitions: ['gpu', 'cpu'],
+            };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [] });
+
+            const res = await request(app)
+                .get('/api/v2/slurm/access')
+                .set('Cookie', ['Username=testuser']);
+
+            expect(res.body.partitions).toEqual([]);
+            expect(res.body.partitionsRequired).toBe(true);
+        });
+
+        it('reports partitionsRequired as false when the cluster has no partition concept', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [] };
+
+            const res = await request(app)
+                .get('/api/v2/slurm/access')
+                .set('Cookie', ['Username=testuser']);
+
+            expect(res.body.partitionsRequired).toBe(false);
         });
     });
 
@@ -299,8 +331,24 @@ describe('Slurm job routes', () => {
             );
         });
 
-        it('rejects a missing partition when slurm_partitions is configured', async () => {
+        it('rejects a user with no PartitionAccess grants at all when slurm_partitions is configured', async () => {
             global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [] });
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ PName: 'proj', Admin: 'admin', python_path: 'python3', script: 'train.py', partition: 'gpu' });
+
+            expect(res.statusCode).toBe(403);
+            expect(res.body.success).toBe(false);
+            expect(prepareTrainingSubmission).not.toHaveBeenCalled();
+            expect(submitSbatchJob).not.toHaveBeenCalled();
+        });
+
+        it('rejects a missing partition when the user has been granted some', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [{ Partition: 'gpu' }, { Partition: 'cpu' }] });
 
             const res = await request(app)
                 .post('/api/v2/slurm/training-jobs')
@@ -315,6 +363,7 @@ describe('Slurm job routes', () => {
 
         it('rejects a partition that is not on the configured list', async () => {
             global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [{ Partition: 'gpu' }, { Partition: 'cpu' }] });
 
             const res = await request(app)
                 .post('/api/v2/slurm/training-jobs')
@@ -325,8 +374,22 @@ describe('Slurm job routes', () => {
             expect(prepareTrainingSubmission).not.toHaveBeenCalled();
         });
 
-        it('accepts and threads through a valid partition', async () => {
+        it('rejects a partition that is configured but not granted to this user', async () => {
             global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [{ Partition: 'cpu' }] });
+
+            const res = await request(app)
+                .post('/api/v2/slurm/training-jobs')
+                .set('Cookie', ['Username=testuser'])
+                .send({ PName: 'proj', Admin: 'admin', python_path: 'python3', script: 'train.py', partition: 'gpu' });
+
+            expect(res.statusCode).toBe(400);
+            expect(prepareTrainingSubmission).not.toHaveBeenCalled();
+        });
+
+        it('accepts and threads through a valid, granted partition', async () => {
+            global.configFile = { slurm_bin_path: '/opt/slurm/bin', slurm_allowed_users: [], slurm_partitions: ['gpu', 'cpu'] };
+            queries.managed.listPartitionsForUser.mockResolvedValue({ rows: [{ Partition: 'gpu' }, { Partition: 'cpu' }] });
             prepareTrainingSubmission.mockResolvedValue({
                 command: 'cmd', runPath: '/proj/training/logs/123', jobName: 'train_proj_123',
                 logFile: '/proj/training/logs/123/sbatch.out', errFile: '/proj/training/logs/123/123-error.log',

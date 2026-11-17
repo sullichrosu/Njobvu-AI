@@ -12,6 +12,12 @@ module.exports = {
 
             return result;
         },
+        getAllUsers: async function () {
+            const query = "SELECT Username FROM Users ORDER BY Username";
+            const result = await global.managedDbClient.all(query, []);
+
+            return result;
+        },
         createUser: async function (
             username,
             digest,

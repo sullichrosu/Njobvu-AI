@@ -82,6 +82,8 @@ const {
     submitInferenceJob,
 } = require("./api/v2/slurmJobs");
 
+const updatePartitionAccess = require("./admin/updatePartitionAccess");
+
 const updateLabels = require("./labelling/updateLabels");
 const deleteLabels = require("./labelling/deleteLabels");
 const switchLabels = require("./labelling/switchLabels");
@@ -208,6 +210,9 @@ api.get("/api/v2/slurm/jobs", listSlurmJobs);
 api.get("/api/v2/slurm/jobs/:slurmJobId", getSlurmJobStatus);
 api.post("/api/v2/slurm/training-jobs", submitTrainingJob);
 api.post("/api/v2/slurm/inference-jobs", submitInferenceJob);
+
+// ADMIN ROUTES
+api.post("/api/v2/admin/partitions", updatePartitionAccess);
 
 // LABELLING ROUTES
 api.post("/updateLabels", updateLabels);
