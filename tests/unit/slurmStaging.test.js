@@ -31,24 +31,49 @@ describe('utils/slurmStaging', () => {
             expect(slurmStaging.getStagingMode()).toBe('none');
         });
 
-        it('is "none" when ssh_destination or remote_root is missing', () => {
-            global.configFile = { slurm_staging: { mode: 'rsync', ssh_destination: '', remote_root: '/x' } };
+        it('is "none" for an unrecognized mode value', () => {
+            global.configFile = { slurm_staging: { mode: 'nfs', ssh_destination: 'fc@host', ssh_key: '/k', remote_root: '/x' } };
             expect(slurmStaging.getStagingMode()).toBe('none');
         });
 
-        it('is "none" for an unrecognized mode value', () => {
-            global.configFile = { slurm_staging: { mode: 'nfs', ssh_destination: 'fc@host', remote_root: '/x' } };
-            expect(slurmStaging.getStagingMode()).toBe('none');
+        it('reflects the requested mode even when the connection fields are blank', () => {
+            // getStagingMode() answers "what was requested", not "is it
+            // usable" - isFullyConfigured() answers that. beforeSubmit()
+            // is what actually rejects a half-filled-in config; silently
+            // treating this as "none" previously meant setting mode:
+            // "rsync" with blank fields reproduced the pre-staging
+            // "Unable to open file" bug with no indication why.
+            global.configFile = { slurm_staging: { mode: 'rsync', ssh_destination: '', ssh_key: '', remote_root: '' } };
+            expect(slurmStaging.getStagingMode()).toBe('rsync');
         });
 
         it('is "rsync" when configured for rsync', () => {
-            global.configFile = { slurm_staging: { mode: 'rsync', ssh_destination: 'fc@host', remote_root: '/x' } };
+            global.configFile = { slurm_staging: { mode: 'rsync', ssh_destination: 'fc@host', ssh_key: '/k', remote_root: '/x' } };
             expect(slurmStaging.getStagingMode()).toBe('rsync');
         });
 
         it('is "shared" when configured for a shared mount', () => {
-            global.configFile = { slurm_staging: { mode: 'shared', ssh_destination: 'fc@host', remote_root: '/x' } };
+            global.configFile = { slurm_staging: { mode: 'shared', ssh_destination: 'fc@host', ssh_key: '/k', remote_root: '/x' } };
             expect(slurmStaging.getStagingMode()).toBe('shared');
+        });
+    });
+
+    describe('isFullyConfigured', () => {
+        it('is false when slurm_staging is missing', () => {
+            global.configFile = {};
+            expect(slurmStaging.isFullyConfigured()).toBe(false);
+        });
+
+        it.each(['ssh_destination', 'ssh_key', 'remote_root'])('is false when %s is blank', (field) => {
+            const staging = { mode: 'rsync', ssh_destination: 'fc@host', ssh_key: '/k', remote_root: '/x' };
+            staging[field] = '';
+            global.configFile = { slurm_staging: staging };
+            expect(slurmStaging.isFullyConfigured()).toBe(false);
+        });
+
+        it('is true when all three connection fields are set', () => {
+            global.configFile = { slurm_staging: { mode: 'rsync', ssh_destination: 'fc@host', ssh_key: '/k', remote_root: '/x' } };
+            expect(slurmStaging.isFullyConfigured()).toBe(true);
         });
     });
 
@@ -189,6 +214,33 @@ describe('utils/slurmStaging', () => {
 
             await slurmStaging.afterTerminal();
             expect(execFile).toHaveBeenCalledTimes(1);
+        });
+
+        it('rejects the submission when mode is "rsync" but the connection fields are blank', async () => {
+            global.configFile = {
+                slurm_staging: { mode: 'rsync', ssh_destination: '', ssh_key: '', remote_root: '' },
+            };
+
+            await expect(slurmStaging.beforeSubmit()).rejects.toThrow(/slurm_staging\.mode is "rsync"/);
+            expect(execFile).not.toHaveBeenCalled();
+        });
+
+        it('rejects the submission when mode is "shared" but the connection fields are blank', async () => {
+            global.configFile = {
+                slurm_staging: { mode: 'shared', ssh_destination: '', ssh_key: '', remote_root: '' },
+            };
+
+            await expect(slurmStaging.beforeSubmit()).rejects.toThrow(/slurm_staging\.mode is "shared"/);
+            expect(execFile).not.toHaveBeenCalled();
+        });
+
+        it('skips (rather than attempting a broken fetch) after terminal status when "rsync" is misconfigured', async () => {
+            global.configFile = {
+                slurm_staging: { mode: 'rsync', ssh_destination: '', ssh_key: '', remote_root: '' },
+            };
+
+            await slurmStaging.afterTerminal();
+            expect(execFile).not.toHaveBeenCalled();
         });
     });
 });

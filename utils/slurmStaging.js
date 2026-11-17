@@ -29,14 +29,26 @@ const { execFile } = require("child_process");
 // at the same absolute path means every path the training/inference
 // builders generate just resolves correctly on both ends with zero
 // rewriting.
+//
+// getStagingMode() reflects the raw `mode` value the operator asked for,
+// independent of whether ssh_destination/ssh_key/remote_root are actually
+// filled in - isFullyConfigured() answers that separately. Conflating the
+// two used to mean setting mode: "rsync" with blank connection fields
+// silently behaved exactly like mode: "none" (submission would fall
+// through to an un-staged sbatch call and fail with the same opaque
+// "Unable to open file" this feature exists to fix) - beforeSubmit() below
+// now rejects that combination loudly instead.
 function getStagingMode() {
     const staging = global.configFile && global.configFile.slurm_staging;
+    const mode = staging && staging.mode;
 
-    if (!staging || !staging.ssh_destination || !staging.remote_root) {
-        return "none";
-    }
+    return mode === "shared" || mode === "rsync" ? mode : "none";
+}
 
-    return staging.mode === "shared" || staging.mode === "rsync" ? staging.mode : "none";
+function isFullyConfigured() {
+    const staging = global.configFile && global.configFile.slurm_staging;
+
+    return !!(staging && staging.ssh_destination && staging.ssh_key && staging.remote_root);
 }
 
 function sshCommand() {
@@ -116,28 +128,48 @@ function verifySharedMount() {
 }
 
 // Call before every sbatch submission. Mode-dispatches to the right
-// pre-flight behavior; a no-op in "none" mode.
+// pre-flight behavior; a no-op in "none" mode. Throws - refusing the
+// submission - rather than silently skipping staging when a mode is
+// requested but ssh_destination/ssh_key/remote_root aren't all set, so a
+// half-filled-in config fails immediately with a clear reason instead of
+// reproducing the generic sbatch "Unable to open file" error further down.
 async function beforeSubmit() {
     const mode = getStagingMode();
 
+    if (mode === "none") {
+        return;
+    }
+
+    if (!isFullyConfigured()) {
+        throw new Error(
+            `slurm_staging.mode is "${mode}" but ssh_destination/ssh_key/remote_root are not all set in config.json - `
+            + "fill them in, or set mode back to \"none\" if staging isn't ready yet.",
+        );
+    }
+
     if (mode === "rsync") {
         await stageProjectsToRemote();
-    } else if (mode === "shared") {
+    } else {
         await verifySharedMount();
     }
 }
 
 // Call once a job's status has just transitioned into a terminal state.
 // Only "rsync" mode needs to do anything here - "shared" mode's results
-// were never anywhere else to begin with.
+// were never anywhere else to begin with. Silently skips (rather than
+// throwing) when misconfigured: beforeSubmit() already would have rejected
+// the submission itself in that case, so a job reaching a terminal state
+// at all means it was fully configured at submit time; this is just
+// defensive against config changing mid-flight.
 async function afterTerminal() {
-    if (getStagingMode() === "rsync") {
+    if (getStagingMode() === "rsync" && isFullyConfigured()) {
         await fetchProjectsFromRemote();
     }
 }
 
 module.exports = {
     getStagingMode,
+    isFullyConfigured,
     stageProjectsToRemote,
     fetchProjectsFromRemote,
     verifySharedMount,
