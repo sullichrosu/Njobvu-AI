@@ -117,15 +117,17 @@ async function getSlurmJobStatus(req, res) {
                 await queries.managed.updateSlurmJobStatus(slurmJobId, runtimeStatus, updatedAt);
                 job = { ...job, Status: runtimeStatus, UpdatedAt: updatedAt };
 
-                // Just transitioned into a terminal state - pull results
-                // (weights, logs) back from the submission host so they're
-                // on local disk same as a locally-run job. Best-effort: a
-                // failed fetch shouldn't turn a successful job into an
-                // error response, and the next status poll will retry it
-                // since nothing here marks the fetch itself as done.
-                if (TERMINAL_STATUSES.has(runtimeStatus) && slurmStaging.isStagingEnabled()) {
+                // Just transitioned into a terminal state - in "rsync" mode,
+                // pull results (weights, logs) back from the submission
+                // host so they're on local disk same as a locally-run job;
+                // a no-op in "shared"/"none" mode (see
+                // utils/slurmStaging.js). Best-effort: a failed fetch
+                // shouldn't turn a successful job into an error response,
+                // and the next status poll will retry it since nothing
+                // here marks the fetch itself as done.
+                if (TERMINAL_STATUSES.has(runtimeStatus)) {
                     try {
-                        await slurmStaging.fetchProjectsFromRemote();
+                        await slurmStaging.afterTerminal();
                     } catch (fetchErr) {
                         global.logger.error("Error fetching Slurm job results from remote:", fetchErr);
                     }

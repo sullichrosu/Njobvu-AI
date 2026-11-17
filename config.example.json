@@ -15,7 +15,7 @@
     "slurm_allowed_users": [],
     "slurm_partitions": [],
     "slurm_staging": {
-        "enabled": false,
+        "mode": "none",
         "ssh_destination": "",
         "ssh_key": "",
         "remote_root": ""

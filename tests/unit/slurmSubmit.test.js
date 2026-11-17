@@ -7,6 +7,12 @@ jest.mock('child_process', () => ({
     execFile: jest.fn(),
 }));
 
+jest.mock('../../utils/slurmStaging', () => ({
+    beforeSubmit: jest.fn().mockResolvedValue(undefined),
+    afterTerminal: jest.fn().mockResolvedValue(undefined),
+}));
+
+const slurmStaging = require('../../utils/slurmStaging');
 const { submitSbatchJob, getSlurmJobRuntimeStatus } = require('../../utils/slurmSubmit');
 
 describe('utils/slurmSubmit', () => {
@@ -93,20 +99,14 @@ describe('utils/slurmSubmit', () => {
             })).rejects.toThrow(/Could not parse Slurm job id/);
         });
 
-        it('stages the project tree to the remote host before calling sbatch when staging is enabled', async () => {
-            global.configFile.slurm_staging = {
-                enabled: true,
-                ssh_destination: 'fc@frrt-space-1',
-                ssh_key: '/home/svc/.ssh/njobvu_slurm',
-                remote_root: '/home/fc/code/njobvu-ai',
-            };
-
-            const calls = [];
+        it('runs the staging pre-flight (slurmStaging.beforeSubmit) before calling sbatch', async () => {
+            const callOrder = [];
+            slurmStaging.beforeSubmit.mockImplementation(() => {
+                callOrder.push('beforeSubmit');
+                return Promise.resolve();
+            });
             execFile.mockImplementation((bin, args, cb) => {
-                calls.push(bin);
-                if (bin === 'rsync') {
-                    return cb(null, '', '');
-                }
+                callOrder.push('sbatch');
                 cb(null, 'Submitted batch job 4242\n', '');
             });
 
@@ -114,18 +114,17 @@ describe('utils/slurmSubmit', () => {
                 jobName: 'my_job', command: 'python3 train.py', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`,
             });
 
-            expect(calls).toEqual(['rsync', path.join('/opt/slurm/bin', 'sbatch')]);
+            expect(callOrder).toEqual(['beforeSubmit', 'sbatch']);
         });
 
-        it('does not stage when staging is not configured', async () => {
-            execFile.mockImplementation((bin, args, cb) => cb(null, 'Submitted batch job 4242\n', ''));
+        it('propagates a staging pre-flight failure without calling sbatch', async () => {
+            slurmStaging.beforeSubmit.mockRejectedValueOnce(new Error('Shared mount check failed'));
 
-            await submitSbatchJob({
+            await expect(submitSbatchJob({
                 jobName: 'my_job', command: 'python3 train.py', runPath, logFile: `${runPath}/log`, errFile: `${runPath}/err`,
-            });
+            })).rejects.toThrow('Shared mount check failed');
 
-            expect(execFile).toHaveBeenCalledTimes(1);
-            expect(execFile).toHaveBeenCalledWith(path.join('/opt/slurm/bin', 'sbatch'), expect.anything(), expect.any(Function));
+            expect(execFile).not.toHaveBeenCalled();
         });
     });
 

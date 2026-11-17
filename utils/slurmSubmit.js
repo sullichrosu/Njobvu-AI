@@ -8,15 +8,14 @@ const slurmStaging = require("./slurmStaging");
 // so job names / paths built from user-influenced project data can't be
 // interpreted as shell metacharacters.
 async function submitSbatchJob({ jobName, command, runPath, logFile, errFile, partition }) {
-    if (slurmStaging.isStagingEnabled()) {
-        // Mirror public/projects onto the submission host *before* writing
-        // and submitting the script below, so every absolute path baked
-        // into `command`/`logFile`/`errFile` (all rooted at
-        // global.currentPath, same as the remote root - see
-        // utils/slurmStaging.js) already resolves there by the time sbatch
-        // runs.
-        await slurmStaging.stageProjectsToRemote();
-    }
+    // Mode-dependent pre-flight: mirrors public/projects onto the
+    // submission host in "rsync" mode, or verifies a real shared mount is
+    // actually visible there in "shared" mode - either way, by the time
+    // sbatch runs below, every absolute path baked into
+    // `command`/`logFile`/`errFile` (all rooted at global.currentPath,
+    // same as the remote root - see utils/slurmStaging.js) resolves there.
+    // No-op in "none" mode.
+    await slurmStaging.beforeSubmit();
 
     return new Promise((resolve, reject) => {
         const slurmBinPath = (global.configFile && global.configFile.slurm_bin_path) || "";
